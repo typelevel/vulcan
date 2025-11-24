@@ -1,7 +1,7 @@
 val avroVersion = "1.11.4"
 val catsVersion = "2.13.0"
 val disciplineScalaTestVersion = "2.3.0"
-val enumeratumVersion = "1.9.0"
+val enumeratumVersion = "1.9.1"
 val jacksonVersion = "2.20.0"
 val magnolia2Version = "0.17.0"
 val magnolia3Version = "1.3.18"
@@ -14,8 +14,8 @@ val shapelessVersion = "2.3.13"
 val slf4jNopVersion = "2.0.17"
 
 val scala212 = "2.12.20"
-val scala213 = "2.13.16"
-val scala3 = "3.3.6"
+val scala213 = "2.13.17"
+val scala3 = "3.3.7"
 
 ThisBuild / versionScheme := Some("early-semver")
 
@@ -149,7 +149,7 @@ lazy val dependencySettings = Seq(
     else {
       Seq(
         "org.scala-lang.modules" %% "scala-collection-compat" % scalaCollectionCompatVersion % Test,
-        compilerPlugin(("org.typelevel" %% "kind-projector" % "0.13.3").cross(CrossVersion.full))
+        compilerPlugin(("org.typelevel" %% "kind-projector" % "0.13.4").cross(CrossVersion.full))
       )
     }
   },
