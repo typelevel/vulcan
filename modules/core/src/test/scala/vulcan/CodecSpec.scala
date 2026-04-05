@@ -8,20 +8,20 @@ package vulcan
 
 import cats.data._
 import cats.implicits._
+import org.apache.avro.generic.GenericData
+import org.apache.avro.{Conversions, LogicalTypes, Schema, SchemaBuilder}
+import org.scalacheck.Gen
+import org.scalatest.Assertion
+import vulcan.Codec.InstantMicros
+import vulcan.examples._
+import vulcan.internal.converters.collection._
 
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import java.time.{Instant, LocalDate, LocalTime}
-import java.util.concurrent.TimeUnit
 import java.time.temporal.ChronoUnit
+import java.time._
 import java.util.UUID
-import org.apache.avro.{Conversions, LogicalTypes, Schema, SchemaBuilder}
-import org.apache.avro.generic.GenericData
-import org.scalacheck.Gen
-import org.scalatest.Assertion
-import vulcan.examples.{SecondInSealedTraitCaseClass, _}
-import vulcan.internal.converters.collection._
-
+import java.util.concurrent.TimeUnit._
 import scala.util.{Failure, Success, Try}
 
 final class CodecSpec extends BaseSpec with CodecSpecHelpers {
@@ -824,11 +824,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
       describe("encode") {
         it("should encode as long") {
-          val value = {
-            val instant = Instant.now()
-            instant.minusNanos(instant.getNano().toLong)
-          }
-
+          val value = Instant.now()
           assertEncodeIs[Instant](
             value,
             Right(value.toEpochMilli())
@@ -864,6 +860,132 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           }
 
           assertDecodeIs[Instant](
+            unsafeEncode(value),
+            Right(value)
+          )
+        }
+      }
+    }
+
+    describe("instant micros") {
+      describe("schema") {
+        it("should be encoded as long with logical type timestamp-micros") {
+          assertSchemaIs[InstantMicros] {
+            """{"type":"long","logicalType":"timestamp-micros"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as long") {
+          val instantMicros: InstantMicros = InstantMicros(Instant.now())
+
+          assertEncodeIs[InstantMicros](
+            instantMicros,
+            Right(
+              NANOSECONDS.toMicros(
+                SECONDS.toNanos(instantMicros.value.getEpochSecond) + instantMicros.value.getNano
+              )
+            )
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if logical type is missing") {
+          val instantMicros: InstantMicros = InstantMicros(Instant.now())
+
+          assertDecodeError[InstantMicros](
+            unsafeEncode(instantMicros),
+            unsafeSchema[Long],
+            "Error decoding InstantMicros: Got unexpected missing logical type"
+          )
+        }
+
+        it("should error if logical type is not timestamp-micros") {
+          val instantMicros: InstantMicros = InstantMicros(Instant.now())
+
+          assertDecodeError[InstantMicros](
+            unsafeEncode(instantMicros), {
+              LogicalTypes.timestampMillis().addToSchema {
+                SchemaBuilder.builder().longType()
+              }
+            },
+            "Error decoding InstantMicros: Got unexpected logical type timestamp-millis"
+          )
+        }
+
+        it("should decode as Instant") {
+          val instantMicros: InstantMicros = InstantMicros(Instant.now())
+
+          assertDecodeIs[InstantMicros](
+            unsafeEncode(instantMicros),
+            Right(instantMicros)
+          )
+        }
+      }
+    }
+
+    describe("local date time") {
+      describe("schema") {
+        it("should be encoded as long with logical type local-timestamp-millis") {
+          assertSchemaIs[LocalDateTime] {
+            """{"type":"long","logicalType":"local-timestamp-millis"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as long") {
+          val value = {
+            val instant = Instant.now()
+            LocalDateTime.ofInstant(instant.minusNanos(instant.getNano.toLong), ZoneOffset.UTC)
+          }
+
+          assertEncodeIs[LocalDateTime](
+            value,
+            Right(value.toInstant(ZoneOffset.UTC).toEpochMilli)
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if logical type is missing") {
+          val value = {
+            val instant = Instant.now()
+            LocalDateTime.ofInstant(instant.minusNanos(instant.getNano.toLong), ZoneOffset.UTC)
+          }
+
+          assertDecodeError[LocalDateTime](
+            unsafeEncode(value),
+            unsafeSchema[Long],
+            "Error decoding LocalDateTime: Got unexpected missing logical type"
+          )
+        }
+
+        it("should error if logical type is not local-timestamp-millis") {
+          val value = {
+            val instant = Instant.now()
+            LocalDateTime.ofInstant(instant.minusNanos(instant.getNano.toLong), ZoneId.of("UTC"))
+          }
+
+          assertDecodeError[LocalDateTime](
+            unsafeEncode(value), {
+              LogicalTypes.timestampMillis().addToSchema {
+                SchemaBuilder.builder().longType()
+              }
+            },
+            "Error decoding LocalDateTime: Got unexpected logical type timestamp-millis"
+          )
+        }
+
+        it("should decode as LocalDateTime") {
+          val value = {
+            val instant = Instant.now()
+            LocalDateTime.ofInstant(instant.minusNanos(instant.getNano().toLong), ZoneId.of("UTC"))
+          }
+
+          assertDecodeIs[LocalDateTime](
             unsafeEncode(value),
             Right(value)
           )
@@ -1120,7 +1242,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           assertEncodeIs[LocalTime](
             value,
             Right(
-              java.lang.Integer.valueOf(TimeUnit.NANOSECONDS.toMillis(value.toNanoOfDay()).toInt)
+              java.lang.Integer.valueOf(NANOSECONDS.toMillis(value.toNanoOfDay()).toInt)
             )
           )
         }
@@ -1161,7 +1283,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           val value = LocalTime.now()
           assertEncodeIs[LocalTime](
             value,
-            Right(java.lang.Long.valueOf(TimeUnit.NANOSECONDS.toMicros(value.toNanoOfDay())))
+            Right(java.lang.Long.valueOf(NANOSECONDS.toMicros(value.toNanoOfDay())))
           )
         }
       }
@@ -2060,7 +2182,8 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
               }
             implicit val testCodec: Codec[Test] =
               Codec.record("Test", "") { field =>
-                field("value", _.value, default = Some(List(Element(123), Element(456)))).map(Test(_))
+                field("value", _.value, default = Some(List(Element(123), Element(456))))
+                  .map(Test(_))
               }
 
             assertSchemaIs[Test] {
