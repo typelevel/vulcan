@@ -650,10 +650,6 @@ object Codec extends CodecCompanionCompat {
     *
     * @group Create
     */
-  @deprecated(
-    "Use existing primitives and combinators. If the functionality you need is not available or not exposed, please open an issue or pull request.",
-    "1.9.0"
-  )
   final def instance[AvroType0, A](
     schema: Either[AvroError, Schema],
     encode: A => Either[AvroError, AvroType0],
