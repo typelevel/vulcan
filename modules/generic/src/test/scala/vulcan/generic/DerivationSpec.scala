@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2023 OVO Energy Limited
+ * Copyright 2019-2024 OVO Energy Limited
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -42,6 +42,12 @@ final class DerivationSpec extends BaseSpec with RoundtripHelpers with CodecSpec
         it("should derive overridden name") {
           assertSchemaIs[FixedAvroName] {
             """{"type":"fixed","name":"FixedOtherName","namespace":"vulcan.generic.examples","size":1}"""
+          }
+        }
+
+        it("should use alias annotation") {
+          assertSchemaIs[FixedAvroAlias] {
+            """{"type":"fixed","name":"FixedAvroAlias","namespace":"vulcan.generic.examples","size":1,"aliases":["FixedOtherAlias"]}"""
           }
         }
 

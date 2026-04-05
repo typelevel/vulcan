@@ -1,12 +1,12 @@
 /*
- * Copyright 2019-2023 OVO Energy Limited
+ * Copyright 2019-2025 OVO Energy Limited
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 
 package vulcan
 
-import scala.annotation.StaticAnnotation
+import scala.annotation.{StaticAnnotation, nowarn}
 
 /**
   * Annotation which can be used to set the namespace
@@ -27,6 +27,7 @@ final class AvroNamespace(final val namespace: String) extends StaticAnnotation 
 }
 
 private[vulcan] object AvroNamespace {
+  @nowarn("cat=deprecation")
   final def unapply(avroNamespace: AvroNamespace): Some[String] =
     Some(avroNamespace.namespace)
 }

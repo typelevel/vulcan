@@ -1,20 +1,23 @@
-val avroVersion = "1.11.1"
-val catsVersion = "2.9.0"
-val disciplineScalaTestVersion = "2.2.0"
-val enumeratumVersion = "1.7.2"
-val jacksonVersion = "2.14.2"
+val avroVersion = "1.11.5"
+val catsVersion = "2.13.0"
+val disciplineScalaTestVersion = "2.3.0"
+val enumeratumVersion = "1.9.1"
+val jacksonVersion = "2.20.1"
 val magnolia2Version = "0.17.0"
-val magnolia3Version = "1.3.0"
-val munitVersion = "0.7.29"
-val refinedVersion = "0.10.3"
-val scalaCollectionCompatVersion = "2.9.0"
-val shapeless3Version = "3.3.0"
-val shapelessVersion = "2.3.10"
-val slf4jNopVersion = "2.0.7"
+val magnolia3Version = "1.3.18"
+val munitVersion = "1.2.0"
+val refinedVersion = "0.11.3"
+val scalaCollectionCompatVersion = "2.14.0"
+val scalacCompatVersion = "0.1.4"
+val shapeless3Version = "3.5.0"
+val shapelessVersion = "2.3.13"
+val slf4jNopVersion = "2.0.17"
 
-val scala212 = "2.12.17"
-val scala213 = "2.13.10"
-val scala3 = "3.2.2"
+val scala212 = "2.12.20"
+val scala213 = "2.13.18"
+val scala3 = "3.3.7"
+
+ThisBuild / versionScheme := Some("early-semver")
 
 lazy val vulcan = project
   .in(file("."))
@@ -37,7 +40,8 @@ lazy val core = project
         "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
         "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
         "org.apache.avro" % "avro" % avroVersion,
-        "org.typelevel" %% "cats-free" % catsVersion
+        "org.typelevel" %% "cats-free" % catsVersion,
+        "org.typelevel" %% "scalac-compat-annotation" % scalacCompatVersion % Test
       ) ++ {
         if (scalaVersion.value.startsWith("3")) Nil
         else Seq("org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided)
@@ -94,6 +98,10 @@ lazy val generic = project
     scalaSettings ++ Seq(
       crossScalaVersions += scala3
     ),
+    // magnolia requires compilation with the -Yretain-trees flag to support case class field default values on Scala 3
+    Test / scalacOptions ++= (if (CrossVersion.partialVersion(scalaVersion.value).exists(_._1 == 3))
+                                Seq("-Yretain-trees")
+                              else Nil),
     testSettings
   )
   .dependsOn(core % "compile->compile;test->test")
@@ -141,7 +149,7 @@ lazy val dependencySettings = Seq(
     else {
       Seq(
         "org.scala-lang.modules" %% "scala-collection-compat" % scalaCollectionCompatVersion % Test,
-        compilerPlugin(("org.typelevel" %% "kind-projector" % "0.13.2").cross(CrossVersion.full))
+        compilerPlugin(("org.typelevel" %% "kind-projector" % "0.13.4").cross(CrossVersion.full))
       )
     }
   },
@@ -265,7 +273,7 @@ lazy val publishSettings =
     licenses := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0.txt")),
     startYear := Some(2019),
     headerLicense := Some(
-      de.heikoseeberger.sbtheader.License.ALv2(
+      sbtheader.License.ALv2(
         s"${startYear.value.get}-${java.time.Year.now}",
         "OVO Energy Limited",
         HeaderLicenseStyle.SpdxSyntax
@@ -316,6 +324,7 @@ lazy val noPublishSettings =
 lazy val scalaSettings = Seq(
   scalaVersion := scala213,
   crossScalaVersions := Seq(scala212, scala213),
+  javacOptions ++= Seq("--release", "8"),
   scalacOptions ++= {
     val commonScalacOptions =
       Seq(
@@ -336,7 +345,10 @@ lazy val scalaSettings = Seq(
           "-Ywarn-dead-code",
           "-Ywarn-numeric-widen",
           "-Ywarn-value-discard",
-          "-Ywarn-unused"
+          "-Ywarn-unused",
+          "-Wconf:cat=unused-nowarn:s",
+          "-release",
+          "8"
         )
       } else Seq()
 
@@ -356,7 +368,9 @@ lazy val scalaSettings = Seq(
     val scala3ScalacOptions =
       if (scalaVersion.value.startsWith("3")) {
         Seq(
-          "-Ykind-projector"
+          "-Ykind-projector",
+          "-java-output-version",
+          "8"
         )
       } else Seq()
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2023 OVO Energy Limited
+ * Copyright 2019-2025 OVO Energy Limited
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -52,8 +52,8 @@ object Props {
 
     override final def toString: String =
       toChain match {
-        case Right(props) =>
-          props.toList
+        case Right(pairs) =>
+          pairs.toList
             .map { case (name, value) => s"$name -> $value" }
             .mkString("Props(", ", ", ")")
 
