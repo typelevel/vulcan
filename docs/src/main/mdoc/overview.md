@@ -101,4 +101,4 @@ Library is heavily inspired by ideas from [avro4s](https://github.com/sksamuel/a
 
 ## License
 
-Licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0.html). Refer to the [license file](https://github.com/fd4s/vulcan/blob/master/license.txt).
+Licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0.html). Refer to the [license file](https://github.com/fd4s/vulcan/blob/main/license.txt).
