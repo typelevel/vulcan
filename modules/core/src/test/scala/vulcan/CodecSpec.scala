@@ -824,12 +824,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
       describe("encode") {
         it("should encode as long") {
-          val value = {
-            val instant = Instant.now()
-            instant.minusNanos(instant.getNano().toLong)
-            instant
-          }
-
+          val value = Instant.now()
           assertEncodeIs[Instant](
             value,
             Right(value.toEpochMilli())
@@ -944,7 +939,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
         it("should encode as long") {
           val value = {
             val instant = Instant.now()
-            LocalDateTime.ofInstant(instant.minusNanos(instant.getNano.toLong), ZoneId.of("UTC"))
+            LocalDateTime.ofInstant(instant.minusNanos(instant.getNano.toLong), ZoneOffset.UTC)
           }
 
           assertEncodeIs[LocalDateTime](
@@ -958,7 +953,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
         it("should error if logical type is missing") {
           val value = {
             val instant = Instant.now()
-            LocalDateTime.ofInstant(instant.minusNanos(instant.getNano.toLong), ZoneId.of("UTC"))
+            LocalDateTime.ofInstant(instant.minusNanos(instant.getNano.toLong), ZoneOffset.UTC)
           }
 
           assertDecodeError[LocalDateTime](
