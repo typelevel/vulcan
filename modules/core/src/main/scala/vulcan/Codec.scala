@@ -6,8 +6,7 @@
 
 package vulcan
 
-import cats.{Invariant, Show, ~>}
-import cats.data._
+import cats.data.{Chain, NonEmptyChain, NonEmptyList, NonEmptyMap, NonEmptySet, NonEmptyVector}
 import cats.free.FreeApplicative
 import cats.implicits._
 import cats.{Invariant, Show, ~>}
@@ -15,9 +14,6 @@ import org.apache.avro.Schema.Type._
 import org.apache.avro.generic._
 import org.apache.avro.{Conversions, LogicalType, LogicalTypes, Schema, SchemaBuilder}
 import vulcan.Avro.Bytes
-import vulcan.internal.converters.collection._
-import vulcan.internal.schema.adaptForSchema
-import vulcan.internal.syntax._
 import vulcan.internal.{Deserializer, Serializer}
 
 import java.nio.ByteBuffer
@@ -735,36 +731,38 @@ object Codec extends CodecCompanionCompat {
       .withLogicalType(LogicalTypes.timestampMillis)
       .withTypeName("Instant")
 
-  case class InstantMicros(self: Instant)
-  object InstantMicros {
-    def ofEpochSecond(epochSecond: Long, nanoAdjustment: Long): InstantMicros =
-      new InstantMicros(Instant.ofEpochSecond(epochSecond, nanoAdjustment))
+  final case class InstantMicros(value: Instant)
 
-    def now(): InstantMicros = new InstantMicros(Instant.now())
-  }
-
+  /**
+    * @group JavaTime
+    */
   implicit lazy val instantMicros: Codec.Aux[Avro.Long, InstantMicros] =
     LongCodec
-      .imap { microsSinceEpoch =>
-        InstantMicros.ofEpochSecond(
-          MICROSECONDS.toSeconds(microsSinceEpoch),
-          MICROSECONDS.toNanos(Math.floorMod(microsSinceEpoch, SECONDS.toMicros(1)))
-        )
-      } { instantMicros =>
-        NANOSECONDS.toMicros(
-          SECONDS.toNanos(instantMicros.self.getEpochSecond) + instantMicros.self.getNano
-        )
-      }
+      .imap(
+        epochMicros =>
+          InstantMicros(
+            Instant.ofEpochSecond(
+              MICROSECONDS.toSeconds(epochMicros),
+              MICROSECONDS.toNanos(Math.floorMod(epochMicros, SECONDS.toMicros(1)))
+            )
+          )
+      )(
+        instantMicros =>
+          NANOSECONDS.toMicros(
+            SECONDS.toNanos(instantMicros.value.getEpochSecond) + instantMicros.value.getNano
+          )
+      )
       .withLogicalType(LogicalTypes.timestampMicros)
       .withTypeName("InstantMicros")
 
-  implicit lazy val localTimestampMillis: Codec.Aux[Avro.Long, LocalDateTime] =
+  /**
+    * @group JavaTime
+    */
+  implicit lazy val localDateTime: Codec.Aux[Avro.Long, LocalDateTime] =
     LongCodec
-      .imap { millisSinceEpoch =>
-        LocalDateTime.ofInstant(Instant.ofEpochMilli(millisSinceEpoch), ZoneId.of("UTC"))
-      } { localDateTime =>
-        localDateTime.toInstant(ZoneOffset.UTC).toEpochMilli
-      }
+      .imap(
+        epochMilli => LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMilli), ZoneOffset.UTC)
+      )(localDateTime => localDateTime.toInstant(ZoneOffset.UTC).toEpochMilli)
       .withLogicalType(LogicalTypes.localTimestampMillis)
       .withTypeName("LocalDateTime")
 

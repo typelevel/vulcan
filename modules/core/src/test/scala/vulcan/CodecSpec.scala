@@ -883,31 +883,35 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
       describe("encode") {
         it("should encode as long") {
-          val value: InstantMicros = InstantMicros.now()
+          val instantMicros: InstantMicros = InstantMicros(Instant.now())
 
           assertEncodeIs[InstantMicros](
-            value,
-            Right(NANOSECONDS.toMicros(SECONDS.toNanos(value.self.getEpochSecond) + value.self.getNano))
+            instantMicros,
+            Right(
+              NANOSECONDS.toMicros(
+                SECONDS.toNanos(instantMicros.value.getEpochSecond) + instantMicros.value.getNano
+              )
+            )
           )
         }
       }
 
       describe("decode") {
         it("should error if logical type is missing") {
-          val value = InstantMicros.now()
+          val instantMicros: InstantMicros = InstantMicros(Instant.now())
 
           assertDecodeError[InstantMicros](
-            unsafeEncode(value),
+            unsafeEncode(instantMicros),
             unsafeSchema[Long],
             "Error decoding InstantMicros: Got unexpected missing logical type"
           )
         }
 
         it("should error if logical type is not timestamp-micros") {
-          val value = InstantMicros.now()
+          val instantMicros: InstantMicros = InstantMicros(Instant.now())
 
           assertDecodeError[InstantMicros](
-            unsafeEncode(value), {
+            unsafeEncode(instantMicros), {
               LogicalTypes.timestampMillis().addToSchema {
                 SchemaBuilder.builder().longType()
               }
@@ -917,11 +921,11 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
         }
 
         it("should decode as Instant") {
-          val value = InstantMicros.now()
+          val instantMicros: InstantMicros = InstantMicros(Instant.now())
 
           assertDecodeIs[InstantMicros](
-            unsafeEncode(value),
-            Right(value)
+            unsafeEncode(instantMicros),
+            Right(instantMicros)
           )
         }
       }
@@ -2183,7 +2187,8 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
               }
             implicit val testCodec: Codec[Test] =
               Codec.record("Test", "") { field =>
-                field("value", _.value, default = Some(List(Element(123), Element(456)))).map(Test(_))
+                field("value", _.value, default = Some(List(Element(123), Element(456))))
+                  .map(Test(_))
               }
 
             assertSchemaIs[Test] {
