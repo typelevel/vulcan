@@ -274,7 +274,7 @@ lazy val publishSettings =
     startYear := Some(2019),
     headerLicense := Some(
       sbtheader.License.ALv2(
-        s"${startYear.value.get}-${java.time.Year.now}",
+        s"${startYear.value.get}",
         "OVO Energy Limited",
         HeaderLicenseStyle.SpdxSyntax
       )
