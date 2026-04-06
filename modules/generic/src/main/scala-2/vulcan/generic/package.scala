@@ -20,8 +20,8 @@ package object generic {
   implicit final val cnilCodec: Codec.Aux[Nothing, CNil] =
     Codec.UnionCodec(Chain.empty).asInstanceOf[Codec.Aux[Nothing, CNil]].withTypeName("Coproduct")
 
-  implicit final def coproductCodec[H, T <: Coproduct](
-    implicit headCodec: Codec[H],
+  implicit final def coproductCodec[H, T <: Coproduct](implicit
+    headCodec: Codec[H],
     tailCodec: Lazy[Codec[T]]
   ): Codec[H :+: T] =
     tailCodec.value match {
@@ -37,14 +37,14 @@ package object generic {
           )
           .withTypeName(typeName)
       case Codec.Fail(error) => Codec.Fail(error)
-      case other =>
+      case other             =>
         throw new IllegalArgumentException(
           s"cannot derive coproduct codec from non-union ${other.getClass()}"
         )
     }
 
-  implicit final def coproductPrism[C <: Coproduct, A](
-    implicit inject: Inject[C, A],
+  implicit final def coproductPrism[C <: Coproduct, A](implicit
+    inject: Inject[C, A],
     selector: Selector[C, A]
   ): Prism[C, A] =
     Prism.instance(selector(_))(inject(_))
@@ -66,11 +66,11 @@ package object generic {
             namespace = caseClass.annotations
               .collectFirst { case AvroNamespace(namespace) => namespace }
               .getOrElse(caseClass.typeName.owner),
-            doc = caseClass.annotations.collectFirst {
-              case AvroDoc(doc) => doc
+            doc = caseClass.annotations.collectFirst { case AvroDoc(doc) =>
+              doc
             },
-            aliases = caseClass.annotations.collectFirst {
-              case AvroAlias(alias) => alias
+            aliases = caseClass.annotations.collectFirst { case AvroAlias(alias) =>
+              alias
             }.toList
           ) { (f: Codec.FieldBuilder[A]) =>
             val nullDefaultBase = caseClass.annotations
@@ -81,21 +81,21 @@ package object generic {
               .traverse[FreeApplicative[Codec.Field[A, *], *], Any] { param =>
                 def nullDefaultField =
                   param.annotations
-                    .collectFirst {
-                      case AvroNullDefault(nullDefault) => nullDefault
+                    .collectFirst { case AvroNullDefault(nullDefault) =>
+                      nullDefault
                     }
                     .getOrElse(nullDefaultBase)
 
                 def renamedField =
                   param.annotations
-                    .collectFirst {
-                      case AvroName(newName) => newName
+                    .collectFirst { case AvroName(newName) =>
+                      newName
                     }
 
                 def getProps =
                   param.annotations
-                    .collectFirst {
-                      case AvroProps(props) => props
+                    .collectFirst { case AvroProps(props) =>
+                      props
                     }
 
                 implicit val codec = param.typeclass
@@ -103,11 +103,11 @@ package object generic {
                 f(
                   name = renamedField.getOrElse(param.label),
                   access = param.dereference,
-                  doc = param.annotations.collectFirst {
-                    case AvroDoc(doc) => doc
+                  doc = param.annotations.collectFirst { case AvroDoc(doc) =>
+                    doc
                   },
-                  aliases = param.annotations.collectFirst {
-                    case AvroAlias(alias) => alias
+                  aliases = param.annotations.collectFirst { case AvroAlias(alias) =>
+                    alias
                   }.toList,
                   default = param.default.orElse(
                     if (codec.schema.exists(_.isNullable) && nullDefaultField)
@@ -121,10 +121,8 @@ package object generic {
           }
       }
 
-    /**
-      * Returns a `Codec` instance for the specified type,
-      * deriving details from the type, as long as the
-      * type is a `case class` or `sealed trait`.
+    /** Returns a `Codec` instance for the specified type, deriving details from the type, as long
+      * as the type is a `case class` or `sealed trait`.
       */
     final def derive[A]: Codec[A] =
       macro Magnolia.gen[A]
@@ -132,11 +130,10 @@ package object generic {
     final def dispatch[A](sealedTrait: SealedTrait[Codec, A]): Codec.Aux[Any, A] = {
 
       Codec
-        .union[A](
-          alt =>
-            Chain.fromSeq(sealedTrait.subtypes).flatMap { subtype =>
-              alt(subtype.typeclass, Prism.instance(subtype.cast.lift)(identity))
-            }
+        .union[A](alt =>
+          Chain.fromSeq(sealedTrait.subtypes).flatMap { subtype =>
+            alt(subtype.typeclass, Prism.instance(subtype.cast.lift)(identity))
+          }
         )
         .withTypeName(sealedTrait.typeName.full)
     }
@@ -144,10 +141,8 @@ package object generic {
     final type Typeclass[A] = Codec[A]
   }
 
-  /**
-    * Returns an enum `Codec` for type `A`, deriving details
-    * like the name, namespace, and [[AvroDoc]] documentation
-    * from the type `A` using type tags.
+  /** Returns an enum `Codec` for type `A`, deriving details like the name, namespace, and
+    * [[AvroDoc]] documentation from the type `A` using type tags.
     *
     * @group Derive
     */
@@ -166,10 +161,8 @@ package object generic {
       aliases = aliasFrom(tag)
     )
 
-  /**
-    * Returns a fixed `Codec` for type `A`, deriving details
-    * like the name, namespace, and [[AvroDoc]] documentation
-    * from the type `A` using type tags.
+  /** Returns a fixed `Codec` for type `A`, deriving details like the name, namespace, and
+    * [[AvroDoc]] documentation from the type `A` using type tags.
     *
     * @group Derive
     */

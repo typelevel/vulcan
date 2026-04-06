@@ -6,7 +6,6 @@
 
 package vulcan
 
-
 import org.apache.avro.generic._
 import org.apache.avro.Schema
 import shapeless3.deriving._
@@ -28,77 +27,77 @@ package object generic {
   ) extends Derivation[Codec] {
     inline def derive[A](using Mirror.Of[A]): Codec[A] = derived[A]
 
-    final def join[A](caseClass: CaseClass[Codec, A]): Codec[A] = 
+    final def join[A](caseClass: CaseClass[Codec, A]): Codec[A] =
       Codec
-          .record[A](
-            name = caseClass.annotations
-              .collectFirst { case AvroName(namespace) => namespace }
-              .getOrElse(caseClass.typeInfo.short),
-            namespace = caseClass.annotations
-              .collectFirst { case AvroNamespace(namespace) => namespace }
-              .getOrElse(caseClass.typeInfo.owner),
-            doc = caseClass.annotations.collectFirst {
-              case AvroDoc(doc) => doc
-            },
-            aliases = caseClass.annotations.collectFirst {
-              case AvroAlias(alias) => alias
-            }.toList
-          ) { (f: Codec.FieldBuilder[A]) =>
-            val nullDefaultBase = caseClass.annotations
-              .collectFirst { case AvroNullDefault(enabled) => enabled }
-              .getOrElse(false)
+        .record[A](
+          name = caseClass.annotations
+            .collectFirst { case AvroName(namespace) => namespace }
+            .getOrElse(caseClass.typeInfo.short),
+          namespace = caseClass.annotations
+            .collectFirst { case AvroNamespace(namespace) => namespace }
+            .getOrElse(caseClass.typeInfo.owner),
+          doc = caseClass.annotations.collectFirst { case AvroDoc(doc) =>
+            doc
+          },
+          aliases = caseClass.annotations.collectFirst { case AvroAlias(alias) =>
+            alias
+          }.toList
+        ) { (f: Codec.FieldBuilder[A]) =>
+          val nullDefaultBase = caseClass.annotations
+            .collectFirst { case AvroNullDefault(enabled) => enabled }
+            .getOrElse(false)
 
-            caseClass.params.toList
-              .traverse[FreeApplicative[Codec.Field[A, *], *], Any] { param =>
-                def nullDefaultField =
-                  param.annotations
-                    .collectFirst {
-                      case AvroNullDefault(nullDefault) => nullDefault
-                    }
-                    .getOrElse(nullDefaultBase)
+          caseClass.params.toList
+            .traverse[FreeApplicative[Codec.Field[A, *], *], Any] { param =>
+              def nullDefaultField =
+                param.annotations
+                  .collectFirst { case AvroNullDefault(nullDefault) =>
+                    nullDefault
+                  }
+                  .getOrElse(nullDefaultBase)
 
-                def renamedField =
-                  param.annotations
-                    .collectFirst {
-                      case AvroName(newName) => newName
-                    }
+              def renamedField =
+                param.annotations
+                  .collectFirst { case AvroName(newName) =>
+                    newName
+                  }
 
-                def getProps =
-                  param.annotations
-                    .collectFirst {
-                      case AvroProps(props) => props
-                    }
+              def getProps =
+                param.annotations
+                  .collectFirst { case AvroProps(props) =>
+                    props
+                  }
 
-                implicit val codec = param.typeclass
+              implicit val codec = param.typeclass
 
-                f(
-                  name = renamedField.getOrElse(param.label),
-                  access = param.deref,
-                  doc = param.annotations.collectFirst {
-                    case AvroDoc(doc) => doc
-                  },
-                  aliases = param.annotations.collectFirst {
-                    case AvroAlias(alias) => alias
-                  }.toList,
-                  default = param.default.orElse(
-                    Option.when(codec.schema.exists(_.isNullable) && nullDefaultField)(
-                      None.asInstanceOf[param.PType]  // TODO: remove cast
-                    )
-                  ),
-                  props = getProps.getOrElse(Props.empty)
-                ).widen
-              }
-              .map(caseClass.rawConstruct(_))
-          }
+              f(
+                name = renamedField.getOrElse(param.label),
+                access = param.deref,
+                doc = param.annotations.collectFirst { case AvroDoc(doc) =>
+                  doc
+                },
+                aliases = param.annotations.collectFirst { case AvroAlias(alias) =>
+                  alias
+                }.toList,
+                default = param.default.orElse(
+                  Option.when(codec.schema.exists(_.isNullable) && nullDefaultField)(
+                    None.asInstanceOf[param.PType] // TODO: remove cast
+                  )
+                ),
+                props = getProps.getOrElse(Props.empty)
+              ).widen
+            }
+            .map(caseClass.rawConstruct(_))
+        }
 
     final def split[A](sealedTrait: SealedTrait[Codec, A]): Codec.Aux[Any, A] = {
       Codec
-        .union[A](
-          alt =>
-            Chain.fromSeq(sealedTrait.subtypes.sortBy(_.typeInfo.full))
-              .flatMap { subtype =>
-                alt(subtype.typeclass, Prism.instance(subtype.cast.lift)(identity))
-              }
+        .union[A](alt =>
+          Chain
+            .fromSeq(sealedTrait.subtypes.sortBy(_.typeInfo.full))
+            .flatMap { subtype =>
+              alt(subtype.typeclass, Prism.instance(subtype.cast.lift)(identity))
+            }
         )
         .withTypeName(sealedTrait.typeInfo.full)
     }
@@ -106,11 +105,8 @@ package object generic {
     final type Typeclass[A] = Codec[A]
   }
 
-
-  /**
-    * Returns an enum `Codec` for type `A`, deriving details
-    * like the name, namespace, and [[AvroDoc]] documentation
-    * from the type `A` using reflection.
+  /** Returns an enum `Codec` for type `A`, deriving details like the name, namespace, and
+    * [[AvroDoc]] documentation from the type `A` using reflection.
     *
     * @group Derive
     */
@@ -129,10 +125,8 @@ package object generic {
       aliases = aliasOf[A]
     )
 
-  /**
-    * Returns a fixed `Codec` for type `A`, deriving details
-    * like the name, namespace, and [[AvroDoc]] documentation
-    * from the type `A` using reflection.
+  /** Returns a fixed `Codec` for type `A`, deriving details like the name, namespace, and
+    * [[AvroDoc]] documentation from the type `A` using reflection.
     *
     * @group Derive
     */
@@ -151,24 +145,23 @@ package object generic {
       aliases = aliasOf[A]
     )
 
-
   private inline def nameOf[A]: String = summonFrom {
     case a: Annotation[AvroName, A] => a().name
-    case ct: ClassTag[A] => ct.runtimeClass.getSimpleName
+    case ct: ClassTag[A]            => ct.runtimeClass.getSimpleName
   }
 
   private inline def namespaceOf[A]: String = summonFrom {
     case a: Annotation[AvroNamespace, A] => a().namespace
-    case ct: ClassTag[A] => ct.runtimeClass.getPackage.getName
+    case ct: ClassTag[A]                 => ct.runtimeClass.getPackage.getName
   }
 
   private inline def docOf[A]: Option[String] = summonFrom {
     case a: Annotation[AvroDoc, A] => Some(a().doc)
-    case _ => None
+    case _                         => None
   }
 
   private inline def aliasOf[A]: Seq[String] = summonFrom {
     case a: Annotation[AvroAlias, A] => Seq(a().alias)
-    case _ => Seq()
+    case _                           => Seq()
   }
 }

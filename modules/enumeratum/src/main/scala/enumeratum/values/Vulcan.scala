@@ -13,8 +13,8 @@ import vulcan.generic.deriveEnum
 object Vulcan {
   def codec[ValueType, EntryType <: ValueEnumEntry[ValueType]](
     `enum`: ValueEnum[ValueType, EntryType]
-  )(
-    implicit codec: Codec[ValueType],
+  )(implicit
+    codec: Codec[ValueType],
     tag: WeakTypeTag[EntryType]
   ): Codec.Aux[codec.AvroType, EntryType] = {
     lazy val typeName = tag.tpe.typeSymbol.name.decodedName

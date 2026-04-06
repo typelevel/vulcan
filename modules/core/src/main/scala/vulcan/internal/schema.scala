@@ -23,9 +23,8 @@ private[vulcan] object schema {
         fixed.bytes()
       case record: IndexedRecord =>
         record.getSchema.getFields.asScala.zipWithIndex
-          .foldLeft(Map.empty[String, Any]) {
-            case (map, (field, index)) =>
-              map.updated(field.name, adaptForSchema(record.get(index)))
+          .foldLeft(Map.empty[String, Any]) { case (map, (field, index)) =>
+            map.updated(field.name, adaptForSchema(record.get(index)))
           }
           .asJava
       case array: ju.Collection[?] =>

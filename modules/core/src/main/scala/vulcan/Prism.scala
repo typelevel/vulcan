@@ -9,8 +9,7 @@ package vulcan
 import scala.annotation.implicitNotFound
 import scala.reflect.ClassTag
 
-/**
-  * Optic used for selecting a part of a coproduct type.
+/** Optic used for selecting a part of a coproduct type.
   */
 @implicitNotFound(
   "could not find implicit Prism[${S}, ${A}]; ensure ${A} is a subtype of ${S} or manually define an instance"
@@ -31,21 +30,17 @@ sealed abstract class Prism[S, A] { self =>
 
 object Prism extends PrismLowPriority {
 
-  /**
-    * Returns the [[Prism]] for the specified types.
+  /** Returns the [[Prism]] for the specified types.
     */
   final def apply[S, A](implicit prism: Prism[S, A]): Prism[S, A] =
     prism
 
-  /**
-    * Returns a new [[Prism]] for the specified type.
+  /** Returns a new [[Prism]] for the specified type.
     */
   implicit final def identity[A]: Prism[A, A] =
     Prism.instance[A, A](Some(_))(a => a)
 
-  /**
-    * Returns a new [[Prism]] instance using the specified
-    * `getOption` and `reverseGet` functions.
+  /** Returns a new [[Prism]] instance using the specified `getOption` and `reverseGet` functions.
     */
   final def instance[S, A](getOption: S => Option[A])(reverseGet: A => S): Prism[S, A] = {
     val _getOption = getOption
@@ -63,8 +58,7 @@ object Prism extends PrismLowPriority {
     }
   }
 
-  /**
-    * Returns a new [[Prism]] from `Either[A, B]` to `Left[A, B]`.
+  /** Returns a new [[Prism]] from `Either[A, B]` to `Left[A, B]`.
     */
   implicit final def left[A, B]: Prism[Either[A, B], Left[A, B]] =
     Prism.instance[Either[A, B], Left[A, B]] {
@@ -72,8 +66,7 @@ object Prism extends PrismLowPriority {
       case Right(_)       => None
     }(left => left)
 
-  /**
-    * Returns a new [[Prism]] from `Option` to `None`.
+  /** Returns a new [[Prism]] from `Option` to `None`.
     */
   implicit final def none[A]: Prism[Option[A], None.type] =
     Prism.instance[Option[A], None.type] {
@@ -81,15 +74,13 @@ object Prism extends PrismLowPriority {
       case Some(_) => None
     }(none => none)
 
-  /**
-    * Returns a new [[Prism]] instance using the specified
-    * `get` partial function and `reverseGet` function.
+  /** Returns a new [[Prism]] instance using the specified `get` partial function and `reverseGet`
+    * function.
     */
   final def partial[S, A](get: PartialFunction[S, A])(reverseGet: A => S): Prism[S, A] =
     Prism.instance(get.lift)(reverseGet)
 
-  /**
-    * Returns a new [[Prism]] from `Either[A, B]` to `Right[A, B]`.
+  /** Returns a new [[Prism]] from `Either[A, B]` to `Right[A, B]`.
     */
   implicit final def right[A, B]: Prism[Either[A, B], Right[A, B]] =
     Prism.instance[Either[A, B], Right[A, B]] {
@@ -97,8 +88,7 @@ object Prism extends PrismLowPriority {
       case right @ Right(_) => Some(right)
     }(right => right)
 
-  /**
-    * Returns a new [[Prism]] from `Option` to `Some`.
+  /** Returns a new [[Prism]] from `Option` to `Some`.
     */
   implicit final def some[S, A](implicit prism: Prism[S, A]): Prism[Option[S], Some[A]] =
     Prism.instance[Option[S], Some[A]] {
@@ -109,16 +99,13 @@ object Prism extends PrismLowPriority {
 
 private[vulcan] sealed abstract class PrismLowPriority {
 
-  /**
-    * Returns a new [[Prism]] for the specified supertype
-    * and subtype.
+  /** Returns a new [[Prism]] for the specified supertype and subtype.
     *
-    * Relies on class tags. Since the function is implicit,
-    * [[Prism]]s are available implicitly for any supertype
-    * and subtype relationships.
+    * Relies on class tags. Since the function is implicit, [[Prism]]s are available implicitly for
+    * any supertype and subtype relationships.
     */
-  implicit final def derive[S, A <: S](
-    implicit tag: ClassTag[A]
+  implicit final def derive[S, A <: S](implicit
+    tag: ClassTag[A]
   ): Prism[S, A] = {
     val getOption = (s: S) =>
       if (tag.runtimeClass.isInstance(s))

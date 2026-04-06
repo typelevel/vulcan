@@ -29,22 +29,19 @@ import vulcan.internal.syntax._
 import vulcan.internal.schema.adaptForSchema
 import scala.util.Try
 
-/**
-  * Provides a schema, along with encoding and decoding functions
-  * for a given type.
+/** Provides a schema, along with encoding and decoding functions for a given type.
   */
 @implicitNotFound(
   "could not find implicit Codec[${A}]; ensure no imports are missing or manually define an instance"
 )
 sealed abstract class Codec[A] {
 
-  /**
-    * The Java type that this codec will encode to. The resulting value will in turn be
-    * converted to a binary or JSON-based Avro format by the underlying Avro SDK.
+  /** The Java type that this codec will encode to. The resulting value will in turn be converted to
+    * a binary or JSON-based Avro format by the underlying Avro SDK.
     *
-    * This type is of interest mainly because it determines what Avro type the data
-    * will ultimately be encoded to; therefore, we express it using type aliases named
-    * according to the Avro type they represent.
+    * This type is of interest mainly because it determines what Avro type the data will ultimately
+    * be encoded to; therefore, we express it using type aliases named according to the Avro type
+    * they represent.
     */
   type AvroType
 
@@ -63,21 +60,16 @@ sealed abstract class Codec[A] {
   private[vulcan] def validate: Either[AvroError, Codec.WithValidSchema[AvroType, A]] =
     schema.map(Codec.Validated[AvroType, A](this, _))
 
-  /**
-    * Returns a new [[Codec]] which uses this [[Codec]]
-    * for encoding and decoding, mapping back-and-forth
-    * between types `A` and `B`.
+  /** Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
+    * back-and-forth between types `A` and `B`.
     */
   def imap[B](f: A => B)(g: B => A): Codec.Aux[AvroType, B] =
     imapErrors(f(_).asRight)(g(_).asRight)
 
-  /**
-    * Returns a new [[Codec]] which uses this [[Codec]]
-    * for encoding and decoding, mapping back-and-forth
-    * between types `A` and `B`.
+  /** Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
+    * back-and-forth between types `A` and `B`.
     *
-    * Similar to [[Codec#imap]], except the mapping from
-    * `A` to `B` might be unsuccessful.
+    * Similar to [[Codec#imap]], except the mapping from `A` to `B` might be unsuccessful.
     */
   def imapError[B](f: A => Either[AvroError, B])(g: B => A): Codec.Aux[AvroType, B] =
     imapErrors(f)(g(_).asRight)
@@ -87,13 +79,10 @@ sealed abstract class Codec[A] {
   )(g: B => Either[AvroError, A]): Codec.Aux[AvroType, B] =
     validate.fold[Codec.Aux[AvroType, B]](Codec.Fail(_), Codec.ImapErrors(_, f, g))
 
-  /**
-    * Returns a new [[Codec]] which uses this [[Codec]]
-    * for encoding and decoding, mapping back-and-forth
-    * between types `A` and `B`.
+  /** Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
+    * back-and-forth between types `A` and `B`.
     *
-    * Similar to [[Codec#imap]], except the mapping from
-    * `A` to `B` might be unsuccessful.
+    * Similar to [[Codec#imap]], except the mapping from `A` to `B` might be unsuccessful.
     */
   final def imapTry[B](f: A => Try[B])(g: B => A): Codec.Aux[AvroType, B] =
     imapError(f(_).toEither.leftMap(AvroError.fromThrowable))(g)
@@ -112,38 +101,45 @@ sealed abstract class Codec[A] {
     }
 }
 
-/**
-  * @groupname General General Codecs
+/** @groupname General General Codecs
   * @groupprio General 0
-  * @groupdesc General Default codecs for standard library types.
+  * @groupdesc General
+  *   Default codecs for standard library types.
   *
   * @groupname Collection Collection Codecs
   * @groupprio Collection 1
-  * @groupdesc Collection Default codecs for standard library collection types.
+  * @groupdesc Collection
+  *   Default codecs for standard library collection types.
   *
   * @groupname Cats Cats Codecs
   * @groupprio Cats 2
-  * @groupdesc Cats Default codecs for Cats data types and type class instances for [[Codec]].
+  * @groupdesc Cats
+  *   Default codecs for Cats data types and type class instances for [[Codec]].
   *
   * @groupname JavaTime Java Time Codecs
   * @groupprio JavaTime 3
-  * @groupdesc JavaTime Default codecs for `java.time` types.
+  * @groupdesc JavaTime
+  *   Default codecs for `java.time` types.
   *
   * @groupname JavaUtil Java Util Codecs
   * @groupprio JavaUtil 4
-  * @groupdesc JavaUtil Default codecs for `java.util` types.
+  * @groupdesc JavaUtil
+  *   Default codecs for `java.util` types.
   *
   * @groupname Create Create Codecs
   * @groupprio Create 5
-  * @groupdesc Create Functions for creating new codecs.
+  * @groupdesc Create
+  *   Functions for creating new codecs.
   *
   * @groupname Derive Derive Codecs
   * @groupprio Derive 6
-  * @groupdesc Derive Functions for deriving new codecs.
+  * @groupdesc Derive
+  *   Functions for deriving new codecs.
   *
   * @groupname Utilities
   * @groupprio Utilities 7
-  * @groupdesc Utilities Miscellaneous utility functions.
+  * @groupdesc Utilities
+  *   Miscellaneous utility functions.
   */
 object Codec extends CodecCompanionCompat {
 
@@ -196,7 +192,9 @@ object Codec extends CodecCompanionCompat {
     override def schema: Either[AvroError, Schema] =
       AvroError.catchNonFatal {
         Right {
-          val schemaCopy = new Schema.Parser().parse(codec.validSchema.toString) // adding logical type mutates the instance, so we need to copy
+          val schemaCopy = new Schema.Parser().parse(
+            codec.validSchema.toString
+          ) // adding logical type mutates the instance, so we need to copy
           logicalType.addToSchema(schemaCopy)
         }
       }
@@ -208,9 +206,7 @@ object Codec extends CodecCompanionCompat {
         .decode(value, schema)
         .ensure(
           AvroError.decodeUnexpectedLogicalType(schema.getLogicalType)
-        )(
-          _ => schema.getLogicalType == logicalType
-        )
+        )(_ => schema.getLogicalType == logicalType)
   }
 
   private[vulcan] final case class WithTypeName[AvroType0, A](
@@ -225,27 +221,25 @@ object Codec extends CodecCompanionCompat {
       codec.decode(value, schema).leftMap(AvroError.errorDecodingTo(typeName, _))
   }
 
-  /**
-    * Returns the [[Codec]] for the specified type.
+  /** Returns the [[Codec]] for the specified type.
     *
     * @group Utilities
     */
   final def apply[A](implicit codec: Codec[A]): codec.type = codec
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit final val boolean: Codec.Aux[Avro.Boolean, Boolean] = BooleanCodec
   case object BooleanCodec
       extends Codec.InstanceForTypes[Avro.Boolean, Boolean](
         "Boolean",
         SchemaBuilder.builder().booleanType(),
-        _.asRight, { case (value: Boolean, _) => Right(value) },
+        _.asRight,
+        { case (value: Boolean, _) => Right(value) },
         Some("Boolean")
       )
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit final lazy val byte: Codec.Aux[Avro.Int, Byte] = {
     Codec.int
@@ -256,8 +250,7 @@ object Codec extends CodecCompanionCompat {
       .withTypeName("Byte")
   }
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit final val bytes: Codec.Aux[Avro.Bytes, Array[Byte]] = BytesCodec
 
@@ -276,7 +269,7 @@ object Codec extends CodecCompanionCompat {
             case avroBytes: Avro.Bytes   => Right(avroBytes.array)
             case avroString: Avro.String => Right(avroString.getBytes)
             case string: String          => Right(string.getBytes(StandardCharsets.UTF_8))
-            case other                   => Left(AvroError.decodeUnexpectedType(other, "ByteBuffer"))
+            case other => Left(AvroError.decodeUnexpectedType(other, "ByteBuffer"))
           }
 
         case schemaType =>
@@ -287,28 +280,24 @@ object Codec extends CodecCompanionCompat {
     }.leftMap(AvroError.errorDecodingTo("Array[Byte]", _))
   }
 
-  /**
-    * @group Cats
+  /** @group Cats
     */
-  implicit final def chain[A](
-    implicit codec: Codec[A]
+  implicit final def chain[A](implicit
+    codec: Codec[A]
   ): Codec.Aux[Avro.Array[codec.AvroType], Chain[A]] =
     Codec.list[A].imap(Chain.fromSeq)(_.toList).withTypeName("Chain")
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit lazy val char: Codec.Aux[Avro.String, Char] =
     Codec.string
-      .imapError(
-        string =>
-          if (string.length == 1) Right(string.charAt(0))
-          else Left(AvroError.unexpectedChar(string.length))
+      .imapError(string =>
+        if (string.length == 1) Right(string.charAt(0))
+        else Left(AvroError.unexpectedChar(string.length))
       )(_.toString)
       .withTypeName("Char")
 
-  /**
-    * Returns a new decimal [[Codec]] for type `BigDecimal`.
+  /** Returns a new decimal [[Codec]] for type `BigDecimal`.
     *
     * @group Create
     */
@@ -388,17 +377,14 @@ object Codec extends CodecCompanionCompat {
     }.leftMap(err => AvroError.errorDecodingTo("BigDecimal", err))
   }
 
-  /**
-    * Returns the result of decoding the specified value
-    * to the specified type.
+  /** Returns the result of decoding the specified value to the specified type.
     *
     * @group Utilities
     */
   final def decode[A](value: Any)(implicit codec: Codec[A]): Either[AvroError, A] =
     codec.schema.flatMap(codec.decode(value, _))
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit lazy val double: Codec.Aux[Avro.Double, Double] = DoubleCodec
 
@@ -415,7 +401,7 @@ object Codec extends CodecCompanionCompat {
             case float: Avro.Float   => Right(float.toDouble)
             case int: Avro.Int       => Right(int.toDouble)
             case long: Avro.Long     => Right(long.toDouble)
-            case other =>
+            case other               =>
               Left(
                 AvroError.decodeUnexpectedTypes(
                   other,
@@ -432,27 +418,24 @@ object Codec extends CodecCompanionCompat {
     }.leftMap(AvroError.errorDecodingTo("Double", _))
   }
 
-  /**
-    * @group General
+  /** @group General
     */
-  implicit final def either[A, B](
-    implicit codecA: Codec[A],
+  implicit final def either[A, B](implicit
+    codecA: Codec[A],
     codecB: Codec[B]
   ): Codec.Aux[Any, Either[A, B]] =
     Codec
       .union[Either[A, B]](alt => alt[Left[A, B]] |+| alt[Right[A, B]])
       .withTypeName("Either")
 
-  /**
-    * Returns the result of encoding the specified value.
+  /** Returns the result of encoding the specified value.
     *
     * @group Utilities
     */
   final def encode[A](a: A)(implicit codec: Codec[A]): Either[AvroError, codec.AvroType] =
     codec.encode(a)
 
-  /**
-    * Returns a new enum [[Codec]] for type `A`.
+  /** Returns a new enum [[Codec]] for type `A`.
     *
     * @group Create
     */
@@ -499,14 +482,14 @@ object Codec extends CodecCompanionCompat {
                 Right(Avro.EnumSymbol(schema, symbol))
               else
                 Left(AvroError.encodeSymbolNotInSchema(symbol, symbols))
-            }, {
-              case (genericEnum: GenericEnumSymbol[_], _) =>
-                val symbol = genericEnum.toString
+            },
+            { case (genericEnum: GenericEnumSymbol[_], _) =>
+              val symbol = genericEnum.toString
 
-                if (symbols.contains(symbol))
-                  decode(symbol)
-                else
-                  default.toRight(AvroError.decodeSymbolNotInSchema(symbol, symbols))
+              if (symbols.contains(symbol))
+                decode(symbol)
+              else
+                default.toRight(AvroError.decodeSymbolNotInSchema(symbol, symbols))
             }
           )
           .withTypeName(typeName)
@@ -527,13 +510,11 @@ object Codec extends CodecCompanionCompat {
   ): Codec.Aux[Avro.EnumSymbol, A] =
     enumeration(name, namespace, symbols, encode, decode, default, doc, aliases, props)
 
-  /**
-    * Returns a new fixed [[Codec]] for type `A`.
+  /** Returns a new fixed [[Codec]] for type `A`.
     *
-    * When encoding, bytes are zero-padded to the specified size.
-    * Zero-padding is applied at the end, and will remain in the
-    * input to `decode`. Encoding checks to ensure the size is
-    * not exceeded, while decoding ensures the exact size.
+    * When encoding, bytes are zero-padded to the specified size. Zero-padding is applied at the
+    * end, and will remain in the input to `decode`. Encoding checks to ensure the size is not
+    * exceeded, while decoding ensures the exact size.
     *
     * @group Create
     */
@@ -578,27 +559,26 @@ object Codec extends CodecCompanionCompat {
               } else {
                 Left(AvroError.encodeExceedsFixedSize(bytes.length, size))
               }
-            }, {
-              case (fixed: Avro.Fixed, avroSchema) =>
-                val bytes = fixed.bytes()
-                if (bytes.length == avroSchema.getFixedSize) {
-                  decode(bytes)
-                } else {
-                  Left {
-                    AvroError.decodeNotEqualFixedSize(
-                      bytes.length,
-                      avroSchema.getFixedSize
-                    )
-                  }
+            },
+            { case (fixed: Avro.Fixed, avroSchema) =>
+              val bytes = fixed.bytes()
+              if (bytes.length == avroSchema.getFixedSize) {
+                decode(bytes)
+              } else {
+                Left {
+                  AvroError.decodeNotEqualFixedSize(
+                    bytes.length,
+                    avroSchema.getFixedSize
+                  )
                 }
+              }
             }
           )
           .withTypeName(typeName)
     )
   }
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit lazy val float: Codec.Aux[Avro.Float, Float] = FloatCodec
 
@@ -626,27 +606,22 @@ object Codec extends CodecCompanionCompat {
     }.leftMap(AvroError.errorDecodingTo("Float", _))
   }
 
-  /**
-    * Returns the result of decoding the specified
-    * Avro binary to the specified type.
+  /** Returns the result of decoding the specified Avro binary to the specified type.
     *
     * @group Utilities
     */
   final def fromBinary[A: Codec](bytes: Array[Byte], writerSchema: Schema): Either[AvroError, A] =
     Deserializer.fromBinary[A](bytes, writerSchema)
 
-  /**
-    * Returns the result of decoding the specified
-    * Avro JSON to the specified type.
+  /** Returns the result of decoding the specified Avro JSON to the specified type.
     *
     * @group Utilities
     */
   final def fromJson[A: Codec](json: String, writerSchema: Schema): Either[AvroError, A] =
     Deserializer.fromJson[A](json, writerSchema)
 
-  /**
-    * Returns a new [[Codec]] instance using the specified
-    * `Schema`, and encode and decode functions.
+  /** Returns a new [[Codec]] instance using the specified `Schema`, and encode and decode
+    * functions.
     *
     * @group Create
     */
@@ -718,8 +693,7 @@ object Codec extends CodecCompanionCompat {
     }.leftMap(err => decodingTypeName.fold(err)(AvroError.errorDecodingTo(_, err)))
   }
 
-  /**
-    * @group JavaTime
+  /** @group JavaTime
     */
   implicit lazy val instant: Codec.Aux[Avro.Long, Instant] =
     LongCodec
@@ -729,41 +703,36 @@ object Codec extends CodecCompanionCompat {
 
   final case class InstantMicros(value: Instant)
 
-  /**
-    * @group JavaTime
+  /** @group JavaTime
     */
   implicit lazy val instantMicros: Codec.Aux[Avro.Long, InstantMicros] =
     LongCodec
-      .imap(
-        epochMicros =>
-          InstantMicros(
-            Instant.ofEpochSecond(
-              MICROSECONDS.toSeconds(epochMicros),
-              MICROSECONDS.toNanos(Math.floorMod(epochMicros, SECONDS.toMicros(1)))
-            )
+      .imap(epochMicros =>
+        InstantMicros(
+          Instant.ofEpochSecond(
+            MICROSECONDS.toSeconds(epochMicros),
+            MICROSECONDS.toNanos(Math.floorMod(epochMicros, SECONDS.toMicros(1)))
           )
-      )(
-        instantMicros =>
-          NANOSECONDS.toMicros(
-            SECONDS.toNanos(instantMicros.value.getEpochSecond) + instantMicros.value.getNano
-          )
+        )
+      )(instantMicros =>
+        NANOSECONDS.toMicros(
+          SECONDS.toNanos(instantMicros.value.getEpochSecond) + instantMicros.value.getNano
+        )
       )
       .withLogicalType(LogicalTypes.timestampMicros)
       .withTypeName("InstantMicros")
 
-  /**
-    * @group JavaTime
+  /** @group JavaTime
     */
   implicit lazy val localDateTime: Codec.Aux[Avro.Long, LocalDateTime] =
     LongCodec
-      .imap(
-        epochMilli => LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMilli), ZoneOffset.UTC)
+      .imap(epochMilli =>
+        LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMilli), ZoneOffset.UTC)
       )(localDateTime => localDateTime.toInstant(ZoneOffset.UTC).toEpochMilli)
       .withLogicalType(LogicalTypes.localTimestampMillis)
       .withTypeName("LocalDateTime")
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit lazy val int: Codec.Aux[Avro.Int, Int] = IntCodec
 
@@ -771,80 +740,79 @@ object Codec extends CodecCompanionCompat {
       extends Codec.InstanceForTypes[Avro.Int, Int](
         "Int",
         SchemaBuilder.builder().intType(),
-        _.asRight, { case (integer: Int, _) => Right(integer) },
+        _.asRight,
+        { case (integer: Int, _) => Right(integer) },
         Some("Int")
       )
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit final def left[A, B](implicit codec: Codec[A]): Codec.Aux[codec.AvroType, Left[A, B]] =
     codec.imap(Left[A, B])(_.value)
 
   import java.{util => ju}
 
-  private def collection[A](
-    implicit codec: Codec[A]
+  private def collection[A](implicit
+    codec: Codec[A]
   ): Codec.Aux[Avro.Array[codec.AvroType], ju.Collection[A]] =
     codec.schema.fold(
       fail,
       schema =>
         Codec.instanceForTypes[Avro.Array[codec.AvroType], ju.Collection[A]](
           "Collection",
-          Schema.createArray(schema), { collection =>
+          Schema.createArray(schema),
+          { collection =>
             val it = collection.iterator()
             val coll: ju.List[codec.AvroType] = new ju.ArrayList
             AvroError.catchNonFatal {
-              while (it.hasNext)(coll
-                .add(codec.encode(it.next()).fold(err => throw err.throwable, identity)))
+              while (it.hasNext)
+                (coll
+                  .add(codec.encode(it.next()).fold(err => throw err.throwable, identity)))
               Right(coll)
             }
-          }, {
-            case (as: java.util.Collection[_], avroShema) =>
-              val it = as.iterator()
-              val coll: ju.Collection[A] = new ju.ArrayList
-              AvroError.catchNonFatal {
-                while (it.hasNext)(coll
+          },
+          { case (as: java.util.Collection[_], avroShema) =>
+            val it = as.iterator()
+            val coll: ju.Collection[A] = new ju.ArrayList
+            AvroError.catchNonFatal {
+              while (it.hasNext)
+                (coll
                   .add(
                     codec
                       .decode(it.next(), avroShema.getElementType)
                       .fold(err => throw err.throwable, identity)
                   ))
-                Right(coll)
-              }
+              Right(coll)
+            }
           }
         )
     )
 
-  /**
-    * @group Collection
+  /** @group Collection
     */
-  implicit final def list[A](
-    implicit codec: Codec[A]
+  implicit final def list[A](implicit
+    codec: Codec[A]
   ): Codec.Aux[Avro.Array[codec.AvroType], List[A]] =
     Codec
       .collection[A]
       .imap(_.asScala.toList)(_.asJava)
       .withTypeName("List")
 
-  /**
-    * @group JavaTime
+  /** @group JavaTime
     */
   implicit lazy val localDate: Codec.Aux[Avro.Int, LocalDate] =
     Codec.int
-      .imapErrors(int => LocalDate.ofEpochDay(int.toLong).asRight)(
-        localDate =>
-          Either.cond(
-            localDate.toEpochDay.isValidInt,
-            localDate.toEpochDay.toInt,
-            AvroError.encodeDateSizeExceeded(localDate)
-          )
+      .imapErrors(int => LocalDate.ofEpochDay(int.toLong).asRight)(localDate =>
+        Either.cond(
+          localDate.toEpochDay.isValidInt,
+          localDate.toEpochDay.toInt,
+          AvroError.encodeDateSizeExceeded(localDate)
+        )
       )
       .withLogicalType(LogicalTypes.date)
       .withTypeName("LocalDate")
 
-  /**
-    * @group JavaTime
+  /** @group JavaTime
     */
   final val localTimeMillis: Codec.Aux[Avro.Int, LocalTime] =
     Codec.int
@@ -855,8 +823,7 @@ object Codec extends CodecCompanionCompat {
       .withLogicalType(LogicalTypes.timeMillis)
       .withTypeName("LocalTime")
 
-  /**
-    * @group JavaTime
+  /** @group JavaTime
     */
   final val localTimeMicros: Codec.Aux[Avro.Long, LocalTime] =
     Codec.long
@@ -867,8 +834,7 @@ object Codec extends CodecCompanionCompat {
       .withLogicalType(LogicalTypes.timeMicros)
       .withTypeName("LocalTime")
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit lazy val long: Codec.Aux[Avro.Long, Long] = LongCodec
   case object LongCodec extends Codec.WithValidSchema[Avro.Long, Long] {
@@ -896,11 +862,10 @@ object Codec extends CodecCompanionCompat {
     }.leftMap(AvroError.errorDecodingTo("Long", _))
   }
 
-  /**
-    * @group Collection
+  /** @group Collection
     */
-  implicit final def map[A](
-    implicit codec: Codec[A]
+  implicit final def map[A](implicit
+    codec: Codec[A]
   ): Codec.Aux[Avro.Map[codec.AvroType], Map[String, A]] =
     codec.schema.fold(
       fail,
@@ -910,21 +875,20 @@ object Codec extends CodecCompanionCompat {
             "java.util.Map",
             Schema.createMap(schema),
             _.toList
-              .traverse {
-                case (key, value) =>
-                  codec
-                    .encode(value)
-                    .tupleLeft(Avro.String(key))
+              .traverse { case (key, value) =>
+                codec
+                  .encode(value)
+                  .tupleLeft(Avro.String(key))
               }
-              .map(_.toMap.asJava), {
-              case (map: java.util.Map[_, _], avroSchema) =>
-                map.asScala.toList
-                  .traverse {
-                    case (key: Avro.String, value) =>
-                      codec.decode(value, avroSchema.getValueType).tupleLeft(key.toString)
-                    case (key, _) => Left(AvroError.decodeUnexpectedMapKey(key))
-                  }
-                  .map(_.toMap)
+              .map(_.toMap.asJava),
+            { case (map: java.util.Map[_, _], avroSchema) =>
+              map.asScala.toList
+                .traverse {
+                  case (key: Avro.String, value) =>
+                    codec.decode(value, avroSchema.getValueType).tupleLeft(key.toString)
+                  case (key, _) => Left(AvroError.decodeUnexpectedMapKey(key))
+                }
+                .map(_.toMap)
             }
           )
           .withTypeName("Map")
@@ -935,22 +899,21 @@ object Codec extends CodecCompanionCompat {
       .instanceForTypes[Avro.Null, Null](
         "null",
         SchemaBuilder.builder().nullType(),
-        _ => Right(null), { case (null, _) => Right(null) }
+        _ => Right(null),
+        { case (null, _) => Right(null) }
       )
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit lazy val none: Codec.Aux[Avro.Null, None.type] =
     `null`
       .imap(_ => None)(_ => null)
       .withTypeName("None")
 
-  /**
-    * @group Cats
+  /** @group Cats
     */
-  implicit final def nonEmptyChain[A](
-    implicit codec: Codec[A]
+  implicit final def nonEmptyChain[A](implicit
+    codec: Codec[A]
   ): Codec.Aux[Avro.Array[codec.AvroType], NonEmptyChain[A]] =
     Codec
       .chain[A]
@@ -959,11 +922,10 @@ object Codec extends CodecCompanionCompat {
       )(_.toChain)
       .withTypeName("NonEmptyChain")
 
-  /**
-    * @group Cats
+  /** @group Cats
     */
-  implicit final def nonEmptyList[A](
-    implicit codec: Codec[A]
+  implicit final def nonEmptyList[A](implicit
+    codec: Codec[A]
   ): Codec.Aux[Avro.Array[codec.AvroType], NonEmptyList[A]] =
     Codec
       .list[A]
@@ -972,28 +934,25 @@ object Codec extends CodecCompanionCompat {
       )(_.toList)
       .withTypeName("NonEmptyList")
 
-  /**
-    * @group Cats
+  /** @group Cats
     */
-  implicit final def nonEmptySet[A](
-    implicit codec: Codec[A],
+  implicit final def nonEmptySet[A](implicit
+    codec: Codec[A],
     ordering: Ordering[A]
   ): Codec.Aux[Avro.Array[codec.AvroType], NonEmptySet[A]] =
     Codec
       .list[A]
-      .imapError(
-        list =>
-          NonEmptySet
-            .fromSet(SortedSet(list: _*))
-            .toRight(AvroError.decodeEmptyCollection)
+      .imapError(list =>
+        NonEmptySet
+          .fromSet(SortedSet(list: _*))
+          .toRight(AvroError.decodeEmptyCollection)
       )(_.toList)
       .withTypeName("NonEmptySet")
 
-  /**
-    * @group Cats
+  /** @group Cats
     */
-  implicit final def nonEmptyVector[A](
-    implicit codec: Codec[A]
+  implicit final def nonEmptyVector[A](implicit
+    codec: Codec[A]
   ): Codec.Aux[Avro.Array[codec.AvroType], NonEmptyVector[A]] =
     Codec
       .vector[A]
@@ -1002,24 +961,21 @@ object Codec extends CodecCompanionCompat {
       )(_.toVector)
       .withTypeName("NonEmptyVector")
 
-  /**
-    * @group Cats
+  /** @group Cats
     */
-  implicit final def nonEmptyMap[A](
-    implicit codec: Codec[A]
+  implicit final def nonEmptyMap[A](implicit
+    codec: Codec[A]
   ): Codec.Aux[Avro.Map[codec.AvroType], NonEmptyMap[String, A]] =
     Codec
       .map[A]
-      .imapError(
-        map =>
-          NonEmptyMap
-            .fromMap(SortedMap.apply(map.toList: _*))
-            .toRight(AvroError.decodeEmptyCollection)
+      .imapError(map =>
+        NonEmptyMap
+          .fromMap(SortedMap.apply(map.toList: _*))
+          .toRight(AvroError.decodeEmptyCollection)
       )(_.toSortedMap)
       .withTypeName("NonEmptyMap")
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit final def option[A](implicit codec: Codec[A]): Codec[Option[A]] =
     OptionCodec(codec)
@@ -1051,8 +1007,7 @@ object Codec extends CodecCompanionCompat {
     }
   }
 
-  /**
-    * Returns a new record [[Codec]] for type `A`.
+  /** Returns a new record [[Codec]] for type `A`.
     *
     * @group Create
     */
@@ -1138,57 +1093,53 @@ object Codec extends CodecCompanionCompat {
                 values.foreach { case (name, value) => record.put(name, value) }
                 record
               }
-            }, {
-              case (record: IndexedRecord, _) =>
-                free.foldMap {
-                  new (Field[A, *] ~> Either[AvroError, *]) {
-                    def apply[B](field: Field[A, B]): Either[AvroError, B] =
-                      (field.name +: field.aliases.toList)
-                        .collectFirstSome { name =>
-                          Option(record.getSchema.getField(name))
-                        }
-                        .fold(field.default.toRight(AvroError.decodeMissingRecordField(field.name))) {
-                          schemaField =>
-                            field.codec.decode(record.get(schemaField.pos), schemaField.schema)
-                        }
-                  }
+            },
+            { case (record: IndexedRecord, _) =>
+              free.foldMap {
+                new (Field[A, *] ~> Either[AvroError, *]) {
+                  def apply[B](field: Field[A, B]): Either[AvroError, B] =
+                    (field.name +: field.aliases.toList)
+                      .collectFirstSome { name =>
+                        Option(record.getSchema.getField(name))
+                      }
+                      .fold(field.default.toRight(AvroError.decodeMissingRecordField(field.name))) {
+                        schemaField =>
+                          field.codec.decode(record.get(schemaField.pos), schemaField.schema)
+                      }
                 }
+              }
             }
           )
           .withTypeName(typeName)
     )
   }
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit final def right[A, B](implicit codec: Codec[B]): Codec.Aux[codec.AvroType, Right[A, B]] =
     codec.imap(Right[A, B](_))(_.value).withTypeName("Right")
 
-  /**
-    * @group Collection
+  /** @group Collection
     */
-  implicit final def seq[A](
-    implicit codec: Codec[A]
+  implicit final def seq[A](implicit
+    codec: Codec[A]
   ): Codec.Aux[Avro.Array[codec.AvroType], Seq[A]] =
     Codec
       .list[A]
       .imap[Seq[A]](_.toSeq)(_.toList)
       .withTypeName("Seq")
 
-  /**
-    * @group Collection
+  /** @group Collection
     */
-  implicit final def set[A](
-    implicit codec: Codec[A]
+  implicit final def set[A](implicit
+    codec: Codec[A]
   ): Codec.Aux[Avro.Array[codec.AvroType], Set[A]] =
     Codec
       .collection[A]
       .imap(_.asScala.toSet)(_.asJava)
       .withTypeName("Set")
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit lazy val short: Codec.Aux[Avro.Int, Short] = {
     Codec.int
@@ -1199,14 +1150,12 @@ object Codec extends CodecCompanionCompat {
       .withTypeName("Short")
   }
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit final def some[A](implicit codec: Codec[A]): Codec.Aux[codec.AvroType, Some[A]] =
     codec.imap(Some(_))(_.value).withTypeName("Some")
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit lazy val string: Codec.Aux[Avro.String, String] = StringCodec
 
@@ -1221,7 +1170,7 @@ object Codec extends CodecCompanionCompat {
           value match {
             case string: String          => Right(string)
             case avroString: Avro.String => Right(avroString.toString)
-            case avroBytes: Avro.Bytes =>
+            case avroBytes: Avro.Bytes   =>
               AvroError.catchNonFatal(Right(StandardCharsets.UTF_8.decode(avroBytes).toString))
             case other =>
               Left {
@@ -1238,26 +1187,21 @@ object Codec extends CodecCompanionCompat {
     }.leftMap(AvroError.errorDecodingTo("String", _))
   }
 
-  /**
-    * Returns the result of encoding the specified
-    * value to Avro binary.
+  /** Returns the result of encoding the specified value to Avro binary.
     *
     * @group Utilities
     */
   final def toBinary[A: Codec](a: A): Either[AvroError, Array[Byte]] =
     Serializer.toBinary(a)
 
-  /**
-    * Returns the result of encoding the specified
-    * value to Avro JSON.
+  /** Returns the result of encoding the specified value to Avro JSON.
     *
     * @group Utilities
     */
   final def toJson[A: Codec](a: A): Either[AvroError, String] =
     Serializer.toJson(a)
 
-  /**
-    * Returns a new union [[Codec]] for type `A`.
+  /** Returns a new union [[Codec]] for type `A`.
     *
     * @group Create
     */
@@ -1365,41 +1309,36 @@ object Codec extends CodecCompanionCompat {
     }
   }
 
-  /**
-    * @group General
+  /** @group General
     */
   implicit lazy val unit: Codec.Aux[Avro.Null, Unit] =
     `null`
       .imap(_ => ())(_ => null)
       .withTypeName("Unit")
 
-  /**
-    * @group JavaUtil
+  /** @group JavaUtil
     */
   implicit lazy val uuid: Codec.Aux[Avro.String, UUID] =
     Codec.string
-      .imapError(
-        string =>
-          AvroError.catchNonFatal {
-            Right(UUID.fromString(string))
-          }
+      .imapError(string =>
+        AvroError.catchNonFatal {
+          Right(UUID.fromString(string))
+        }
       )(_.toString)
       .withLogicalType(LogicalTypes.uuid)
       .withTypeName("UUID")
 
-  /**
-    * @group Collection
+  /** @group Collection
     */
-  implicit final def vector[A](
-    implicit codec: Codec[A]
+  implicit final def vector[A](implicit
+    codec: Codec[A]
   ): Codec.Aux[Avro.Array[codec.AvroType], Vector[A]] =
     Codec
       .collection[A]
       .imap(_.asScala.toVector)(_.asJava)
       .withTypeName("Vector")
 
-  /**
-    * @group Cats
+  /** @group Cats
     */
   implicit final val codecInvariant: Invariant[Codec] =
     new Invariant[Codec] {
@@ -1407,20 +1346,17 @@ object Codec extends CodecCompanionCompat {
         codec.imap(f)(g)
     }
 
-  /**
-    * @group Cats
+  /** @group Cats
     */
   implicit final def codecShow[A]: Show[Codec[A]] =
     Show.fromToString
 
-  /**
-    * @group Cats
+  /** @group Cats
     */
   implicit final def codecAuxShow[AvroType, A]: Show[Codec.Aux[AvroType, A]] =
     Show.fromToString
 
-  /**
-    * @group Create
+  /** @group Create
     */
   sealed abstract class Alt[A] {
     type B
@@ -1443,12 +1379,11 @@ object Codec extends CodecCompanionCompat {
     }
   }
 
-  /**
-    * @group Create
+  /** @group Create
     */
   sealed abstract class AltBuilder[A] {
-    def apply[B](
-      implicit codec: Codec[B],
+    def apply[B](implicit
+      codec: Codec[B],
       prism: Prism[A, B]
     ): Chain[Alt[A]]
   }
@@ -1456,8 +1391,8 @@ object Codec extends CodecCompanionCompat {
   private[vulcan] object AltBuilder {
     private[this] final val Instance: AltBuilder[Any] =
       new AltBuilder[Any] {
-        override final def apply[B](
-          implicit codec: Codec[B],
+        override final def apply[B](implicit
+          codec: Codec[B],
           prism: Prism[Any, B]
         ): Chain[Alt[Any]] =
           Chain.one(Alt(codec, prism))
@@ -1470,8 +1405,7 @@ object Codec extends CodecCompanionCompat {
       Instance.asInstanceOf[AltBuilder[A]]
   }
 
-  /**
-    * @group Create
+  /** @group Create
     */
   sealed abstract class Field[A, B] {
     def name: String
@@ -1491,8 +1425,7 @@ object Codec extends CodecCompanionCompat {
     def props: Props
   }
 
-  /**
-    * @group Create
+  /** @group Create
     */
   sealed abstract class FieldBuilder[A] {
     def apply[B](

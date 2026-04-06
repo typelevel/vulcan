@@ -27,8 +27,8 @@ object FixedNamespace {
       val b1 = f1.bytes
       val b2 = f2.bytes
 
-      b1.length == b2.length && b1.zip(b2).forall {
-        case (a, b) => a == b
+      b1.length == b2.length && b1.zip(b2).forall { case (a, b) =>
+        a == b
       }
     }
 

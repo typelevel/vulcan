@@ -222,32 +222,32 @@ lazy val buildInfoSettings = Seq(
       scalacOptions,
       sourceDirectory,
       ThisBuild / latestVersion,
-      BuildInfoKey.map(ThisBuild / version) {
-        case (_, v) => "latestSnapshotVersion" -> v
+      BuildInfoKey.map(ThisBuild / version) { case (_, v) =>
+        "latestSnapshotVersion" -> v
       },
-      BuildInfoKey.map(core / moduleName) {
-        case (k, v) => "core" ++ k.capitalize -> v
+      BuildInfoKey.map(core / moduleName) { case (k, v) =>
+        "core" ++ k.capitalize -> v
       },
-      BuildInfoKey.map(core / crossScalaVersions) {
-        case (k, v) => "core" ++ k.capitalize -> v
+      BuildInfoKey.map(core / crossScalaVersions) { case (k, v) =>
+        "core" ++ k.capitalize -> v
       },
-      BuildInfoKey.map(enumeratum / moduleName) {
-        case (k, v) => "enumeratum" ++ k.capitalize -> v
+      BuildInfoKey.map(enumeratum / moduleName) { case (k, v) =>
+        "enumeratum" ++ k.capitalize -> v
       },
-      BuildInfoKey.map(enumeratum / crossScalaVersions) {
-        case (k, v) => "enumeratum" ++ k.capitalize -> v
+      BuildInfoKey.map(enumeratum / crossScalaVersions) { case (k, v) =>
+        "enumeratum" ++ k.capitalize -> v
       },
-      BuildInfoKey.map(generic / moduleName) {
-        case (k, v) => "generic" ++ k.capitalize -> v
+      BuildInfoKey.map(generic / moduleName) { case (k, v) =>
+        "generic" ++ k.capitalize -> v
       },
-      BuildInfoKey.map(generic / crossScalaVersions) {
-        case (k, v) => "generic" ++ k.capitalize -> v
+      BuildInfoKey.map(generic / crossScalaVersions) { case (k, v) =>
+        "generic" ++ k.capitalize -> v
       },
-      BuildInfoKey.map(refined / moduleName) {
-        case (k, v) => "refined" ++ k.capitalize -> v
+      BuildInfoKey.map(refined / moduleName) { case (k, v) =>
+        "refined" ++ k.capitalize -> v
       },
-      BuildInfoKey.map(refined / crossScalaVersions) {
-        case (k, v) => "refined" ++ k.capitalize -> v
+      BuildInfoKey.map(refined / crossScalaVersions) { case (k, v) =>
+        "refined" ++ k.capitalize -> v
       },
       LocalRootProject / organization,
       core / crossScalaVersions,

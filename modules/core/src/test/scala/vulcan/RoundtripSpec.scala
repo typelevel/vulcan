@@ -55,8 +55,8 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
 
   describe("Chain") {
     it("roundtrip") {
-      implicit def arbitraryChain[A](
-        implicit arbitrary: Arbitrary[A]
+      implicit def arbitraryChain[A](implicit
+        arbitrary: Arbitrary[A]
       ): Arbitrary[Chain[A]] =
         Arbitrary(Gen.listOf(arbitrary.arbitrary).map(Chain.fromSeq))
 
@@ -111,8 +111,8 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
 
   describe("NonEmptyChain") {
     it("roundtrip") {
-      implicit def arbitraryNonEmptyChain[A](
-        implicit arbitrary: Arbitrary[A]
+      implicit def arbitraryNonEmptyChain[A](implicit
+        arbitrary: Arbitrary[A]
       ): Arbitrary[NonEmptyChain[A]] =
         Arbitrary(
           Gen
@@ -126,8 +126,8 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
 
   describe("NonEmptyList") {
     it("roundtrip") {
-      implicit def arbitraryNonEmptyList[A](
-        implicit arbitrary: Arbitrary[A]
+      implicit def arbitraryNonEmptyList[A](implicit
+        arbitrary: Arbitrary[A]
       ): Arbitrary[NonEmptyList[A]] =
         Arbitrary(
           Gen
@@ -141,8 +141,8 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
 
   describe("NonEmptySet") {
     it("roundtrip") {
-      implicit def arbitraryNonEmptySet[A](
-        implicit arbitrary: Arbitrary[A],
+      implicit def arbitraryNonEmptySet[A](implicit
+        arbitrary: Arbitrary[A],
         ordering: Ordering[A]
       ): Arbitrary[NonEmptySet[A]] =
         Arbitrary(
@@ -157,8 +157,8 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
 
   describe("NonEmptyVector") {
     it("roundtrip") {
-      implicit def arbitraryNonEmptyVector[A](
-        implicit arbitrary: Arbitrary[A]
+      implicit def arbitraryNonEmptyVector[A](implicit
+        arbitrary: Arbitrary[A]
       ): Arbitrary[NonEmptyVector[A]] =
         Arbitrary(
           Gen
@@ -176,13 +176,13 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
 
   describe("Seq") {
     it("roundtrip") {
-      implicit def seqArbitrary[A](
-        implicit arbitrary: Arbitrary[A]
+      implicit def seqArbitrary[A](implicit
+        arbitrary: Arbitrary[A]
       ): Arbitrary[Seq[A]] =
         Arbitrary(Gen.listOf(arbitrary.arbitrary))
 
-      implicit def seqEq[A](
-        implicit eq: Eq[A]
+      implicit def seqEq[A](implicit
+        eq: Eq[A]
       ): Eq[Seq[A]] =
         Eq.instance { (a, b) =>
           a.size == b.size && a.zip(b).forall { case (a1, a2) => eq.eqv(a1, a2) }
@@ -217,8 +217,8 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
 trait RoundtripHelpers {
   self: BaseSpec =>
 
-  def roundtrip[A](
-    implicit codec: Codec[A],
+  def roundtrip[A](implicit
+    codec: Codec[A],
     arbitrary: Arbitrary[A],
     eq: Eq[A]
   ): Assertion = {
@@ -229,8 +229,8 @@ trait RoundtripHelpers {
     }
   }
 
-  def roundtrip[A](a: A)(
-    implicit codec: Codec[A],
+  def roundtrip[A](a: A)(implicit
+    codec: Codec[A],
     eq: Eq[A]
   ): Assertion = {
     val avroSchema = codec.schema
@@ -245,8 +245,8 @@ trait RoundtripHelpers {
     }
   }
 
-  def binaryRoundtrip[A](a: A)(
-    implicit codec: Codec[A],
+  def binaryRoundtrip[A](a: A)(implicit
+    codec: Codec[A],
     eq: Eq[A]
   ): Assertion = {
     val binary = Codec.toBinary(a)
@@ -258,8 +258,8 @@ trait RoundtripHelpers {
     }
   }
 
-  def jsonRoundtrip[A](a: A)(
-    implicit codec: Codec[A],
+  def jsonRoundtrip[A](a: A)(implicit
+    codec: Codec[A],
     eq: Eq[A]
   ): Assertion = {
     val json = Codec.toJson(a)

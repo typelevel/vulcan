@@ -1692,7 +1692,11 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           assertEncodeIs[NonEmptyMap[String, Int]](
             NonEmptyMap.of("key1" -> 1, "key2" -> 2, "key3" -> 3),
             Right(
-              Map(Avro.String("key1") -> 1, Avro.String("key2") -> 2, Avro.String("key3") -> 3).asJava
+              Map(
+                Avro.String("key1") -> 1,
+                Avro.String("key2") -> 2,
+                Avro.String("key3") -> 3
+              ).asJava
             )
           )
         }
@@ -2690,7 +2694,9 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
       it("should show the error if schema is unavailable") {
         assert {
-          Codec[Option[Option[Int]]].show == """AvroError(org.apache.avro.AvroRuntimeException: Duplicate in union:null)"""
+          Codec[
+            Option[Option[Int]]
+          ].show == """AvroError(org.apache.avro.AvroRuntimeException: Duplicate in union:null)"""
         }
       }
 
@@ -2995,11 +3001,10 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
               field("value", _.value).map(SecondInSealedTraitCaseClass(_))
             }
 
-          implicit val codec: Codec[SealedTraitCaseClass] = Codec.union(
-            alt =>
-              alt[FirstInSealedTraitCaseClass]
-                |+| alt[SecondInSealedTraitCaseClass]
-                |+| alt[ThirdInSealedTraitCaseClass]
+          implicit val codec: Codec[SealedTraitCaseClass] = Codec.union(alt =>
+            alt[FirstInSealedTraitCaseClass]
+              |+| alt[SecondInSealedTraitCaseClass]
+              |+| alt[ThirdInSealedTraitCaseClass]
           )
 
           assertDecodeIs[SealedTraitCaseClass](
