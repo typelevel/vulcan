@@ -73,7 +73,9 @@ final class GenericDerivationCodecSpec extends CodecBase {
             }
           }
 
-          it("should support annotation for setting explicit default null value for specific field") {
+          it(
+            "should support annotation for setting explicit default null value for specific field"
+          ) {
             assertSchemaIs[CaseClassFieldAvroNullDefault] {
               """{"type":"record","name":"CaseClassFieldAvroNullDefault","namespace":"vulcan.generic.examples","fields":[{"name":"int","type":["null","int"],"default":null},{"name":"long","type":["null","long"]},{"name":"string","type":["null","string"],"default":null},{"name":"date","type":["null",{"type":"int","logicalType":"date"}]},{"name":"map","type":["null",{"type":"map","values":"string"}],"default":null},{"name":"caseClassValueClass","type":["null","int"]},{"name":"sealedTraitEnumDerived","type":["null",{"type":"enum","name":"SealedTraitEnumDerived","namespace":"com.example","symbols":["first","second"]}],"default":null}]}"""
             }

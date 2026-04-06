@@ -10,8 +10,8 @@ import cats.syntax.either._
 import eu.timepit.refined.api.{RefType, Validate}
 
 package object refined {
-  implicit def refinedCodec[F[_, _], T, P](
-    implicit codec: Codec[T],
+  implicit def refinedCodec[F[_, _], T, P](implicit
+    codec: Codec[T],
     validate: Validate[T, P],
     refType: RefType[F]
   ): Codec[F[T, P]] = {

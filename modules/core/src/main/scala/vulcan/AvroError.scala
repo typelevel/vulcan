@@ -13,12 +13,10 @@ import org.apache.avro.{Schema, LogicalType}
 import scala.util.control.NonFatal
 import java.time.LocalDate
 
-/**
-  * Error which occurred while generating a schema, or
-  * while encoding or decoding.
+/** Error which occurred while generating a schema, or while encoding or decoding.
   *
-  * Use [[AvroError.apply]] to create an instance, and
-  * [[AvroError#message]] to retrieve the message.
+  * Use [[AvroError.apply]] to create an instance, and [[AvroError#message]] to retrieve the
+  * message.
   */
 sealed abstract class AvroError {
   def message: String

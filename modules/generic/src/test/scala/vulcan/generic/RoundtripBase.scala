@@ -17,8 +17,8 @@ import vulcan._
 
 class RoundtripBase extends BaseSpec {
 
-  def roundtrip[A](
-    implicit codec: Codec[A],
+  def roundtrip[A](implicit
+    codec: Codec[A],
     arbitrary: Arbitrary[A],
     eq: Eq[A]
   ): Assertion = {
@@ -28,8 +28,8 @@ class RoundtripBase extends BaseSpec {
     }
   }
 
-  def roundtrip[A](a: A)(
-    implicit codec: Codec[A],
+  def roundtrip[A](a: A)(implicit
+    codec: Codec[A],
     eq: Eq[A]
   ): Assertion = {
     val avroSchema = codec.schema
@@ -42,8 +42,8 @@ class RoundtripBase extends BaseSpec {
     assert(decoded === Right(a))
   }
 
-  def binaryRoundtrip[A](a: A)(
-    implicit codec: Codec[A],
+  def binaryRoundtrip[A](a: A)(implicit
+    codec: Codec[A],
     eq: Eq[A]
   ): Assertion = {
     val binary = toBinary(a)
@@ -53,8 +53,8 @@ class RoundtripBase extends BaseSpec {
     assert(decoded === Right(a))
   }
 
-  def toBinary[A](a: A)(
-    implicit codec: Codec[A]
+  def toBinary[A](a: A)(implicit
+    codec: Codec[A]
   ): Either[AvroError, Array[Byte]] =
     codec.schema.flatMap { schema =>
       codec.encode(a).map { encoded =>
@@ -67,8 +67,8 @@ class RoundtripBase extends BaseSpec {
       }
     }
 
-  def fromBinary[A](bytes: Array[Byte])(
-    implicit codec: Codec[A]
+  def fromBinary[A](bytes: Array[Byte])(implicit
+    codec: Codec[A]
   ): Either[AvroError, A] =
     codec.schema.flatMap { schema =>
       val bais = new ByteArrayInputStream(bytes)

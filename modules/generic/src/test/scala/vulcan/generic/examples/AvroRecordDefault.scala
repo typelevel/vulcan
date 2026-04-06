@@ -42,39 +42,39 @@ object AvroRecordDefault {
   }
 
   case class Foo(
-                  a: Int = 1,
-                  b: String = "foo",
-                  c: Option[String] = None
-                )
+    a: Int = 1,
+    b: String = "foo",
+    c: Option[String] = None
+  )
 
   object Foo {
     implicit val codec: Codec[Foo] = Codec.derive
   }
 
   case class InvalidDefault2(
-                              a: Option[String] = Some("foo")
-                            )
+    a: Option[String] = Some("foo")
+  )
   object InvalidDefault2 {
     implicit val codec: Codec[InvalidDefault2] = Codec.derive
   }
 
   case class HasSFirst(
-                        s: Enum = Enum.A
-                      )
+    s: Enum = Enum.A
+  )
   object HasSFirst {
     implicit val codec: Codec[HasSFirst] = Codec.derive
   }
 
   case class HasSSecond(
-                         s: Enum = Enum.B
-                       )
+    s: Enum = Enum.B
+  )
   object HasSSecond {
     implicit val codec: Codec[HasSSecond] = Codec.derive
   }
 
   case class HasUnion(
-                       u: Union = Union.A(1)
-                     )
+    u: Union = Union.A(1)
+  )
   object HasUnion {
     implicit val codec: Codec[HasUnion] = Codec.derive
   }
@@ -85,11 +85,9 @@ object AvroRecordDefault {
   }
 
   case class HasUnionSecond(
-                             u: Union = Union.B("foo")
-                           )
+    u: Union = Union.B("foo")
+  )
   object HasUnionSecond {
     implicit val codec: Codec[HasUnionSecond] = Codec.derive
   }
 }
-
-

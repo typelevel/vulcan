@@ -15,8 +15,8 @@ import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 
 private[vulcan] object Deserializer {
-  def fromBinary[A](bytes: Array[Byte], writerSchema: Schema)(
-    implicit codec: Codec[A]
+  def fromBinary[A](bytes: Array[Byte], writerSchema: Schema)(implicit
+    codec: Codec[A]
   ): Either[AvroError, A] =
     AvroError.catchNonFatal {
       val bais = new ByteArrayInputStream(bytes)
@@ -25,8 +25,8 @@ private[vulcan] object Deserializer {
       codec.decode(value, writerSchema)
     }
 
-  def fromJson[A](json: String, writerSchema: Schema)(
-    implicit codec: Codec[A]
+  def fromJson[A](json: String, writerSchema: Schema)(implicit
+    codec: Codec[A]
   ): Either[AvroError, A] =
     AvroError.catchNonFatal {
       val bais = new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8))
