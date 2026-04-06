@@ -21,7 +21,7 @@ To get started with [sbt](https://scala-sbt.org), simply add the following line 
 libraryDependencies += "@ORGANIZATION@" %% "@CORE_MODULE_NAME@" % "@LATEST_VERSION@"
 ```
 
-Published for Scala @SCALA_PUBLISH_VERSIONS@. For changes, refer to the [release notes](https://github.com/fd4s/vulcan/releases).
+Published for Scala @SCALA_PUBLISH_VERSIONS@. For changes, refer to the [release notes](https://github.com/typelevel/vulcan/releases).
 
 For Scala 2.12, enable partial unification by adding the following line to `build.sbt`.
 
@@ -61,11 +61,11 @@ libraryDependencies += "@ORGANIZATION@" %% "@REFINED_MODULE_NAME@" % "@LATEST_VE
 
 Following is an incomplete list of third-party integrations.
 
-- [fs2-kafka-vulcan](https://fd4s.github.io/fs2-kafka)
+- [fs2-kafka-vulcan](https://typelevel.org/fs2-kafka)
 
 ### Signatures
 
-Stable release artifacts are signed with the [`7AD5 92B5 B105 24E3`](https://keys.openpgp.org/search?q=4EA20EFC74E422D0489470997AD592B5B10524E3) key.
+Stable release artifacts are signed with the [`14CA 4AC4 FDB0 0D5F`](https://keys.openpgp.org/search?q=598648A65DF64506) key.
 
 ### Compatibility
 
@@ -101,4 +101,4 @@ Library is heavily inspired by ideas from [avro4s](https://github.com/sksamuel/a
 
 ## License
 
-Licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0.html). Refer to the [license file](https://github.com/fd4s/vulcan/blob/main/license.txt).
+Licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0.html). Refer to the [license file](https://github.com/typelevel/vulcan/blob/main/license.txt).
