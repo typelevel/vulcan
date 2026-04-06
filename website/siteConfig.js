@@ -1,4 +1,4 @@
-const repoUrl = "https://github.com/fd4s/vulcan";
+const repoUrl = "https://github.com/typelevel/vulcan";
 
 const apiUrl = `/vulcan/api/vulcan/index.html`;
 
@@ -6,13 +6,13 @@ const apiUrl = `/vulcan/api/vulcan/index.html`;
 const siteConfig = {
   title: "Vulcan",
   tagline: "Functional Avro for Scala",
-  url: "https://fd4s.github.io/vulcan",
+  url: "https://typelevel.org/vulcan",
   baseUrl: "/vulcan/",
 
   customDocsPath: "docs/target/mdoc",
 
   projectName: "vulcan",
-  organizationName: "fd4s",
+  organizationName: "typelevel",
 
   headerLinks: [
     { href: apiUrl, label: "API Docs" },

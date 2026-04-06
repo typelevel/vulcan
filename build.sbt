@@ -221,7 +221,7 @@ lazy val mdocSettings = Seq(
       .value,
   // format: off
   ScalaUnidoc / unidoc / scalacOptions ++= Seq(
-    "-doc-source-url", s"https://github.com/fd4s/vulcan/tree/v${(ThisBuild / latestVersion).value}€{FILE_PATH}.scala",
+    "-doc-source-url", s"https://github.com/typelevel/vulcan/tree/v${(ThisBuild / latestVersion).value}€{FILE_PATH}.scala",
     "-sourcepath", (LocalRootProject / baseDirectory).value.getAbsolutePath,
     "-doc-title", "Vulcan",
     "-doc-version", s"v${(ThisBuild / latestVersion).value}",
@@ -288,7 +288,7 @@ lazy val publishSettings =
   metadataSettings ++ Seq(
     Test / publishArtifact := false,
     pomIncludeRepository := (_ => false),
-    homepage := Some(url("https://fd4s.github.io/vulcan")),
+    homepage := Some(url("https://typelevel.org/vulcan")),
     licenses := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0.txt")),
     startYear := Some(2019),
     headerLicense := Some(

@@ -95,7 +95,7 @@ class Index extends React.Component {
     );
 
     const index =
-      `[![GitHub Actions](https://img.shields.io/github/actions/workflow/status/fd4s/vulcan/ci.yml?branch=main)](https://github.com/fd4s/vulcan/actions) [![Discord](https://img.shields.io/discord/632277896739946517?color=5865f2)](https://discord.gg/XF3CXcMzqD) [![Version](https://img.shields.io/badge/version-v${latestVersionBadge}-orange.svg)](https://index.scala-lang.org/fd4s/vulcan)
+      `[![GitHub Actions](https://img.shields.io/github/actions/workflow/status/typelevel/vulcan/ci.yml?branch=main)](https://github.com/typelevel/vulcan/actions) [![Discord](https://img.shields.io/discord/632277896739946517?color=5865f2)](https://discord.gg/XF3CXcMzqD) [![Version](https://img.shields.io/badge/version-v${latestVersionBadge}-orange.svg)](https://index.scala-lang.org/typelevel/vulcan)
 
 Functional Avro encodings for Scala using the official Apache Avro library.<br>
 Project is under active development. Feedback and contributions welcome.
@@ -107,7 +107,7 @@ To get started with [sbt](https://scala-sbt.org), simply add the following line 
 libraryDependencies += "${organization}" %% "${coreModuleName}" % "${latestVersion}"
 \`\`\`
 
-Published for Scala ${scalaPublishVersions}. For changes, refer to the [release notes](https://github.com/fd4s/vulcan/releases).
+Published for Scala ${scalaPublishVersions}. For changes, refer to the [release notes](https://github.com/typelevel/vulcan/releases).
 `.trim();
 
     return (
