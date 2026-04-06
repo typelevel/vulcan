@@ -1,11 +1,12 @@
 val avroVersion = "1.11.5"
 val catsVersion = "2.13.0"
 val disciplineScalaTestVersion = "2.3.0"
-val enumeratumVersion = "1.9.1"
-val jacksonVersion = "2.20.1"
+val enumeratumVersion = "1.9.7"
+val jacksonVersion = "2.21.2"
 val magnolia2Version = "0.17.0"
 val magnolia3Version = "1.3.18"
-val munitVersion = "1.2.0"
+val munitVersion = "1.2.4"
+val munitScalaCheckVersion = "1.2.0"
 val refinedVersion = "0.11.3"
 val scalaCollectionCompatVersion = "2.14.0"
 val scalacCompatVersion = "0.1.4"
@@ -13,7 +14,7 @@ val shapeless3Version = "3.5.0"
 val shapelessVersion = "2.3.13"
 val slf4jNopVersion = "2.0.17"
 
-val scala212 = "2.12.20"
+val scala212 = "2.12.21"
 val scala213 = "2.13.18"
 val scala3 = "3.3.7"
 
@@ -62,7 +63,19 @@ lazy val enumeratum = project
     moduleName := "vulcan-enumeratum",
     name := moduleName.value,
     dependencySettings ++ Seq(
-      libraryDependencies += "com.beachape" %% "enumeratum" % enumeratumVersion
+      libraryDependencies ++= {
+        if (scalaVersion.value.startsWith("2"))
+          Seq(
+            "com.beachape" %% "enumeratum" % enumeratumVersion,
+            "org.apache.avro" % "avro" % avroVersion,
+            "org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided
+          )
+        else
+          Seq(
+            "com.beachape" %% "enumeratum" % enumeratumVersion,
+            "org.apache.avro" % "avro" % avroVersion
+          )
+      }
     ),
     scalatestSettings,
     publishSettings,
@@ -81,13 +94,20 @@ lazy val generic = project
       libraryDependencies ++= {
         if (scalaVersion.value.startsWith("2"))
           Seq(
-            "com.propensive" %% "magnolia" % magnolia2Version,
             "com.chuusai" %% "shapeless" % shapelessVersion,
-            "org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided
+            "com.propensive" %% "magnolia" % magnolia2Version,
+            "org.apache.avro" % "avro" % avroVersion,
+            "org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided,
+            "org.typelevel" %% "cats-core" % catsVersion,
+            "org.typelevel" %% "cats-free" % catsVersion
           )
         else
           Seq(
             "com.softwaremill.magnolia1_3" %% "magnolia" % magnolia3Version,
+            "org.apache.avro" % "avro" % avroVersion,
+            "org.typelevel" %% "cats-core" % catsVersion,
+            "org.typelevel" %% "cats-free" % catsVersion,
+            "org.typelevel" %% "cats-kernel" % catsVersion,
             "org.typelevel" %% "shapeless3-deriving" % shapeless3Version
           )
       }
@@ -114,7 +134,8 @@ lazy val refined = project
     dependencySettings ++ Seq(
       libraryDependencies ++= Seq(
         "eu.timepit" %% "refined" % refinedVersion,
-        "eu.timepit" %% "refined-scalacheck" % refinedVersion % Test
+        "eu.timepit" %% "refined-scalacheck" % refinedVersion % Test,
+        "org.typelevel" %% "cats-core" % catsVersion
       )
     ),
     // uses munit because Scalatest and Refined for Scala 3.0.0-RC2 have
@@ -178,7 +199,7 @@ lazy val scalatestSettings = Seq(
 lazy val munitSettings = Seq(
   libraryDependencies ++= Seq(
     "org.scalameta" %% "munit" % munitVersion,
-    "org.scalameta" %% "munit-scalacheck" % munitVersion,
+    "org.scalameta" %% "munit-scalacheck" % munitScalaCheckVersion,
     "org.slf4j" % "slf4j-nop" % slf4jNopVersion
   ).map(_ % Test),
   testFrameworks += new TestFramework("munit.Framework")
