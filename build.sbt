@@ -114,7 +114,7 @@ lazy val generic = project
     ),
     scalatestSettings,
     publishSettings,
-    mimaSettings(excludeScala3 = true), // re-include scala 3 after publishing
+    mimaSettings(),
     scalaSettings ++ Seq(
       crossScalaVersions += scala3
     ),
@@ -138,8 +138,6 @@ lazy val refined = project
         "org.typelevel" %% "cats-core" % catsVersion
       )
     ),
-    // uses munit because Scalatest and Refined for Scala 3.0.0-RC2 have
-    // incompatible scala-xml dependencies
     munitSettings,
     publishSettings,
     mimaSettings(),
@@ -304,7 +302,7 @@ lazy val publishSettings =
     developers := List(
       Developer(
         id = "vlovgr",
-        name = "Viktor Lövgren",
+        name = "Viktor Rudebeck",
         email = "github@vlovgr.se",
         url = url("https://vlovgr.se")
       )
