@@ -10,7 +10,7 @@ val munitScalaCheckVersion = "1.3.0"
 val refinedVersion = "0.11.3"
 val scalaCollectionCompatVersion = "2.14.0"
 val scalacCompatVersion = "0.1.4"
-val shapeless3Version = "3.5.0"
+val shapeless3Version = "3.6.0"
 val shapelessVersion = "2.3.13"
 val slf4jNopVersion = "2.0.18"
 
