@@ -701,24 +701,27 @@ object Codec extends CodecCompanionCompat {
       .withLogicalType(LogicalTypes.timestampMillis)
       .withTypeName("Instant")
 
-  final case class InstantMicros(value: Instant)
+  final case class InstantMicros(value: Instant) {
+    def toEpochMicro: Long =
+      SECONDS.toMicros(value.getEpochSecond) + NANOSECONDS.toMicros(value.getNano.toLong)
+  }
+
+  object InstantMicros {
+    def fromEpochMicro(epochMicros: Long): InstantMicros = {
+      InstantMicros(
+        Instant.ofEpochSecond(
+          Math.floorDiv(epochMicros, SECONDS.toMicros(1)),
+          MICROSECONDS.toNanos(Math.floorMod(epochMicros, SECONDS.toMicros(1)))
+        )
+      )
+    }
+  }
 
   /** @group JavaTime
     */
   implicit lazy val instantMicros: Codec.Aux[Avro.Long, InstantMicros] =
     LongCodec
-      .imap(epochMicros =>
-        InstantMicros(
-          Instant.ofEpochSecond(
-            MICROSECONDS.toSeconds(epochMicros),
-            MICROSECONDS.toNanos(Math.floorMod(epochMicros, SECONDS.toMicros(1)))
-          )
-        )
-      )(instantMicros =>
-        NANOSECONDS.toMicros(
-          SECONDS.toNanos(instantMicros.value.getEpochSecond) + instantMicros.value.getNano
-        )
-      )
+      .imap(InstantMicros.fromEpochMicro)(_.toEpochMicro)
       .withLogicalType(LogicalTypes.timestampMicros)
       .withTypeName("InstantMicros")
 
