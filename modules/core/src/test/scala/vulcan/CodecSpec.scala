@@ -3173,25 +3173,22 @@ trait CodecSpecHelpers {
   def assertEncodeIs[A](
     a: A,
     encoded: Either[AvroError, Any]
-  )(implicit codec: Codec[A]): Assertion =
-    assert {
-      val encode = codec.encode(a).value
-      encode === encoded.value
-    }
+  )(implicit codec: Codec[A]): Assertion = {
+    val encode = codec.encode(a).value
+    assert(encode === encoded.value)
+  }
 
   def assertDecodeIs[A](
     value: Any,
     decoded: Either[AvroError, A],
     schema: Option[Schema] = None
-  )(implicit codec: Codec[A]): Assertion =
-    assert {
-      val decode =
-        schema
-          .map(codec.decode(value, _).value)
-          .getOrElse(unsafeDecode(value))
-
-      decode === decoded.value
-    }
+  )(implicit codec: Codec[A]): Assertion = {
+    val decode =
+      schema
+        .map(codec.decode(value, _).value)
+        .getOrElse(unsafeDecode(value))
+    assert(decode === decoded.value)
+  }
 
   def assertSchemaError[A](
     expectedErrorMessage: String
