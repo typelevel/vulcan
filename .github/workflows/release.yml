@@ -9,15 +9,14 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: coursier/cache-action@v6
-      - uses: coursier/setup-action@v1
+      - uses: coursier/cache-action@v8
+      - uses: coursier/setup-action@v3
         with:
-          jvm: adoptium:1.11.0.22
+          jvm: adoptium:1.17.0.20.1
           apps: sbt
-      - uses: olafurpg/setup-gpg@v3
       - run: echo "GIT_DEPLOY_KEY=${{ secrets.GIT_DEPLOY_KEY }}" >> $GITHUB_ENV
       - run: echo "PGP_PASSPHRASE=${{ secrets.PGP_PASSPHRASE }}" >> $GITHUB_ENV
       - run: echo "PGP_SECRET=${{ secrets.PGP_SECRET }}" >> $GITHUB_ENV
