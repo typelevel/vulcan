@@ -14,7 +14,7 @@ import org.apache.avro.Schema.Type._
 import org.apache.avro.generic._
 import org.apache.avro.{Conversions, LogicalType, LogicalTypes, Schema, SchemaBuilder}
 import vulcan.Avro.Bytes
-import vulcan.internal.{Deserializer, Serializer}
+import vulcan.internal.{Deserializer, InstantMicrosCompanionCompat, Serializer}
 
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -701,24 +701,30 @@ object Codec extends CodecCompanionCompat {
       .withLogicalType(LogicalTypes.timestampMillis)
       .withTypeName("Instant")
 
-  final case class InstantMicros(value: Instant)
+  final case class InstantMicros(value: Instant) {
+    def toEpochMicro: Long =
+      SECONDS.toMicros(value.getEpochSecond) + NANOSECONDS.toMicros(value.getNano.toLong)
+  }
+
+  object InstantMicros extends InstantMicrosCompanionCompat {
+    def fromEpochMicro(epochMicros: Long): InstantMicros = {
+      InstantMicros(
+        Instant.ofEpochSecond(
+          Math.floorDiv(epochMicros, SECONDS.toMicros(1)),
+          MICROSECONDS.toNanos(Math.floorMod(epochMicros, SECONDS.toMicros(1)))
+        )
+      )
+    }
+
+    override def toString: String =
+      "InstantMicros"
+  }
 
   /** @group JavaTime
     */
   implicit lazy val instantMicros: Codec.Aux[Avro.Long, InstantMicros] =
     LongCodec
-      .imap(epochMicros =>
-        InstantMicros(
-          Instant.ofEpochSecond(
-            MICROSECONDS.toSeconds(epochMicros),
-            MICROSECONDS.toNanos(Math.floorMod(epochMicros, SECONDS.toMicros(1)))
-          )
-        )
-      )(instantMicros =>
-        NANOSECONDS.toMicros(
-          SECONDS.toNanos(instantMicros.value.getEpochSecond) + instantMicros.value.getNano
-        )
-      )
+      .imap(InstantMicros.fromEpochMicro)(_.toEpochMicro)
       .withLogicalType(LogicalTypes.timestampMicros)
       .withTypeName("InstantMicros")
 
