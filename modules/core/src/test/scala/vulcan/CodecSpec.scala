@@ -371,9 +371,9 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           assertDecodeError[BigDecimal](
             unsafeEncode(BigDecimal("123.45678")), {
               val bytes = SchemaBuilder.builder().bytesType()
-              LogicalTypes.uuid().addToSchema(bytes)
+              LogicalTypes.bigDecimal().addToSchema(bytes)
             },
-            "Error decoding BigDecimal: Got unexpected logical type uuid"
+            "Error decoding BigDecimal: Got unexpected logical type big-decimal"
           )
         }
 
@@ -882,11 +882,20 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
           assertEncodeIs[InstantMicros](
             instantMicros,
-            Right(
-              NANOSECONDS.toMicros(
-                SECONDS.toNanos(instantMicros.value.getEpochSecond) + instantMicros.value.getNano
-              )
-            )
+            Right(instantMicros.toEpochMicro)
+          )
+        }
+
+        it("should encode mid-term future Instant") {
+          // Epoch 10_000_000_000, or 2286-11-20T17:46:40Z, rescaled to nanos
+          // exceeds Long.MaxValue. Check that our conversion does not overflow.
+          val futureEpoch = 10L * 1000 * 1000 * 1000
+          val instant: Instant = Instant.ofEpochSecond(futureEpoch, 0L)
+          val instantMicros: InstantMicros = InstantMicros(instant)
+
+          assertEncodeIs[InstantMicros](
+            instantMicros,
+            Right(SECONDS.toMicros(futureEpoch))
           )
         }
       }
@@ -915,8 +924,24 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           )
         }
 
-        it("should decode as Instant") {
-          val instantMicros: InstantMicros = InstantMicros(Instant.now())
+        it("should truncate Instant to micros") {
+          // Encoding/decoding through InstantMicros will truncate to micros.
+          val instant: Instant = Instant.now()
+          val truncated: Instant = instant.truncatedTo(ChronoUnit.MICROS)
+
+          assertDecodeIs[InstantMicros](
+            unsafeEncode(InstantMicros(instant)),
+            Right(InstantMicros(truncated))
+          )
+        }
+
+        it("should roundtrip negative Instant with microsecond offsets") {
+          // 1969-12-31T23:59:59.999999Z, is one microsecond before the epoch.
+          // Ensure negative fractional sections are correctly rescaled to
+          // micros.
+          val fractionNanos = 999999L * 1000
+          val instant: Instant = Instant.ofEpochSecond(-1L, fractionNanos)
+          val instantMicros: InstantMicros = InstantMicros(instant)
 
           assertDecodeIs[InstantMicros](
             unsafeEncode(instantMicros),
@@ -3173,25 +3198,22 @@ trait CodecSpecHelpers {
   def assertEncodeIs[A](
     a: A,
     encoded: Either[AvroError, Any]
-  )(implicit codec: Codec[A]): Assertion =
-    assert {
-      val encode = codec.encode(a).value
-      encode === encoded.value
-    }
+  )(implicit codec: Codec[A]): Assertion = {
+    val encode = codec.encode(a).value
+    assert(encode === encoded.value)
+  }
 
   def assertDecodeIs[A](
     value: Any,
     decoded: Either[AvroError, A],
     schema: Option[Schema] = None
-  )(implicit codec: Codec[A]): Assertion =
-    assert {
-      val decode =
-        schema
-          .map(codec.decode(value, _).value)
-          .getOrElse(unsafeDecode(value))
-
-      decode === decoded.value
-    }
+  )(implicit codec: Codec[A]): Assertion = {
+    val decode =
+      schema
+        .map(codec.decode(value, _).value)
+        .getOrElse(unsafeDecode(value))
+    assert(decode === decoded.value)
+  }
 
   def assertSchemaError[A](
     expectedErrorMessage: String
