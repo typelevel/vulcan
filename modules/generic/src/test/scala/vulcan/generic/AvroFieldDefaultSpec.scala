@@ -17,8 +17,10 @@ final class AvroFieldDefaultSpec extends CodecBase {
       assert(Foo.codec.schema.exists(_.getField("c").defaultVal() == JsonProperties.NULL_VALUE))
     }
 
-    it("should fail when annotating an Option") {
-      assertSchemaError[InvalidDefault2]
+    it("should succeed when annotating an Option") {
+      assertSchemaIs[HasOptionDefault](
+        """{"type":"record","name":"HasOptionDefault","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"a","type":["null","string"],"default":"foo"}]}"""
+      )
     }
 
     it("should succeed when annotating an enum first element") {
@@ -37,8 +39,12 @@ final class AvroFieldDefaultSpec extends CodecBase {
       assert(result == HasUnion(Union.A(1)))
     }
 
-    it("should fail with the second member of a union") {
-      assertSchemaError[HasUnionSecond]
+    it("should succeed with the second member of a union") {
+      assertSchemaIs[HasUnionSecond](
+        """{"type":"record","name":"HasUnionSecond","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"u","type":[{"type":"record","name":"A","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"a","type":"int"}]},{"type":"record","name":"B","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"b","type":"string"}]}],"default":{"b":"foo"}}]}"""
+      )
+      val result = unsafeDecode[HasUnionSecond](unsafeEncode[Empty](Empty()))
+      assert(result == HasUnionSecond(Union.B("foo")))
     }
   }
 }

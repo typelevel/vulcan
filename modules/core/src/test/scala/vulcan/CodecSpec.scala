@@ -371,9 +371,9 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           assertDecodeError[BigDecimal](
             unsafeEncode(BigDecimal("123.45678")), {
               val bytes = SchemaBuilder.builder().bytesType()
-              LogicalTypes.uuid().addToSchema(bytes)
+              LogicalTypes.bigDecimal().addToSchema(bytes)
             },
-            "Error decoding BigDecimal: Got unexpected logical type uuid"
+            "Error decoding BigDecimal: Got unexpected logical type big-decimal"
           )
         }
 
