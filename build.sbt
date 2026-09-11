@@ -215,6 +215,7 @@ lazy val mdocSettings = Seq(
   ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(core, enumeratum, generic, refined),
   ScalaUnidoc / unidoc / target := (LocalRootProject / baseDirectory).value / "website" / "static" / "api",
   cleanFiles += (ScalaUnidoc / unidoc / target).value,
+  docusaurusVersion := DocusaurusVersion.V1,
   docusaurusCreateSite := docusaurusCreateSite
     .dependsOn(Compile / unidoc)
     .dependsOn(ThisBuild / updateSiteVariables)
