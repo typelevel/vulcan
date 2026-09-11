@@ -773,7 +773,7 @@ object Codec extends CodecCompanionCompat {
             AvroError.catchNonFatal {
               while (it.hasNext)
                 (coll
-                  .add(codec.encode(it.next()).fold(err => throw err.throwable, identity)))
+                  .add(codec.encode(it.next()).fold(err => throw err.throwable, identity)): Unit)
               Right(coll)
             }
           },
@@ -787,7 +787,7 @@ object Codec extends CodecCompanionCompat {
                     codec
                       .decode(it.next(), avroShema.getElementType)
                       .fold(err => throw err.throwable, identity)
-                  ))
+                  ): Unit)
               Right(coll)
             }
           }

@@ -6,19 +6,11 @@
 
 package vulcan
 
-import org.apache.avro.generic._
-import org.apache.avro.Schema
-import shapeless3.deriving._
-import scala.compiletime._
-import scala.reflect.ClassTag
 import scala.deriving.Mirror
 import cats.data.Chain
 import cats.implicits._
 import cats.free.FreeApplicative
 import magnolia1._
-import org.apache.avro.generic._
-import org.apache.avro.Schema
-import vulcan.internal.converters.collection._
 import vulcan.internal.Names
 
 package object generic {
