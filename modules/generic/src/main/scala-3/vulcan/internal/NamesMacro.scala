@@ -7,7 +7,6 @@
 package vulcan.internal
 
 import scala.quoted.*
-import scala.compiletime.*
 import vulcan.internal.Names
 import vulcan.generic.AvroDoc
 import vulcan.generic.AvroName

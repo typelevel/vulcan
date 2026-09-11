@@ -1,3 +1,9 @@
+/*
+ * Copyright 2019 OVO Energy Limited
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package enumeratum.values
 
 import vulcan.generic.{AvroDoc, AvroNamespace}

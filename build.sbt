@@ -18,17 +18,17 @@ val scala212 = "2.12.21"
 val scala213 = "2.13.18"
 val scala3 = "3.3.8"
 
-ThisBuild / versionScheme := Some("early-semver")
+ThisBuild / tlBaseVersion := "1.14"
 
 lazy val vulcan = project
   .in(file("."))
   .settings(
-    mimaSettings(),
     scalaSettings,
     noPublishSettings,
     console := (core / Compile / console).value,
     Test / console := (core / Test / console).value
   )
+  .enablePlugins(TypelevelMimaPlugin)
   .aggregate(core, enumeratum, generic, refined)
 
 lazy val core = project
@@ -50,11 +50,9 @@ lazy val core = project
     ),
     scalatestSettings,
     publishSettings,
-    mimaSettings(),
-    scalaSettings ++ Seq(
-      crossScalaVersions += scala3
-    ),
-    testSettings
+    scalaSettings,
+    testSettings,
+    tlVersionIntroduced := Map("3" -> "1.7.0")
   )
 
 lazy val enumeratum = project
@@ -79,14 +77,12 @@ lazy val enumeratum = project
     ),
     scalatestSettings,
     publishSettings,
-    mimaSettings(excludeScala3 = true),
-    scalaSettings ++ Seq(
-      crossScalaVersions += scala3
-    ),
+    scalaSettings,
     testSettings,
     Test / scalacOptions ++= {
       if (scalaVersion.value.startsWith("3")) List("-Yretain-trees") else Nil
-    }
+    },
+    tlVersionIntroduced := Map("3" -> "1.14.0")
   )
   .dependsOn(core, generic)
 
@@ -119,15 +115,13 @@ lazy val generic = project
     ),
     scalatestSettings,
     publishSettings,
-    mimaSettings(),
-    scalaSettings ++ Seq(
-      crossScalaVersions += scala3
-    ),
+    scalaSettings,
     // magnolia requires compilation with the -Yretain-trees flag to support case class field default values on Scala 3
     Test / scalacOptions ++= (if (CrossVersion.partialVersion(scalaVersion.value).exists(_._1 == 3))
                                 Seq("-Yretain-trees")
                               else Nil),
-    testSettings
+    testSettings,
+    tlVersionIntroduced := Map("3" -> "1.8.0")
   )
   .dependsOn(core % "compile->compile;test->test")
 
@@ -145,11 +139,9 @@ lazy val refined = project
     ),
     munitSettings,
     publishSettings,
-    mimaSettings(),
-    scalaSettings ++ Seq(
-      crossScalaVersions += scala3
-    ),
-    testSettings
+    scalaSettings,
+    testSettings,
+    tlVersionIntroduced := Map("3" -> "1.7.0")
   )
   .dependsOn(core)
 
@@ -211,11 +203,10 @@ lazy val munitSettings = Seq(
 lazy val mdocSettings = Seq(
   mdoc := (Compile / run).evaluated,
   scalacOptions --= Seq("-Xfatal-warnings", "-Ywarn-unused"),
-  crossScalaVersions := Seq(scalaVersion.value),
+  crossScalaVersions := Seq(scala213),
   ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(core, enumeratum, generic, refined),
   ScalaUnidoc / unidoc / target := (LocalRootProject / baseDirectory).value / "website" / "static" / "api",
   cleanFiles += (ScalaUnidoc / unidoc / target).value,
-  docusaurusVersion := DocusaurusVersion.V1,
   docusaurusCreateSite := docusaurusCreateSite
     .dependsOn(Compile / unidoc)
     .dependsOn(ThisBuild / updateSiteVariables)
@@ -290,6 +281,31 @@ lazy val metadataSettings = Seq(
   organization := "com.github.fd4s"
 )
 
+ThisBuild / githubWorkflowBuild := Seq(
+  WorkflowStep.Sbt(List("ci")),
+  WorkflowStep.Sbt(
+    List("docs/run"),
+    cond = Some(s"matrix.scala == '2.13'")
+  )
+)
+
+ThisBuild / githubWorkflowArtifactUpload := false
+
+ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("21"))
+
+ThisBuild / githubWorkflowPublish := Seq(
+  WorkflowStep.Sbt(
+    List("tlCiRelease", "docs/docusaurusPublishGhpages"),
+    env = Map(
+      "GIT_DEPLOY_KEY" -> "${{ secrets.GIT_DEPLOY_KEY }}",
+      "PGP_PASSPHRASE" -> "${{ secrets.PGP_PASSPHRASE }}",
+      "PGP_SECRET" -> "${{ secrets.PGP_SECRET }}",
+      "SONATYPE_PASSWORD" -> "${{ secrets.SONATYPE_PASSWORD }}",
+      "SONATYPE_USERNAME" -> "${{ secrets.SONATYPE_USERNAME }}"
+    )
+  )
+)
+
 lazy val publishSettings =
   metadataSettings ++ Seq(
     Test / publishArtifact := false,
@@ -298,47 +314,33 @@ lazy val publishSettings =
     licenses := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0.txt")),
     startYear := Some(2019),
     headerLicense := Some(
-      sbtheader.License.ALv2(
+      de.heikoseeberger.sbtheader.License.ALv2(
         s"${startYear.value.get}",
         "OVO Energy Limited",
         HeaderLicenseStyle.SpdxSyntax
       )
     ),
     headerSources / excludeFilter := HiddenFileFilter,
-    developers := List(
-      Developer(
-        id = "vlovgr",
-        name = "Viktor Rudebeck",
-        email = "github@vlovgr.se",
-        url = url("https://vlovgr.se")
-      )
-    )
+    developers := List(tlGitHubDev("vlovgr", "Viktor Rudebeck"))
   )
 
-def mimaSettings(excludeScala3: Boolean = false) = Seq(
-  mimaPreviousArtifacts := {
-    if (publishArtifact.value && !(excludeScala3 && scalaVersion.value.startsWith("3"))) {
-      Set(organization.value %% moduleName.value % (ThisBuild / previousStableVersion).value.get)
-    } else Set()
-  },
-  mimaBinaryIssueFilters ++= {
-    import com.typesafe.tools.mima.core._
-    // format: off
-    Seq(
-      ProblemFilters.exclude[Problem]("vulcan.internal.*"),
-      ProblemFilters.exclude[IncompatibleSignatureProblem]("*"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.Codec.withDecodingTypeName"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroError.decode*"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroError.encode*"),
-      ProblemFilters.exclude[MissingClassProblem]("vulcan.Codec$Field$"),
-      ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroException.*"),
+ThisBuild / mimaBinaryIssueFilters ++= {
+  import com.typesafe.tools.mima.core.*
+  // format: off
+  Seq(
+    ProblemFilters.exclude[Problem]("vulcan.internal.*"),
+    ProblemFilters.exclude[IncompatibleSignatureProblem]("*"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.Codec.withDecodingTypeName"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroError.decode*"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroError.encode*"),
+    ProblemFilters.exclude[MissingClassProblem]("vulcan.Codec$Field$"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroException.*"),
 
-      // package-private
-      ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.Codec.instanceForTypes")
-    )
-    // format: on
-  }
-)
+    // package-private
+    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.Codec.instanceForTypes")
+  )
+  // format: on
+}
 
 lazy val noPublishSettings =
   publishSettings ++ Seq(
@@ -346,65 +348,13 @@ lazy val noPublishSettings =
     publishArtifact := false
   )
 
+ThisBuild / scalaVersion := scala213
+
+ThisBuild / crossScalaVersions := Seq(scala212, scala213, scala3)
+
+ThisBuild / tlFatalWarnings := false
+
 lazy val scalaSettings = Seq(
-  scalaVersion := scala213,
-  crossScalaVersions := Seq(scala212, scala213),
-  javacOptions ++= Seq("--release", "8"),
-  scalacOptions ++= {
-    val commonScalacOptions =
-      Seq(
-        "-deprecation",
-        "-encoding",
-        "UTF-8",
-        "-feature",
-        "-unchecked",
-        "-Xfatal-warnings",
-        "-language:implicitConversions"
-      )
-
-    val scala2ScalacOptions =
-      if (scalaVersion.value.startsWith("2.")) {
-        Seq(
-          "-language:higherKinds",
-          "-Xlint",
-          "-Ywarn-dead-code",
-          "-Ywarn-numeric-widen",
-          "-Ywarn-value-discard",
-          "-Ywarn-unused",
-          "-Wconf:cat=unused-nowarn:s",
-          "-release",
-          "8"
-        )
-      } else Seq()
-
-    val scala212ScalacOptions =
-      if (scalaVersion.value.startsWith("2.12")) {
-        Seq(
-          "-Yno-adapted-args",
-          "-Ypartial-unification"
-        )
-      } else Seq()
-
-    val scala213ScalacOptions =
-      if (scalaVersion.value.startsWith("2.13")) {
-        Seq("-Wconf:msg=Block&src=test/scala-2/vulcan/generic/.*:silent")
-      } else Seq()
-
-    val scala3ScalacOptions =
-      if (scalaVersion.value.startsWith("3")) {
-        Seq(
-          "-Ykind-projector",
-          "-java-output-version",
-          "8"
-        )
-      } else Seq()
-
-    commonScalacOptions ++
-      scala2ScalacOptions ++
-      scala212ScalacOptions ++
-      scala213ScalacOptions ++
-      scala3ScalacOptions
-  },
   Compile / console / scalacOptions --= Seq("-Xlint", "-Ywarn-unused"),
   Test / console / scalacOptions := (Compile / console / scalacOptions).value,
   Compile / unmanagedSourceDirectories ++= {
@@ -440,16 +390,10 @@ def scalaVersionOf(version: String): String = {
 }
 
 val latestVersion = settingKey[String]("Latest stable released version")
-ThisBuild / latestVersion := {
-  val snapshot = (ThisBuild / isSnapshot).value
-  val stable = (ThisBuild / isVersionStable).value
-
-  if (!snapshot && stable) {
-    (ThisBuild / version).value
-  } else {
-    (ThisBuild / previousStableVersion).value.get
-  }
-}
+ThisBuild / latestVersion := tlLatestVersion.value
+  .getOrElse(
+    throw new IllegalStateException("No tagged version found")
+  )
 
 val updateSiteVariables = taskKey[Unit]("Update site variables")
 ThisBuild / updateSiteVariables := {
@@ -487,12 +431,25 @@ addCommandsAlias(
   "validate",
   List(
     "+clean",
+    "+test",
+    "+mimaReportBinaryIssues",
     "+scalafmtCheck",
     "scalafmtSbtCheck",
     "+headerCheck",
-    "+test",
-    "+mimaReportBinaryIssues",
     "+doc",
     "docs/run"
+  )
+)
+
+addCommandsAlias(
+  "ci",
+  List(
+    "clean",
+    "test",
+    "mimaReportBinaryIssues",
+    "scalafmtCheck",
+    "scalafmtSbtCheck",
+    "headerCheck",
+    "doc"
   )
 )

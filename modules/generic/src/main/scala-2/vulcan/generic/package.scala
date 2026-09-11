@@ -6,7 +6,6 @@
 
 package vulcan
 
-import scala.language.experimental.macros
 import scala.reflect.runtime.universe.WeakTypeTag
 import cats.implicits._
 import magnolia._
