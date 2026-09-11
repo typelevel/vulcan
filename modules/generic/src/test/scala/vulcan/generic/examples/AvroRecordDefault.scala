@@ -51,11 +51,11 @@ object AvroRecordDefault {
     implicit val codec: Codec[Foo] = Codec.derive
   }
 
-  case class InvalidDefault2(
+  case class HasOptionDefault(
     a: Option[String] = Some("foo")
   )
-  object InvalidDefault2 {
-    implicit val codec: Codec[InvalidDefault2] = Codec.derive
+  object HasOptionDefault {
+    implicit val codec: Codec[HasOptionDefault] = Codec.derive
   }
 
   case class HasSFirst(

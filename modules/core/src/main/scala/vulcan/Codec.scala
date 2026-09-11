@@ -26,7 +26,7 @@ import scala.annotation.implicitNotFound
 import scala.collection.immutable.{SortedMap, SortedSet}
 import vulcan.internal.converters.collection._
 import vulcan.internal.syntax._
-import vulcan.internal.schema.adaptForSchema
+import vulcan.internal.schema.{adaptForSchema, prettyPrint}
 import scala.util.Try
 
 /** Provides a schema, along with encoding and decoding functions for a given type.
@@ -96,7 +96,7 @@ sealed abstract class Codec[A] {
 
   override final def toString: String =
     schema match {
-      case Right(schema) => s"Codec(${schema.toString(true)})"
+      case Right(schema) => s"Codec(${prettyPrint(schema)})"
       case Left(error)   => error.toString
     }
 }
