@@ -7,12 +7,19 @@
 package vulcan.internal
 
 import java.nio.ByteBuffer
+import org.apache.avro.{Schema, SchemaFormatter}
 import org.apache.avro.generic.{GenericEnumSymbol, GenericFixed, IndexedRecord}
 import vulcan.internal.converters.collection._
 
 import java.{util => ju}
 
 private[vulcan] object schema {
+  private val jsonPrettyFormatter: SchemaFormatter =
+    SchemaFormatter.getInstance("json/pretty")
+
+  final def prettyPrint(schema: Schema): String =
+    jsonPrettyFormatter.format(schema)
+
   final def adaptForSchema(encoded: Any): Any =
     encoded match {
       case bytes: ByteBuffer =>
