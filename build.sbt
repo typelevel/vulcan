@@ -2,7 +2,7 @@ val avroVersion = "1.12.2"
 val catsVersion = "2.13.0"
 val disciplineScalaTestVersion = "2.3.0"
 val enumeratumVersion = "1.9.8"
-val jacksonVersion = "2.22.0"
+val jacksonVersion = "2.22.2"
 val magnolia2Version = "0.17.0"
 val magnolia3Version = "1.3.23"
 val munitVersion = "1.3.6"
@@ -215,6 +215,7 @@ lazy val mdocSettings = Seq(
   ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(core, enumeratum, generic, refined),
   ScalaUnidoc / unidoc / target := (LocalRootProject / baseDirectory).value / "website" / "static" / "api",
   cleanFiles += (ScalaUnidoc / unidoc / target).value,
+  docusaurusVersion := DocusaurusVersion.V1,
   docusaurusCreateSite := docusaurusCreateSite
     .dependsOn(Compile / unidoc)
     .dependsOn(ThisBuild / updateSiteVariables)
