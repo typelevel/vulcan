@@ -14,7 +14,7 @@ import org.apache.avro.Schema.Type._
 import org.apache.avro.generic._
 import org.apache.avro.{Conversions, LogicalType, LogicalTypes, Schema, SchemaBuilder}
 import vulcan.Avro.Bytes
-import vulcan.internal.{Deserializer, Serializer}
+import vulcan.internal.{Deserializer, InstantMicrosCompanionCompat, Serializer}
 
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -706,7 +706,7 @@ object Codec extends CodecCompanionCompat {
       SECONDS.toMicros(value.getEpochSecond) + NANOSECONDS.toMicros(value.getNano.toLong)
   }
 
-  object InstantMicros {
+  object InstantMicros extends InstantMicrosCompanionCompat {
     def fromEpochMicro(epochMicros: Long): InstantMicros = {
       InstantMicros(
         Instant.ofEpochSecond(
@@ -715,6 +715,9 @@ object Codec extends CodecCompanionCompat {
         )
       )
     }
+
+    override def toString: String =
+      "InstantMicros"
   }
 
   /** @group JavaTime
