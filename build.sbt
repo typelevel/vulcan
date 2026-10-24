@@ -18,7 +18,7 @@ val scala212 = "2.12.21"
 val scala213 = "2.13.18"
 val scala3 = "3.3.8"
 
-ThisBuild / tlBaseVersion := "1.14"
+ThisBuild / tlBaseVersion := "2.0"
 
 lazy val vulcan = project
   .in(file("."))
@@ -51,8 +51,7 @@ lazy val core = project
     scalatestSettings,
     publishSettings,
     scalaSettings,
-    testSettings,
-    tlVersionIntroduced := Map("3" -> "1.7.0")
+    testSettings
   )
 
 lazy val enumeratum = project
@@ -81,8 +80,7 @@ lazy val enumeratum = project
     testSettings,
     Test / scalacOptions ++= {
       if (scalaVersion.value.startsWith("3")) List("-Yretain-trees") else Nil
-    },
-    tlVersionIntroduced := Map("3" -> "1.14.0")
+    }
   )
   .dependsOn(core, generic)
 
@@ -120,8 +118,7 @@ lazy val generic = project
     Test / scalacOptions ++= (if (CrossVersion.partialVersion(scalaVersion.value).exists(_._1 == 3))
                                 Seq("-Yretain-trees")
                               else Nil),
-    testSettings,
-    tlVersionIntroduced := Map("3" -> "1.8.0")
+    testSettings
   )
   .dependsOn(core % "compile->compile;test->test")
 
@@ -140,8 +137,7 @@ lazy val refined = project
     munitSettings,
     publishSettings,
     scalaSettings,
-    testSettings,
-    tlVersionIntroduced := Map("3" -> "1.7.0")
+    testSettings
   )
   .dependsOn(core)
 
@@ -323,24 +319,6 @@ lazy val publishSettings =
     headerSources / excludeFilter := HiddenFileFilter,
     developers := List(tlGitHubDev("vlovgr", "Viktor Rudebeck"))
   )
-
-ThisBuild / mimaBinaryIssueFilters ++= {
-  import com.typesafe.tools.mima.core.*
-  // format: off
-  Seq(
-    ProblemFilters.exclude[Problem]("vulcan.internal.*"),
-    ProblemFilters.exclude[IncompatibleSignatureProblem]("*"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.Codec.withDecodingTypeName"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroError.decode*"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroError.encode*"),
-    ProblemFilters.exclude[MissingClassProblem]("vulcan.Codec$Field$"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroException.*"),
-
-    // package-private
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.Codec.instanceForTypes")
-  )
-  // format: on
-}
 
 lazy val noPublishSettings =
   publishSettings ++ Seq(
