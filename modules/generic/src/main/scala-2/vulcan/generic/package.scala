@@ -6,10 +6,9 @@
 
 package vulcan
 
-import scala.reflect.runtime.universe.WeakTypeTag
 import cats.implicits._
 import magnolia1._
-import vulcan.internal.tags._
+import vulcan.internal.Names
 import cats.data.Chain
 import cats.free.FreeApplicative
 
@@ -107,7 +106,7 @@ package object generic {
   }
 
   /** Returns an enum `Codec` for type `A`, deriving details like the name, namespace, and
-    * [[AvroDoc]] documentation from the type `A` using type tags.
+    * [[AvroDoc]] documentation from the type `A` using reflection.
     *
     * @group Derive
     */
@@ -115,19 +114,19 @@ package object generic {
     symbols: Seq[String],
     encode: A => String,
     decode: String => Either[AvroError, A]
-  )(implicit tag: WeakTypeTag[A]): Codec.Aux[Avro.EnumSymbol, A] =
+  )(implicit names: Names[A]): Codec.Aux[Avro.EnumSymbol, A] =
     Codec.enumeration(
-      name = nameFrom(tag),
+      name = names.typeName,
       symbols = symbols,
       encode = encode,
       decode = decode,
-      namespace = namespaceFrom(tag),
-      doc = docFrom(tag),
-      aliases = aliasFrom(tag)
+      namespace = names.namespace,
+      doc = names.doc,
+      aliases = names.aliasOf.toSeq
     )
 
   /** Returns a fixed `Codec` for type `A`, deriving details like the name, namespace, and
-    * [[AvroDoc]] documentation from the type `A` using type tags.
+    * [[AvroDoc]] documentation from the type `A` using reflection.
     *
     * @group Derive
     */
@@ -135,14 +134,14 @@ package object generic {
     size: Int,
     encode: A => Array[Byte],
     decode: Array[Byte] => Either[AvroError, A]
-  )(implicit tag: WeakTypeTag[A]): Codec.Aux[Avro.Fixed, A] =
+  )(implicit names: Names[A]): Codec.Aux[Avro.Fixed, A] =
     Codec.fixed(
-      name = nameFrom(tag),
+      name = names.typeName,
       size = size,
       encode = encode,
       decode = decode,
-      namespace = namespaceFrom(tag),
-      doc = docFrom(tag),
-      aliases = aliasFrom(tag)
+      namespace = names.namespace,
+      doc = names.doc,
+      aliases = names.aliasOf.toSeq
     )
 }

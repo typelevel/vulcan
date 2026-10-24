@@ -39,10 +39,7 @@ lazy val core = project
         "org.apache.avro" % "avro" % avroVersion,
         "org.typelevel" %% "cats-free" % catsVersion,
         "org.typelevel" %% "scalac-compat-annotation" % scalacCompatVersion % Test
-      ) ++ {
-        if (scalaVersion.value.startsWith("3")) Nil
-        else Seq("org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided)
-      }
+      )
     ),
     scalatestSettings,
     publishSettings,
@@ -56,19 +53,10 @@ lazy val enumeratum = project
     moduleName := "vulcan-enumeratum",
     name := moduleName.value,
     dependencySettings ++ Seq(
-      libraryDependencies ++= {
-        if (scalaVersion.value.startsWith("2"))
-          Seq(
-            "com.beachape" %% "enumeratum" % enumeratumVersion,
-            "org.apache.avro" % "avro" % avroVersion,
-            "org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided
-          )
-        else
-          Seq(
-            "com.beachape" %% "enumeratum" % enumeratumVersion,
-            "org.apache.avro" % "avro" % avroVersion
-          )
-      }
+      libraryDependencies ++= Seq(
+        "com.beachape" %% "enumeratum" % enumeratumVersion,
+        "org.apache.avro" % "avro" % avroVersion
+      )
     ),
     scalatestSettings,
     publishSettings,
