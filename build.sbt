@@ -293,6 +293,9 @@ ThisBuild / githubWorkflowArtifactUpload := false
 
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("21"))
 
+// Publish snapshots and the website from series/1.x until the 2.0.0 release
+ThisBuild / tlCiReleaseBranches := Seq("series/1.x")
+
 ThisBuild / githubWorkflowPublish := Seq(
   WorkflowStep.Sbt(
     List("tlCiRelease", "docs/docusaurusPublishGhpages"),
