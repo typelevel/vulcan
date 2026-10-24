@@ -6,20 +6,20 @@
 
 package enumeratum.values
 
-import scala.reflect.runtime.universe.WeakTypeTag
 import vulcan.{Avro, Codec}
+import vulcan.internal.Names
 
 sealed trait VulcanValueEnum[ValueType, EntryType <: ValueEnumEntry[ValueType]] {
   this: ValueEnum[ValueType, EntryType] =>
 
-  implicit def vulcanCodec(implicit tag: WeakTypeTag[EntryType]): Codec[EntryType]
+  implicit def vulcanCodec(implicit names: Names[EntryType]): Codec[EntryType]
 }
 
 trait ByteVulcanEnum[EntryType <: ByteEnumEntry] extends VulcanValueEnum[Byte, EntryType] {
   this: ValueEnum[Byte, EntryType] =>
 
   implicit override def vulcanCodec(implicit
-    tag: WeakTypeTag[EntryType]
+    names: Names[EntryType]
   ): Codec.Aux[Avro.Int, EntryType] =
     Vulcan.codec(this)
 }
@@ -28,7 +28,7 @@ trait CharVulcanEnum[EntryType <: CharEnumEntry] extends VulcanValueEnum[Char, E
   this: ValueEnum[Char, EntryType] =>
 
   implicit override def vulcanCodec(implicit
-    tag: WeakTypeTag[EntryType]
+    names: Names[EntryType]
   ): Codec.Aux[Avro.String, EntryType] =
     Vulcan.codec(this)
 }
@@ -37,7 +37,7 @@ trait IntVulcanEnum[EntryType <: IntEnumEntry] extends VulcanValueEnum[Int, Entr
   this: ValueEnum[Int, EntryType] =>
 
   implicit override def vulcanCodec(implicit
-    tag: WeakTypeTag[EntryType]
+    names: Names[EntryType]
   ): Codec.Aux[Avro.Int, EntryType] =
     Vulcan.codec(this)
 }
@@ -46,7 +46,7 @@ trait LongVulcanEnum[EntryType <: LongEnumEntry] extends VulcanValueEnum[Long, E
   this: ValueEnum[Long, EntryType] =>
 
   implicit override def vulcanCodec(implicit
-    tag: WeakTypeTag[EntryType]
+    names: Names[EntryType]
   ): Codec.Aux[Avro.Long, EntryType] =
     Vulcan.codec(this)
 }
@@ -55,7 +55,7 @@ trait ShortVulcanEnum[EntryType <: ShortEnumEntry] extends VulcanValueEnum[Short
   this: ValueEnum[Short, EntryType] =>
 
   implicit override def vulcanCodec(implicit
-    tag: WeakTypeTag[EntryType]
+    names: Names[EntryType]
   ): Codec.Aux[Avro.Int, EntryType] =
     Vulcan.codec(this)
 }
@@ -64,7 +64,7 @@ trait StringVulcanEnum[EntryType <: StringEnumEntry] extends VulcanValueEnum[Str
   this: ValueEnum[String, EntryType] =>
 
   implicit override def vulcanCodec(implicit
-    tag: WeakTypeTag[EntryType]
+    names: Names[EntryType]
   ): Codec.Aux[Avro.EnumSymbol, EntryType] =
     Vulcan.enumCodec(this)
 }

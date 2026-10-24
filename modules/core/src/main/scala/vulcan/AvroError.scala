@@ -27,29 +27,6 @@ sealed abstract class AvroError {
     s"AvroError($message)"
 }
 
-@deprecated("Do not use - kept for binary compatibility", "1.5.0")
-sealed abstract class AvroDecodingError extends AvroError {
-  def withDecodingTypeName(decodingTypeName: String): AvroDecodingError
-}
-
-object AvroDecodingError {
-  @deprecated("Do not use - kept for binary compatibility", "1.5.0")
-  final def apply(decodingTypeName: String, message: String => String): AvroDecodingError = {
-    val _message = message
-
-    new AvroDecodingError {
-      override final val message: String =
-        _message(decodingTypeName)
-
-      override final def throwable: Throwable =
-        AvroException(message)
-
-      override final def withDecodingTypeName(_decodingTypeName: String) =
-        apply(_decodingTypeName, _message)
-    }
-  }
-}
-
 object AvroError {
   final def apply(message: => String): AvroError = {
     val _message = () => message

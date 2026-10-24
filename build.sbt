@@ -3,22 +3,18 @@ val catsVersion = "2.13.0"
 val disciplineScalaTestVersion = "2.3.0"
 val enumeratumVersion = "1.9.8"
 val jacksonVersion = "2.22.4"
-val magnolia2Version = "0.17.0"
+val magnolia2Version = "1.1.14"
 val magnolia3Version = "1.3.24"
 val munitVersion = "1.3.6"
 val munitScalaCheckVersion = "1.3.1"
 val refinedVersion = "0.11.4"
-val scalaCollectionCompatVersion = "2.14.0"
 val scalacCompatVersion = "0.1.5"
-val shapeless3Version = "3.6.0"
-val shapelessVersion = "2.3.13"
 val slf4jNopVersion = "2.0.20"
 
-val scala212 = "2.12.21"
 val scala213 = "2.13.18"
 val scala3 = "3.3.8"
 
-ThisBuild / tlBaseVersion := "1.14"
+ThisBuild / tlBaseVersion := "2.0"
 
 lazy val vulcan = project
   .in(file("."))
@@ -43,16 +39,12 @@ lazy val core = project
         "org.apache.avro" % "avro" % avroVersion,
         "org.typelevel" %% "cats-free" % catsVersion,
         "org.typelevel" %% "scalac-compat-annotation" % scalacCompatVersion % Test
-      ) ++ {
-        if (scalaVersion.value.startsWith("3")) Nil
-        else Seq("org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided)
-      }
+      )
     ),
     scalatestSettings,
     publishSettings,
     scalaSettings,
-    testSettings,
-    tlVersionIntroduced := Map("3" -> "1.7.0")
+    testSettings
   )
 
 lazy val enumeratum = project
@@ -61,19 +53,10 @@ lazy val enumeratum = project
     moduleName := "vulcan-enumeratum",
     name := moduleName.value,
     dependencySettings ++ Seq(
-      libraryDependencies ++= {
-        if (scalaVersion.value.startsWith("2"))
-          Seq(
-            "com.beachape" %% "enumeratum" % enumeratumVersion,
-            "org.apache.avro" % "avro" % avroVersion,
-            "org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided
-          )
-        else
-          Seq(
-            "com.beachape" %% "enumeratum" % enumeratumVersion,
-            "org.apache.avro" % "avro" % avroVersion
-          )
-      }
+      libraryDependencies ++= Seq(
+        "com.beachape" %% "enumeratum" % enumeratumVersion,
+        "org.apache.avro" % "avro" % avroVersion
+      )
     ),
     scalatestSettings,
     publishSettings,
@@ -81,8 +64,7 @@ lazy val enumeratum = project
     testSettings,
     Test / scalacOptions ++= {
       if (scalaVersion.value.startsWith("3")) List("-Yretain-trees") else Nil
-    },
-    tlVersionIntroduced := Map("3" -> "1.14.0")
+    }
   )
   .dependsOn(core, generic)
 
@@ -95,8 +77,7 @@ lazy val generic = project
       libraryDependencies ++= {
         if (scalaVersion.value.startsWith("2"))
           Seq(
-            "com.chuusai" %% "shapeless" % shapelessVersion,
-            "com.propensive" %% "magnolia" % magnolia2Version,
+            "com.softwaremill.magnolia1_2" %% "magnolia" % magnolia2Version,
             "org.apache.avro" % "avro" % avroVersion,
             "org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided,
             "org.typelevel" %% "cats-core" % catsVersion,
@@ -107,9 +88,7 @@ lazy val generic = project
             "com.softwaremill.magnolia1_3" %% "magnolia" % magnolia3Version,
             "org.apache.avro" % "avro" % avroVersion,
             "org.typelevel" %% "cats-core" % catsVersion,
-            "org.typelevel" %% "cats-free" % catsVersion,
-            "org.typelevel" %% "cats-kernel" % catsVersion,
-            "org.typelevel" %% "shapeless3-deriving" % shapeless3Version
+            "org.typelevel" %% "cats-free" % catsVersion
           )
       }
     ),
@@ -120,8 +99,7 @@ lazy val generic = project
     Test / scalacOptions ++= (if (CrossVersion.partialVersion(scalaVersion.value).exists(_._1 == 3))
                                 Seq("-Yretain-trees")
                               else Nil),
-    testSettings,
-    tlVersionIntroduced := Map("3" -> "1.8.0")
+    testSettings
   )
   .dependsOn(core % "compile->compile;test->test")
 
@@ -140,8 +118,7 @@ lazy val refined = project
     munitSettings,
     publishSettings,
     scalaSettings,
-    testSettings,
-    tlVersionIntroduced := Map("3" -> "1.7.0")
+    testSettings
   )
   .dependsOn(core)
 
@@ -164,7 +141,6 @@ lazy val dependencySettings = Seq(
     if (scalaVersion.value.startsWith("3")) Nil
     else {
       Seq(
-        "org.scala-lang.modules" %% "scala-collection-compat" % scalaCollectionCompatVersion % Test,
         compilerPlugin(("org.typelevel" %% "kind-projector" % "0.13.4").cross(CrossVersion.full))
       )
     }
@@ -271,14 +247,13 @@ lazy val buildInfoSettings = Seq(
       BuildInfoKey("catsVersion" -> catsVersion),
       BuildInfoKey("enumeratumVersion" -> enumeratumVersion),
       BuildInfoKey("magnoliaVersion" -> magnolia),
-      BuildInfoKey("refinedVersion" -> refinedVersion),
-      BuildInfoKey("shapelessVersion" -> shapelessVersion)
+      BuildInfoKey("refinedVersion" -> refinedVersion)
     )
   }
 )
 
 lazy val metadataSettings = Seq(
-  organization := "com.github.fd4s"
+  organization := "org.typelevel"
 )
 
 ThisBuild / githubWorkflowBuild := Seq(
@@ -293,11 +268,11 @@ ThisBuild / githubWorkflowArtifactUpload := false
 
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("21"))
 
+// The website is published from series/1.x until the 2.0.0 release
 ThisBuild / githubWorkflowPublish := Seq(
   WorkflowStep.Sbt(
-    List("tlCiRelease", "docs/docusaurusPublishGhpages"),
+    List("tlCiRelease"),
     env = Map(
-      "GIT_DEPLOY_KEY" -> "${{ secrets.GIT_DEPLOY_KEY }}",
       "PGP_PASSPHRASE" -> "${{ secrets.PGP_PASSPHRASE }}",
       "PGP_SECRET" -> "${{ secrets.PGP_SECRET }}",
       "SONATYPE_PASSWORD" -> "${{ secrets.SONATYPE_PASSWORD }}",
@@ -324,24 +299,6 @@ lazy val publishSettings =
     developers := List(tlGitHubDev("vlovgr", "Viktor Rudebeck"))
   )
 
-ThisBuild / mimaBinaryIssueFilters ++= {
-  import com.typesafe.tools.mima.core.*
-  // format: off
-  Seq(
-    ProblemFilters.exclude[Problem]("vulcan.internal.*"),
-    ProblemFilters.exclude[IncompatibleSignatureProblem]("*"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.Codec.withDecodingTypeName"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroError.decode*"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroError.encode*"),
-    ProblemFilters.exclude[MissingClassProblem]("vulcan.Codec$Field$"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroException.*"),
-
-    // package-private
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.Codec.instanceForTypes")
-  )
-  // format: on
-}
-
 lazy val noPublishSettings =
   publishSettings ++ Seq(
     publish / skip := true,
@@ -350,28 +307,13 @@ lazy val noPublishSettings =
 
 ThisBuild / scalaVersion := scala213
 
-ThisBuild / crossScalaVersions := Seq(scala212, scala213, scala3)
+ThisBuild / crossScalaVersions := Seq(scala213, scala3)
 
 ThisBuild / tlFatalWarnings := false
 
 lazy val scalaSettings = Seq(
   Compile / console / scalacOptions --= Seq("-Xlint", "-Ywarn-unused"),
-  Test / console / scalacOptions := (Compile / console / scalacOptions).value,
-  Compile / unmanagedSourceDirectories ++= {
-    val sourceDir = (Compile / sourceDirectory).value
-    CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, 12)) => Seq(sourceDir / "scala-2.12", sourceDir / "scala-2")
-      case Some((2, 13)) => Seq(sourceDir / "scala-2.13+", sourceDir / "scala-2")
-      case _             => Seq(sourceDir / "scala-2.13+", sourceDir / "scala-3")
-    }
-  },
-  Test / unmanagedSourceDirectories ++= {
-    val sourceDir = (Test / sourceDirectory).value
-    CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, _)) => Seq(sourceDir / "scala-2")
-      case _            => Nil
-    }
-  }
+  Test / console / scalacOptions := (Compile / console / scalacOptions).value
 )
 
 lazy val testSettings = Seq(

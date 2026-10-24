@@ -14,7 +14,7 @@ import org.apache.avro.Schema.Type._
 import org.apache.avro.generic._
 import org.apache.avro.{Conversions, LogicalType, LogicalTypes, Schema, SchemaBuilder}
 import vulcan.Avro.Bytes
-import vulcan.internal.{Deserializer, InstantMicrosCompanionCompat, Serializer}
+import vulcan.internal.{Deserializer, Serializer}
 
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -44,9 +44,6 @@ sealed abstract class Codec[A] {
     * they represent.
     */
   type AvroType
-
-  @deprecated("Use AvroType", "1.8.0")
-  type Repr = AvroType
 
   /** The schema or an error if the schema could not be generated. */
   def schema: Either[AvroError, Schema]
@@ -141,7 +138,7 @@ sealed abstract class Codec[A] {
   * @groupdesc Utilities
   *   Miscellaneous utility functions.
   */
-object Codec extends CodecCompanionCompat {
+object Codec {
 
   type Aux[AvroType0, A] = Codec[A] {
     type AvroType = AvroType0
@@ -496,20 +493,6 @@ object Codec extends CodecCompanionCompat {
     )
   }
 
-  @deprecated("Use Codec.enumeration - enum is a keyword in Scala 3", "1.3.0")
-  final def `enum`[A](
-    name: String,
-    namespace: String,
-    symbols: Seq[String],
-    encode: A => String,
-    decode: String => Either[AvroError, A],
-    default: Option[A] = None,
-    doc: Option[String] = None,
-    aliases: Seq[String] = Seq.empty,
-    props: Props = Props.empty
-  ): Codec.Aux[Avro.EnumSymbol, A] =
-    enumeration(name, namespace, symbols, encode, decode, default, doc, aliases, props)
-
   /** Returns a new fixed [[Codec]] for type `A`.
     *
     * When encoding, bytes are zero-padded to the specified size. Zero-padding is applied at the
@@ -706,7 +689,7 @@ object Codec extends CodecCompanionCompat {
       SECONDS.toMicros(value.getEpochSecond) + NANOSECONDS.toMicros(value.getNano.toLong)
   }
 
-  object InstantMicros extends InstantMicrosCompanionCompat {
+  object InstantMicros {
     def fromEpochMicro(epochMicros: Long): InstantMicros = {
       InstantMicros(
         Instant.ofEpochSecond(

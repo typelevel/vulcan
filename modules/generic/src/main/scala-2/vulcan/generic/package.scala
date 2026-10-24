@@ -6,52 +6,17 @@
 
 package vulcan
 
-import scala.reflect.runtime.universe.WeakTypeTag
 import cats.implicits._
-import magnolia._
-import shapeless.{:+:, CNil, Coproduct, Inl, Inr, Lazy}
-import shapeless.ops.coproduct.{Inject, Selector}
-import vulcan.internal.tags._
+import magnolia1._
+import vulcan.internal.Names
 import cats.data.Chain
 import cats.free.FreeApplicative
 
 package object generic {
-  implicit final val cnilCodec: Codec.Aux[Nothing, CNil] =
-    Codec.UnionCodec(Chain.empty).asInstanceOf[Codec.Aux[Nothing, CNil]].withTypeName("Coproduct")
-
-  implicit final def coproductCodec[H, T <: Coproduct](implicit
-    headCodec: Codec[H],
-    tailCodec: Lazy[Codec[T]]
-  ): Codec[H :+: T] =
-    tailCodec.value match {
-      case Codec.WithTypeName(Codec.Validated(u: Codec.UnionCodec[T], _), typeName) =>
-        val tailAlts: Chain[Codec.Alt[H :+: T]] =
-          u.alts.map(_.imap[H :+: T](_.eliminate(_ => None, Some(_)), Inr(_)))
-        Codec
-          .UnionCodec(
-            tailAlts
-              .prepend(
-                Codec.Alt(headCodec, Prism.instance[H :+: T, H](_.select)(Inl(_)))
-              )
-          )
-          .withTypeName(typeName)
-      case Codec.Fail(error) => Codec.Fail(error)
-      case other             =>
-        throw new IllegalArgumentException(
-          s"cannot derive coproduct codec from non-union ${other.getClass()}"
-        )
-    }
-
-  implicit final def coproductPrism[C <: Coproduct, A](implicit
-    inject: Inject[C, A],
-    selector: Selector[C, A]
-  ): Prism[C, A] =
-    Prism.instance(selector(_))(inject(_))
-
   implicit final class MagnoliaCodec private[generic] (
     private val codec: Codec.type
   ) extends AnyVal {
-    final def combine[A](caseClass: CaseClass[Codec, A]): Codec[A] =
+    final def join[A](caseClass: CaseClass[Codec, A]): Codec[A] =
       if (caseClass.isValueClass) {
         val param = caseClass.parameters.head
         param.typeclass.imap(value => caseClass.rawConstruct(List(value)))(param.dereference)
@@ -126,7 +91,7 @@ package object generic {
     final def derive[A]: Codec[A] =
       macro Magnolia.gen[A]
 
-    final def dispatch[A](sealedTrait: SealedTrait[Codec, A]): Codec.Aux[Any, A] = {
+    final def split[A](sealedTrait: SealedTrait[Codec, A]): Codec.Aux[Any, A] = {
 
       Codec
         .union[A](alt =>
@@ -141,7 +106,7 @@ package object generic {
   }
 
   /** Returns an enum `Codec` for type `A`, deriving details like the name, namespace, and
-    * [[AvroDoc]] documentation from the type `A` using type tags.
+    * [[AvroDoc]] documentation from the type `A` using reflection.
     *
     * @group Derive
     */
@@ -149,19 +114,19 @@ package object generic {
     symbols: Seq[String],
     encode: A => String,
     decode: String => Either[AvroError, A]
-  )(implicit tag: WeakTypeTag[A]): Codec.Aux[Avro.EnumSymbol, A] =
+  )(implicit names: Names[A]): Codec.Aux[Avro.EnumSymbol, A] =
     Codec.enumeration(
-      name = nameFrom(tag),
+      name = names.typeName,
       symbols = symbols,
       encode = encode,
       decode = decode,
-      namespace = namespaceFrom(tag),
-      doc = docFrom(tag),
-      aliases = aliasFrom(tag)
+      namespace = names.namespace,
+      doc = names.doc,
+      aliases = names.aliasOf.toSeq
     )
 
   /** Returns a fixed `Codec` for type `A`, deriving details like the name, namespace, and
-    * [[AvroDoc]] documentation from the type `A` using type tags.
+    * [[AvroDoc]] documentation from the type `A` using reflection.
     *
     * @group Derive
     */
@@ -169,14 +134,14 @@ package object generic {
     size: Int,
     encode: A => Array[Byte],
     decode: Array[Byte] => Either[AvroError, A]
-  )(implicit tag: WeakTypeTag[A]): Codec.Aux[Avro.Fixed, A] =
+  )(implicit names: Names[A]): Codec.Aux[Avro.Fixed, A] =
     Codec.fixed(
-      name = nameFrom(tag),
+      name = names.typeName,
       size = size,
       encode = encode,
       decode = decode,
-      namespace = namespaceFrom(tag),
-      doc = docFrom(tag),
-      aliases = aliasFrom(tag)
+      namespace = names.namespace,
+      doc = names.doc,
+      aliases = names.aliasOf.toSeq
     )
 }
