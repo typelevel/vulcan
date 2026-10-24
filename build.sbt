@@ -289,11 +289,11 @@ ThisBuild / githubWorkflowArtifactUpload := false
 
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("21"))
 
+// The website is published from series/1.x until the 2.0.0 release
 ThisBuild / githubWorkflowPublish := Seq(
   WorkflowStep.Sbt(
-    List("tlCiRelease", "docs/docusaurusPublishGhpages"),
+    List("tlCiRelease"),
     env = Map(
-      "GIT_DEPLOY_KEY" -> "${{ secrets.GIT_DEPLOY_KEY }}",
       "PGP_PASSPHRASE" -> "${{ secrets.PGP_PASSPHRASE }}",
       "PGP_SECRET" -> "${{ secrets.PGP_SECRET }}",
       "SONATYPE_PASSWORD" -> "${{ secrets.SONATYPE_PASSWORD }}",

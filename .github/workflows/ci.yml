@@ -112,11 +112,10 @@ jobs:
 
       - env:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-          GIT_DEPLOY_KEY: ${{ secrets.GIT_DEPLOY_KEY }}
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           PGP_SECRET: ${{ secrets.PGP_SECRET }}
-        run: sbt tlCiRelease docs/docusaurusPublishGhpages
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+        run: sbt tlCiRelease
 
   dependency-submission:
     name: Submit Dependencies
