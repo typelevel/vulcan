@@ -1,5 +1,6 @@
 val avroVersion = "1.12.2"
 val catsVersion = "2.13.0"
+val circeVersion = "0.14.17"
 val disciplineScalaTestVersion = "2.3.0"
 val enumeratumVersion = "1.9.8"
 val jacksonVersion = "2.22.4"
@@ -9,6 +10,7 @@ val munitVersion = "1.3.6"
 val munitScalaCheckVersion = "1.3.1"
 val refinedVersion = "0.11.4"
 val scalacCompatVersion = "0.1.5"
+val scodecBitsVersion = "1.2.5"
 val slf4jNopVersion = "2.0.20"
 
 val scala213 = "2.13.18"
@@ -43,7 +45,9 @@ lazy val core = project
     libraryDependencies ++= Seq(
       "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
       "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
+      "io.circe" %% "circe-core" % circeVersion,
       "org.apache.avro" % "avro" % avroVersion,
+      "org.scodec" %% "scodec-bits" % scodecBitsVersion,
       "org.typelevel" %% "cats-free" % catsVersion,
       "org.typelevel" %% "scalac-compat-annotation" % scalacCompatVersion % Test
     ),
