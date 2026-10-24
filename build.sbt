@@ -274,7 +274,7 @@ lazy val buildInfoSettings = Seq(
 )
 
 lazy val metadataSettings = Seq(
-  organization := "com.github.fd4s"
+  organization := "org.typelevel"
 )
 
 ThisBuild / githubWorkflowBuild := Seq(
