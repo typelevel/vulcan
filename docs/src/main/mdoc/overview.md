@@ -86,7 +86,7 @@ Refer to the table below for dependencies and version support across modules.
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | `@CORE_MODULE_NAME@`       | [Apache Avro @AVRO_VERSION@](https://github.com/apache/avro), [Cats @CATS_VERSION@](https://github.com/typelevel/cats)                          | Scala @CORE_CROSS_SCALA_VERSIONS@       |
 | `@ENUMERATUM_MODULE_NAME@` | [Enumeratum @ENUMERATUM_VERSION@](https://github.com/lloydmeta/enumeratum)                                                                      | Scala @ENUMERATUM_CROSS_SCALA_VERSIONS@ |
-| `@GENERIC_MODULE_NAME@`    | [Magnolia @MAGNOLIA_VERSION@](https://github.com/propensive/magnolia), [Shapeless @SHAPELESS_VERSION@](https://github.com/milessabin/shapeless) | Scala @GENERIC_CROSS_SCALA_VERSIONS@    |
+| `@GENERIC_MODULE_NAME@`    | [Magnolia @MAGNOLIA_VERSION@](https://github.com/propensive/magnolia)                                                                           | Scala @GENERIC_CROSS_SCALA_VERSIONS@    |
 | `@REFINED_MODULE_NAME@`    | [Refined @REFINED_VERSION@](https://github.com/fthomas/refined)                                                                                 | Scala @REFINED_CROSS_SCALA_VERSIONS@    |
 
 ## Inspiration

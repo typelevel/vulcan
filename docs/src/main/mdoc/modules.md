@@ -107,14 +107,6 @@ final case class Second(value: String) extends FirstOrSecond
 Codec.derive[FirstOrSecond]
 ```
 
-[Shapeless](https://github.com/milessabin/shapeless) `Coproduct`s are also supported and correspond to Avro unions.
-
-```scala mdoc
-import shapeless.{:+:, CNil}
-
-Codec[Int :+: String :+: CNil]
-```
-
 `deriveEnum` can be used to partly derive [`Codec`][codec]s for enumeration types. Annotations like `@AvroDoc` can be used to customize the derivation.
 
 

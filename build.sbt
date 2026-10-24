@@ -9,8 +9,6 @@ val munitVersion = "1.3.6"
 val munitScalaCheckVersion = "1.3.1"
 val refinedVersion = "0.11.4"
 val scalacCompatVersion = "0.1.5"
-val shapeless3Version = "3.6.0"
-val shapelessVersion = "2.3.13"
 val slf4jNopVersion = "2.0.20"
 
 val scala213 = "2.13.18"
@@ -91,7 +89,6 @@ lazy val generic = project
       libraryDependencies ++= {
         if (scalaVersion.value.startsWith("2"))
           Seq(
-            "com.chuusai" %% "shapeless" % shapelessVersion,
             "com.propensive" %% "magnolia" % magnolia2Version,
             "org.apache.avro" % "avro" % avroVersion,
             "org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided,
@@ -103,9 +100,7 @@ lazy val generic = project
             "com.softwaremill.magnolia1_3" %% "magnolia" % magnolia3Version,
             "org.apache.avro" % "avro" % avroVersion,
             "org.typelevel" %% "cats-core" % catsVersion,
-            "org.typelevel" %% "cats-free" % catsVersion,
-            "org.typelevel" %% "cats-kernel" % catsVersion,
-            "org.typelevel" %% "shapeless3-deriving" % shapeless3Version
+            "org.typelevel" %% "cats-free" % catsVersion
           )
       }
     ),
@@ -264,8 +259,7 @@ lazy val buildInfoSettings = Seq(
       BuildInfoKey("catsVersion" -> catsVersion),
       BuildInfoKey("enumeratumVersion" -> enumeratumVersion),
       BuildInfoKey("magnoliaVersion" -> magnolia),
-      BuildInfoKey("refinedVersion" -> refinedVersion),
-      BuildInfoKey("shapelessVersion" -> shapelessVersion)
+      BuildInfoKey("refinedVersion" -> refinedVersion)
     )
   }
 )

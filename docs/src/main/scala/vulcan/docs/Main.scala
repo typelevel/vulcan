@@ -56,8 +56,7 @@ object Main {
           "CATS_VERSION" -> catsVersion,
           "ENUMERATUM_VERSION" -> enumeratumVersion,
           "MAGNOLIA_VERSION" -> magnoliaVersion,
-          "REFINED_VERSION" -> refinedVersion,
-          "SHAPELESS_VERSION" -> shapelessVersion
+          "REFINED_VERSION" -> refinedVersion
         )
       }
       .withScalacOptions(scalacOptions.mkString(" "))
