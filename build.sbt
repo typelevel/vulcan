@@ -8,13 +8,11 @@ val magnolia3Version = "1.3.24"
 val munitVersion = "1.3.6"
 val munitScalaCheckVersion = "1.3.1"
 val refinedVersion = "0.11.4"
-val scalaCollectionCompatVersion = "2.14.0"
 val scalacCompatVersion = "0.1.5"
 val shapeless3Version = "3.6.0"
 val shapelessVersion = "2.3.13"
 val slf4jNopVersion = "2.0.20"
 
-val scala212 = "2.12.21"
 val scala213 = "2.13.18"
 val scala3 = "3.3.8"
 
@@ -160,7 +158,6 @@ lazy val dependencySettings = Seq(
     if (scalaVersion.value.startsWith("3")) Nil
     else {
       Seq(
-        "org.scala-lang.modules" %% "scala-collection-compat" % scalaCollectionCompatVersion % Test,
         compilerPlugin(("org.typelevel" %% "kind-projector" % "0.13.4").cross(CrossVersion.full))
       )
     }
@@ -328,28 +325,13 @@ lazy val noPublishSettings =
 
 ThisBuild / scalaVersion := scala213
 
-ThisBuild / crossScalaVersions := Seq(scala212, scala213, scala3)
+ThisBuild / crossScalaVersions := Seq(scala213, scala3)
 
 ThisBuild / tlFatalWarnings := false
 
 lazy val scalaSettings = Seq(
   Compile / console / scalacOptions --= Seq("-Xlint", "-Ywarn-unused"),
-  Test / console / scalacOptions := (Compile / console / scalacOptions).value,
-  Compile / unmanagedSourceDirectories ++= {
-    val sourceDir = (Compile / sourceDirectory).value
-    CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, 12)) => Seq(sourceDir / "scala-2.12", sourceDir / "scala-2")
-      case Some((2, 13)) => Seq(sourceDir / "scala-2.13+", sourceDir / "scala-2")
-      case _             => Seq(sourceDir / "scala-2.13+", sourceDir / "scala-3")
-    }
-  },
-  Test / unmanagedSourceDirectories ++= {
-    val sourceDir = (Test / sourceDirectory).value
-    CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, _)) => Seq(sourceDir / "scala-2")
-      case _            => Nil
-    }
-  }
+  Test / console / scalacOptions := (Compile / console / scalacOptions).value
 )
 
 lazy val testSettings = Seq(

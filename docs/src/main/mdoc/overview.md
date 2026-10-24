@@ -23,12 +23,6 @@ libraryDependencies += "@ORGANIZATION@" %% "@CORE_MODULE_NAME@" % "@LATEST_VERSI
 
 Published for Scala @SCALA_PUBLISH_VERSIONS@. For changes, refer to the [release notes](https://github.com/typelevel/vulcan/releases).
 
-For Scala 2.12, enable partial unification by adding the following line to `build.sbt`.
-
-```scala
-scalacOptions += "-Ypartial-unification"
-```
-
 ### Modules
 
 Following are additional provided modules.
