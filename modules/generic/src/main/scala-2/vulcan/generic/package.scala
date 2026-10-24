@@ -8,7 +8,7 @@ package vulcan
 
 import scala.reflect.runtime.universe.WeakTypeTag
 import cats.implicits._
-import magnolia._
+import magnolia1._
 import vulcan.internal.tags._
 import cats.data.Chain
 import cats.free.FreeApplicative
@@ -17,7 +17,7 @@ package object generic {
   implicit final class MagnoliaCodec private[generic] (
     private val codec: Codec.type
   ) extends AnyVal {
-    final def combine[A](caseClass: CaseClass[Codec, A]): Codec[A] =
+    final def join[A](caseClass: CaseClass[Codec, A]): Codec[A] =
       if (caseClass.isValueClass) {
         val param = caseClass.parameters.head
         param.typeclass.imap(value => caseClass.rawConstruct(List(value)))(param.dereference)
@@ -92,7 +92,7 @@ package object generic {
     final def derive[A]: Codec[A] =
       macro Magnolia.gen[A]
 
-    final def dispatch[A](sealedTrait: SealedTrait[Codec, A]): Codec.Aux[Any, A] = {
+    final def split[A](sealedTrait: SealedTrait[Codec, A]): Codec.Aux[Any, A] = {
 
       Codec
         .union[A](alt =>

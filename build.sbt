@@ -3,7 +3,7 @@ val catsVersion = "2.13.0"
 val disciplineScalaTestVersion = "2.3.0"
 val enumeratumVersion = "1.9.8"
 val jacksonVersion = "2.22.4"
-val magnolia2Version = "0.17.0"
+val magnolia2Version = "1.1.14"
 val magnolia3Version = "1.3.24"
 val munitVersion = "1.3.6"
 val munitScalaCheckVersion = "1.3.1"
@@ -89,7 +89,7 @@ lazy val generic = project
       libraryDependencies ++= {
         if (scalaVersion.value.startsWith("2"))
           Seq(
-            "com.propensive" %% "magnolia" % magnolia2Version,
+            "com.softwaremill.magnolia1_2" %% "magnolia" % magnolia2Version,
             "org.apache.avro" % "avro" % avroVersion,
             "org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided,
             "org.typelevel" %% "cats-core" % catsVersion,
