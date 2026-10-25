@@ -7,6 +7,7 @@
 package vulcan.v2
 
 import io.circe.{Json, JsonObject}
+import vulcan.v2.internal.{JsonPrinter, SchemaEncoder}
 
 /** Immutable Avro schema. Not validated, so not necessarily a valid Avro schema. */
 sealed abstract class Schema {
@@ -25,6 +26,14 @@ sealed abstract class Schema {
       case union: Schema.Union => union.types.exists(_.isInstanceOf[Schema.Null])
       case _                   => false
     }
+
+  /** The schema as `Json`. Named schemas are referenced by name after their definition. */
+  final def toJson: Json =
+    SchemaEncoder.encode(this)
+
+  /** The schema as JSON without whitespace. */
+  final override def toString: String =
+    JsonPrinter.print(toJson)
 }
 
 object Schema {
