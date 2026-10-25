@@ -61,7 +61,36 @@ object SchemaGenerators {
     )
 
   def genSchema: Gen[Schema] =
-    Gen.choose(0, 3).flatMap(depth => genSchema(depth, None, "0"))
+    Gen.frequency(
+      3 -> Gen.choose(0, 3).flatMap(depth => genSchema(depth, None, "0")),
+      1 -> genReferences
+    )
+
+  /** A record with a schema, followed by fields with named schemas within the schema. */
+  private def genReferences: Gen[Schema] =
+    for {
+      schema <- Gen.choose(1, 3).flatMap(depth => genSchema(depth, None, "0"))
+      named <- Gen.someOf(namedSchemas(schema))
+      name <- genSchemaName(None, "r")
+    } yield {
+      val references =
+        named.toVector.zipWithIndex.map { case (reference, index) =>
+          Schema.Field(s"reference$index", reference)
+        }
+
+      Schema.Record(name, Schema.Field("schema", schema) +: references)
+    }
+
+  private def namedSchemas(schema: Schema): List[Schema.Named] =
+    schema match {
+      case record: Schema.Record =>
+        record :: record.fields.toList.flatMap(field => namedSchemas(field.schema))
+      case named: Schema.Named => List(named)
+      case array: Schema.Array => namedSchemas(array.items)
+      case map: Schema.Map     => namedSchemas(map.values)
+      case union: Schema.Union => union.types.toList.flatMap(namedSchemas)
+      case _                   => Nil
+    }
 
   private def genSchema(depth: Int, namespace: Option[String], path: String): Gen[Schema] =
     if (depth <= 0) genLeaf(namespace, path)

@@ -46,6 +46,7 @@ lazy val core = project
       "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
       "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
       "io.circe" %% "circe-core" % circeVersion,
+      "io.circe" %% "circe-jawn" % circeVersion,
       "org.apache.avro" % "avro" % avroVersion,
       "org.scodec" %% "scodec-bits" % scodecBitsVersion,
       "org.typelevel" %% "cats-free" % catsVersion,

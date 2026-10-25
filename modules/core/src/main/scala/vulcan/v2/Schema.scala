@@ -7,7 +7,8 @@
 package vulcan.v2
 
 import io.circe.{Json, JsonObject}
-import vulcan.v2.internal.{JsonPrinter, SchemaEncoder}
+import vulcan.AvroError
+import vulcan.v2.internal.{JsonPrinter, SchemaDecoder, SchemaEncoder}
 
 /** Immutable Avro schema. Not validated, so not necessarily a valid Avro schema. */
 sealed abstract class Schema {
@@ -37,6 +38,19 @@ sealed abstract class Schema {
 }
 
 object Schema {
+
+  /** Parses, decodes and validates the provided schema JSON `String`. */
+  def parse(json: Predef.String): Either[AvroError, Schema] =
+    io.circe.jawn
+      .parse(json)
+      .left
+      .map(failure => AvroError(s"Invalid JSON: ${failure.message}"))
+      .flatMap(fromJson)
+
+  /** Decodes and validates the provided schema `Json`. */
+  def fromJson(json: Json): Either[AvroError, Schema] =
+    SchemaDecoder.decode(json)
+
   sealed abstract class Null extends Schema {
     final def withProps(props: JsonObject): Null =
       if (props.isEmpty) Null else NullImpl(props)

@@ -10,7 +10,7 @@ import io.circe.Json
 
 private[v2] object JsonPrinter {
 
-  /** Print `Json` without whitespace, matching the Java Avro library for compatiblity. */
+  /** Print `Json` without whitespace, matching the Java Avro library for compatibility. */
   def print(json: Json): String =
     json.fold(
       "null",

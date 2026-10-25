@@ -12,7 +12,7 @@ import vulcan.v2.Schema
 
 private[v2] object SchemaEncoder {
 
-  /** Convert `Schema` to `Json`, matching the Java Avro library for compatiblity.
+  /** Convert `Schema` to `Json`, matching the Java Avro library for compatibility.
     *
     * Named schemas are defined where they first occur, and are referenced by name afterwards. The
     * namespace of a named schema is only included when it differs from the enclosing namespace.
@@ -138,7 +138,7 @@ private[v2] object SchemaEncoder {
   private def aliases(named: Schema.Named): List[(String, Json)] = {
     val names =
       named.aliases
-        .map(aliasName(_, named.name.namespace))
+        .map(SchemaNames.resolve(_, named.name.namespace))
         .distinctBy(_.fullName)
 
     if (names.isEmpty) Nil
@@ -147,13 +147,6 @@ private[v2] object SchemaEncoder {
       List("aliases" -> Json.fromValues(qualifiedNames))
     }
   }
-
-  /** The full name of an alias, which is relative to the namespace unless it includes a dot. */
-  private def aliasName(alias: String, namespace: Option[String]): Schema.Name =
-    alias.lastIndexOf('.') match {
-      case -1      => Schema.Name(alias, namespace)
-      case lastDot => Schema.Name(alias.substring(lastDot + 1), Some(alias.substring(0, lastDot)))
-    }
 
   private def fieldAliases(aliases: Vector[String]): List[(String, Json)] =
     if (aliases.isEmpty) Nil
