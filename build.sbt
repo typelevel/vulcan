@@ -293,10 +293,7 @@ lazy val docs = project
             )
           )
           .site
-          .footer(
-            "Licensed under <a href=\"https://github.com/typelevel/vulcan/blob/main/license.txt\">Apache License, Version 2.0</a>.<br>" +
-              "Copyright © 2019 OVO Energy Limited."
-          )
+          .footer()
           .site
           .pageNavigation(
             sourceBaseURL = Some("https://github.com/typelevel/vulcan/tree/series/1.x/docs")
