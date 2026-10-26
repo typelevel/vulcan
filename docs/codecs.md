@@ -1,9 +1,6 @@
----
-id: codecs
-title: Codecs
----
+# Codecs
 
-[`Codec`][codec] is the central concept in the library. [`Codec`][codec]s represent an Avro `schema`, together with an `encode` and `decode` function for converting between Scala types and types recognized by the Apache Avro library. There are default [`Codec`][codec]s defined for many standard library types. For example, we can check what the default `Option[Instant]` encoding is by asking for a [`Codec`][codec] instance.
+@:api(vulcan.Codec) is the central concept in the library. @:api(vulcan.Codec)s represent an Avro `schema`, together with an `encode` and `decode` function for converting between Scala types and types recognized by the Apache Avro library. There are default @:api(vulcan.Codec)s defined for many standard library types. For example, we can check what the default `Option[Instant]` encoding is by asking for a @:api(vulcan.Codec) instance.
 
 ```scala mdoc:reset-object
 import java.time.Instant
@@ -12,13 +9,13 @@ import vulcan.Codec
 Codec[Option[Instant]]
 ```
 
-In some cases, it's not possible to generate Avro schemas. This is why [`Codec`][codec] `schema`s are wrapped in `Either` with error type [`AvroError`][avroerror]. For example, Avro doesn't support nested unions, so what would happen when we try to ask for a [`Codec`][codec] for `Option[Option[Instant]]`?
+In some cases, it's not possible to generate Avro schemas. This is why @:api(vulcan.Codec) `schema`s are wrapped in `Either` with error type @:api(vulcan.AvroError). For example, Avro doesn't support nested unions, so what would happen when we try to ask for a @:api(vulcan.Codec) for `Option[Option[Instant]]`?
 
 ```scala mdoc
 Codec[Option[Option[Instant]]]
 ```
 
-Encoding and decoding with a [`Codec`][codec] might also be unsuccessful, so results are wrapped in `Either` with error type [`AvroError`][avroerror]. Encoding accepts a value to be encoded according to the schema defined by the [`Codec`][codec], and decoding accepts a value and a schema to decode the value against. For example, what happens if we try to decode `Int`s using a `Boolean` schema?
+Encoding and decoding with a @:api(vulcan.Codec) might also be unsuccessful, so results are wrapped in `Either` with error type @:api(vulcan.AvroError). Encoding accepts a value to be encoded according to the schema defined by the @:api(vulcan.Codec), and decoding accepts a value and a schema to decode the value against. For example, what happens if we try to decode `Int`s using a `Boolean` schema?
 
 ```scala mdoc
 import org.apache.avro.SchemaBuilder
@@ -26,9 +23,9 @@ import org.apache.avro.SchemaBuilder
 Codec[Int].decode(10, SchemaBuilder.builder.booleanType)
 ```
 
-Since the Apache Avro library encodes and decodes using `Object`, [`Codec`][codec]s encode and decode between Scala types and `Any`. This means type safety is lost and tests should be used to ensure [`Codec`][codec]s work as intended. This becomes important when we define [`Codec`][codec]s from scratch. Note `Schema`s are treated as effectively immutable, even though they're in fact mutable.
+Since the Apache Avro library encodes and decodes using `Object`, @:api(vulcan.Codec)s encode and decode between Scala types and `Any`. This means type safety is lost and tests should be used to ensure @:api(vulcan.Codec)s work as intended. This becomes important when we define @:api(vulcan.Codec)s from scratch. Note `Schema`s are treated as effectively immutable, even though they're in fact mutable.
 
-[`Codec`][codec]s form [invariant functors][invariant], which means you can easily use an existing [`Codec`][codec] to encode and decode a different type, by mapping back-and-forth between the [`Codec`][codec]'s existing type argument and the new type. This becomes useful when dealing with newtypes, like `InstallationTime` in the following example.
+@:api(vulcan.Codec)s form [invariant functors][invariant], which means you can easily use an existing @:api(vulcan.Codec) to encode and decode a different type, by mapping back-and-forth between the @:api(vulcan.Codec)'s existing type argument and the new type. This becomes useful when dealing with newtypes, like `InstallationTime` in the following example.
 
 ```scala mdoc
 final case class InstallationTime(value: Instant)
@@ -57,7 +54,7 @@ Codec[String].imapError(SerialNumber(_))(_.value)
 
 Avro decimals closely correspond to `BigDecimal`s with a fixed precision and scale.
 
-`Codec.decimal` can be used to create a [`Codec`][codec] for `BigDecimal` given the precision and scale. When encoding, the [`Codec`][codec] checks the precision and scale of the `BigDecimal` to make sure it matches the precision and scale defined in the schema. When decoding, we check the precision is not exceeded.
+`Codec.decimal` can be used to create a @:api(vulcan.Codec) for `BigDecimal` given the precision and scale. When encoding, the @:api(vulcan.Codec) checks the precision and scale of the `BigDecimal` to make sure it matches the precision and scale defined in the schema. When decoding, we check the precision is not exceeded.
 
 ```scala mdoc
 Codec.decimal(precision = 10, scale = 2)
@@ -95,7 +92,7 @@ Codec.enumeration[Fruit](
 )
 ```
 
-Derivation for enumeration types can be partly automated using the [generic](modules.md#generic) or [enumeratum](modules.md#enumeratum) modules, although these will not support Scala 3 for the foreseeable future.
+Derivation for enumeration types can be partly automated using the [generic](derivation.md#enumerations) or [enumeratum](integrations/enumeratum.md) modules.
 
 ## Fixed
 
@@ -147,7 +144,7 @@ Codec.record[Person](
 }
 ```
 
-For generic derivation support, refer to the [generic module](modules.md#generic).
+For generic derivation support, refer to the [generic module](derivation.md#records).
 
 ## Unions
 
@@ -175,8 +172,6 @@ Codec.union[FirstOrSecond] { alt =>
 }
 ```
 
-For generic derivation support, refer to the [generic module](modules.md#generic).
+For generic derivation support, refer to the [generic module](derivation.md#unions).
 
-[avroerror]: @API_BASE_URL@/AvroError.html
-[codec]: @API_BASE_URL@/Codec.html
 [invariant]: https://typelevel.org/cats/typeclasses/invariant.html

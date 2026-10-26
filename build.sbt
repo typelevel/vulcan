@@ -8,7 +8,6 @@ val magnolia3Version = "1.3.24"
 val munitVersion = "1.3.6"
 val munitScalaCheckVersion = "1.3.1"
 val refinedVersion = "0.11.4"
-val scalaCollectionCompatVersion = "2.14.0"
 val scalacCompatVersion = "0.1.5"
 val shapeless3Version = "3.6.0"
 val shapelessVersion = "2.3.13"
@@ -18,169 +17,321 @@ val scala212 = "2.12.21"
 val scala213 = "2.13.18"
 val scala3 = "3.3.8"
 
-ThisBuild / tlBaseVersion := "1.14"
+inThisBuild(
+  Seq(
+    crossScalaVersions := Seq(scala212, scala213, scala3),
+    developers := List(tlGitHubDev("vlovgr", "Viktor Rudebeck")),
+    githubWorkflowJavaVersions := Seq(JavaSpec.temurin("21")),
+    organization := "com.github.fd4s",
+    scalaVersion := scala213,
+    startYear := Some(2019),
+    tlBaseVersion := "1.14",
+    tlFatalWarnings := false,
+    tlSiteKeepFiles := false,
+    // Publish snapshots and the website from series/1.x until the 2.0.0 release
+    tlCiReleaseBranches := Seq("series/1.x"),
+    tlSitePublishBranch := Some("series/1.x"),
+    mimaBinaryIssueFilters ++= {
+      import com.typesafe.tools.mima.core.*
+      Seq(
+        ProblemFilters.exclude[Problem]("vulcan.internal.*"),
+        ProblemFilters.exclude[IncompatibleSignatureProblem]("*"),
+        ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.Codec.withDecodingTypeName"),
+        ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroError.decode*"),
+        ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroError.encode*"),
+        ProblemFilters.exclude[MissingClassProblem]("vulcan.Codec$Field$"),
+        ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroException.*"),
 
-lazy val vulcan = project
-  .in(file("."))
-  .settings(
-    scalaSettings,
-    noPublishSettings,
-    console := (core / Compile / console).value,
-    Test / console := (core / Test / console).value
+        // package-private
+        ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.Codec.instanceForTypes")
+      )
+    }
   )
-  .enablePlugins(TypelevelMimaPlugin)
+)
+
+lazy val root = project
+  .in(file("."))
+  .enablePlugins(NoPublishPlugin)
   .aggregate(core, enumeratum, generic, refined)
 
 lazy val core = project
   .in(file("modules/core"))
   .settings(
-    moduleName := "vulcan",
-    name := moduleName.value,
-    dependencySettings ++ Seq(
-      libraryDependencies ++= Seq(
-        "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
-        "org.apache.avro" % "avro" % avroVersion,
-        "org.typelevel" %% "cats-free" % catsVersion,
-        "org.typelevel" %% "scalac-compat-annotation" % scalacCompatVersion % Test
-      ) ++ {
-        if (scalaVersion.value.startsWith("3")) Nil
-        else Seq("org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided)
-      }
-    ),
+    name := "vulcan",
+    libraryDependencies ++= Seq(
+      "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
+      "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
+      "org.apache.avro" % "avro" % avroVersion,
+      "org.typelevel" %% "cats-free" % catsVersion,
+      "org.typelevel" %% "scalac-compat-annotation" % scalacCompatVersion % Test
+    ) ++ scalaReflect(scalaVersion.value),
+    headerSettings,
     scalatestSettings,
-    publishSettings,
-    scalaSettings,
-    testSettings,
     tlVersionIntroduced := Map("3" -> "1.7.0")
   )
 
 lazy val enumeratum = project
   .in(file("modules/enumeratum"))
+  .dependsOn(core, generic)
   .settings(
-    moduleName := "vulcan-enumeratum",
-    name := moduleName.value,
-    dependencySettings ++ Seq(
-      libraryDependencies ++= {
-        if (scalaVersion.value.startsWith("2"))
-          Seq(
-            "com.beachape" %% "enumeratum" % enumeratumVersion,
-            "org.apache.avro" % "avro" % avroVersion,
-            "org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided
-          )
-        else
-          Seq(
-            "com.beachape" %% "enumeratum" % enumeratumVersion,
-            "org.apache.avro" % "avro" % avroVersion
-          )
-      }
-    ),
+    name := "vulcan-enumeratum",
+    libraryDependencies ++= Seq(
+      "com.beachape" %% "enumeratum" % enumeratumVersion,
+      "org.apache.avro" % "avro" % avroVersion
+    ) ++ scalaReflect(scalaVersion.value),
+    headerSettings,
     scalatestSettings,
-    publishSettings,
-    scalaSettings,
-    testSettings,
-    Test / scalacOptions ++= {
-      if (scalaVersion.value.startsWith("3")) List("-Yretain-trees") else Nil
-    },
+    Test / scalacOptions ++= (if (tlIsScala3.value) Seq("-Yretain-trees") else Seq()),
     tlVersionIntroduced := Map("3" -> "1.14.0")
   )
-  .dependsOn(core, generic)
 
 lazy val generic = project
   .in(file("modules/generic"))
+  .dependsOn(core % "compile->compile;test->test")
   .settings(
-    moduleName := "vulcan-generic",
-    name := moduleName.value,
-    dependencySettings ++ Seq(
-      libraryDependencies ++= {
-        if (scalaVersion.value.startsWith("2"))
-          Seq(
-            "com.chuusai" %% "shapeless" % shapelessVersion,
-            "com.propensive" %% "magnolia" % magnolia2Version,
-            "org.apache.avro" % "avro" % avroVersion,
-            "org.scala-lang" % "scala-reflect" % scalaVersion.value % Provided,
-            "org.typelevel" %% "cats-core" % catsVersion,
-            "org.typelevel" %% "cats-free" % catsVersion
-          )
-        else
-          Seq(
-            "com.softwaremill.magnolia1_3" %% "magnolia" % magnolia3Version,
-            "org.apache.avro" % "avro" % avroVersion,
-            "org.typelevel" %% "cats-core" % catsVersion,
-            "org.typelevel" %% "cats-free" % catsVersion,
-            "org.typelevel" %% "cats-kernel" % catsVersion,
-            "org.typelevel" %% "shapeless3-deriving" % shapeless3Version
-          )
-      }
-    ),
+    name := "vulcan-generic",
+    libraryDependencies ++= Seq(
+      "org.apache.avro" % "avro" % avroVersion,
+      "org.typelevel" %% "cats-core" % catsVersion,
+      "org.typelevel" %% "cats-free" % catsVersion
+    ) ++ {
+      if (tlIsScala3.value)
+        Seq(
+          "com.softwaremill.magnolia1_3" %% "magnolia" % magnolia3Version,
+          "org.typelevel" %% "cats-kernel" % catsVersion,
+          "org.typelevel" %% "shapeless3-deriving" % shapeless3Version
+        )
+      else
+        Seq(
+          "com.chuusai" %% "shapeless" % shapelessVersion,
+          "com.propensive" %% "magnolia" % magnolia2Version
+        )
+    } ++ scalaReflect(scalaVersion.value),
+    headerSettings,
     scalatestSettings,
-    publishSettings,
-    scalaSettings,
     // magnolia requires compilation with the -Yretain-trees flag to support case class field default values on Scala 3
-    Test / scalacOptions ++= (if (CrossVersion.partialVersion(scalaVersion.value).exists(_._1 == 3))
-                                Seq("-Yretain-trees")
-                              else Nil),
-    testSettings,
+    Test / scalacOptions ++= (if (tlIsScala3.value) Seq("-Yretain-trees") else Seq()),
     tlVersionIntroduced := Map("3" -> "1.8.0")
   )
-  .dependsOn(core % "compile->compile;test->test")
 
 lazy val refined = project
   .in(file("modules/refined"))
+  .dependsOn(core)
   .settings(
-    moduleName := "vulcan-refined",
-    name := moduleName.value,
-    dependencySettings ++ Seq(
-      libraryDependencies ++= Seq(
-        "eu.timepit" %% "refined" % refinedVersion,
-        "eu.timepit" %% "refined-scalacheck" % refinedVersion % Test,
-        "org.typelevel" %% "cats-core" % catsVersion
-      )
+    name := "vulcan-refined",
+    libraryDependencies ++= Seq(
+      "eu.timepit" %% "refined" % refinedVersion,
+      "org.typelevel" %% "cats-core" % catsVersion,
+      "eu.timepit" %% "refined-scalacheck" % refinedVersion % Test,
+      "org.scalameta" %% "munit" % munitVersion % Test,
+      "org.scalameta" %% "munit-scalacheck" % munitScalaCheckVersion % Test,
+      "org.slf4j" % "slf4j-nop" % slf4jNopVersion % Test
     ),
-    munitSettings,
-    publishSettings,
-    scalaSettings,
-    testSettings,
+    headerSettings,
     tlVersionIntroduced := Map("3" -> "1.7.0")
   )
-  .dependsOn(core)
 
 lazy val docs = project
-  .in(file("docs"))
-  .settings(
-    moduleName := "vulcan-docs",
-    name := moduleName.value,
-    dependencySettings,
-    noPublishSettings,
-    scalaSettings,
-    mdocSettings,
-    buildInfoSettings
-  )
+  .in(file("site"))
+  .enablePlugins(TypelevelSitePlugin)
   .dependsOn(core, enumeratum, generic, refined)
-  .enablePlugins(BuildInfoPlugin, DocusaurusPlugin, MdocPlugin, ScalaUnidocPlugin)
+  .settings {
+    import laika.ast.Image
+    import laika.ast.InlineSVGIcon
+    import laika.ast.LengthUnit.em
+    import laika.ast.LengthUnit.px
+    import laika.ast.Path.Root
+    import laika.ast.Styles
+    import laika.config.ApiLinks
+    import laika.config.LinkConfig
+    import laika.helium.Helium
+    import laika.helium.config.ButtonLink
+    import laika.helium.config.ColorQuintet
+    import laika.helium.config.Favicon
+    import laika.helium.config.HeliumIcon
+    import laika.helium.config.IconLink
+    import laika.helium.config.LinkGroup
+    import laika.helium.config.LinkPanel
+    import laika.helium.config.ReleaseInfo
+    import laika.helium.config.TextLink
+    import laika.theme.config.Color
+    import org.typelevel.sbt.site.GenericSiteSettings
 
-lazy val dependencySettings = Seq(
-  libraryDependencies ++= {
-    if (scalaVersion.value.startsWith("3")) Nil
-    else {
-      Seq(
-        "org.scala-lang.modules" %% "scala-collection-compat" % scalaCollectionCompatVersion % Test,
-        compilerPlugin(("org.typelevel" %% "kind-projector" % "0.13.4").cross(CrossVersion.full))
-      )
-    }
-  },
-  pomPostProcess := { (node: xml.Node) =>
-    new xml.transform.RuleTransformer(new xml.transform.RewriteRule {
-      def scopedDependency(e: xml.Elem): Boolean =
-        e.label == "dependency" && e.child.exists(_.label == "scope")
+    Seq(
+      crossScalaVersions := Seq(scala213),
+      scalacOptions ~= (_.filterNot(_.startsWith("-Wunused"))),
+      Compile / packageDoc / mappings := (unidocs / Compile / packageDoc / mappings).value.map {
+        case (file, path) => file -> path.replace('\\', '/')
+      },
+      laikaConfig ~= (_.withConfigValue(LinkConfig.empty.addApiLinks(ApiLinks("/api/")))),
+      laikaIncludeAPI := true,
+      tlSiteApiUrl := None,
+      tlSitePreview := tlSitePreview.dependsOn(laikaGenerateAPI).value,
+      mdocVariables ++= Map(
+        "AVRO_VERSION" -> avroVersion,
+        "CATS_VERSION" -> catsVersion,
+        "CORE_CROSS_SCALA_VERSIONS" -> crossScalaVersionsOf(core).value,
+        "CORE_MODULE_NAME" -> (core / moduleName).value,
+        "ENUMERATUM_CROSS_SCALA_VERSIONS" -> crossScalaVersionsOf(enumeratum).value,
+        "ENUMERATUM_MODULE_NAME" -> (enumeratum / moduleName).value,
+        "ENUMERATUM_VERSION" -> enumeratumVersion,
+        "GENERIC_CROSS_SCALA_VERSIONS" -> crossScalaVersionsOf(generic).value,
+        "GENERIC_MODULE_NAME" -> (generic / moduleName).value,
+        "MAGNOLIA_VERSION" -> (if (tlIsScala3.value) magnolia3Version else magnolia2Version),
+        "MAJOR_VERSION" -> majorVersion(version.value),
+        "ORGANIZATION" -> (ThisBuild / organization).value,
+        "REFINED_CROSS_SCALA_VERSIONS" -> crossScalaVersionsOf(refined).value,
+        "REFINED_MODULE_NAME" -> (refined / moduleName).value,
+        "REFINED_VERSION" -> refinedVersion,
+        "SCALA_DOCS_VERSION" -> scalaVersionOf(scalaVersion.value),
+        "SCALA_PUBLISH_VERSIONS" -> crossScalaVersionsOf(core).value,
+        "SHAPELESS_VERSION" -> shapelessVersion
+      ),
+      tlSiteHelium := {
+        val gitHubUrl = "https://github.com/typelevel/vulcan"
 
-      override def transform(node: xml.Node): xml.NodeSeq =
-        node match {
-          case e: xml.Elem if scopedDependency(e) => Nil
-          case _                                  => Seq(node)
-        }
-    }).transform(node).head
+        val projectLinks = List(
+          IconLink.internal(Root / "api" / "vulcan" / "index.html", HeliumIcon.api),
+          IconLink.external(gitHubUrl, HeliumIcon.github),
+          IconLink.external("https://discord.gg/Q8KBnyC776", HeliumIcon.chat)
+        )
+
+        Helium.defaults
+          .extendWith(GenericSiteSettings.themeExtensions.value)
+          .site
+          .metadata(
+            title = Some("Vulcan · Functional Avro for Scala"),
+            description =
+              Some("Functional Avro encodings for Scala using the official Apache Avro library."),
+            authors = developers.value.map(_.name),
+            language = Some("en"),
+            version = Some(version.value)
+          )
+          .site
+          .themeColors(
+            primary = Color.hex("2a1b12"),
+            secondary = Color.hex("985516"),
+            primaryMedium = Color.hex("ebdecb"),
+            primaryLight = Color.hex("f8f6f1"),
+            text = Color.hex("24292e"),
+            background = Color.hex("ffffff"),
+            bgGradient = (Color.hex("2a1b12"), Color.hex("3a2716"))
+          )
+          .site
+          .syntaxHighlightingColors(
+            base = ColorQuintet(
+              Color.hex("f8f8f8"), // background
+              Color.hex("999988"), // comments
+              Color.hex("333333"), // punctuation
+              Color.hex("333333"), // identifiers
+              Color.hex("333333") // unclassified
+            ),
+            wheel = ColorQuintet(
+              Color.hex("999999"), // substitutions, annotations
+              Color.hex("333333"), // keywords, escape sequences
+              Color.hex("990000"), // declaration names
+              Color.hex("dd1144"), // literals
+              Color.hex("445588") // types
+            )
+          )
+          .site
+          .clearFontResources
+          .site
+          .fontSizes(
+            body = px(16),
+            code = em(0.85),
+            title = px(32),
+            header2 = px(24),
+            header3 = px(20),
+            header4 = px(16),
+            small = px(12)
+          )
+          .site
+          .darkMode
+          .disabled
+          .site
+          .layout(topBarHeight = px(50))
+          .site
+          .topNavigationBar(
+            homeLink = IconLink.internal(
+              Root / "README",
+              InlineSVGIcon(IO.read(file("docs/img/logo.svg"))),
+              text = Some("Vulcan"),
+              options = Styles("home-link")
+            ),
+            navLinks = projectLinks,
+            highContrast = true
+          )
+          .site
+          .internalCSS(Root / "css")
+          .site
+          .favIcons(
+            Favicon.external("https://typelevel.org/vulcan/img/logo.png", "180x180", "image/png"),
+            Favicon.internal(Root / "img" / "logo.svg")
+          )
+          .site
+          .landingPage(
+            logo = Some(
+              Image.internal(Root / "img" / "logo.svg", height = Some(px(150)), alt = Some(""))
+            ),
+            title = Some("Vulcan"),
+            subtitle = Some("Functional Avro for Scala"),
+            latestReleases = tlLatestVersion.value.toList.map(ReleaseInfo("Latest Release", _)),
+            license = Some("Apache 2.0"),
+            titleLinks = Seq(
+              ButtonLink.internal(Root / "overview.md", "Documentation"),
+              LinkGroup.create(projectLinks.head, projectLinks.tail: _*)
+            ),
+            linkPanel = Some(
+              LinkPanel(
+                "Documentation",
+                TextLink.internal(Root / "overview.md", "Overview"),
+                TextLink.internal(Root / "codecs.md", "Codecs"),
+                TextLink.internal(Root / "derivation.md", "Derivation"),
+                TextLink.internal(Root / "integrations" / "enumeratum.md", "Integrations")
+              )
+            )
+          )
+          .site
+          .footer(
+            "Licensed under <a href=\"https://github.com/typelevel/vulcan/blob/main/license.txt\">Apache License, Version 2.0</a>.<br>" +
+              "Copyright © 2019 OVO Energy Limited."
+          )
+          .site
+          .pageNavigation(
+            sourceBaseURL = Some("https://github.com/typelevel/vulcan/tree/series/1.x/docs")
+          )
+      }
+    )
   }
+
+lazy val unidocs = project
+  .enablePlugins(NoPublishPlugin, TypelevelUnidocPlugin)
+  .settings(
+    crossScalaVersions := Seq(scala213),
+    ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(core, enumeratum, generic, refined),
+    ScalaUnidoc / unidoc / scalacOptions ++= {
+      val docVersion = tlLatestVersion.value.getOrElse(version.value)
+      // format: off
+      Seq(
+        "-doc-canonical-base-url", "https://typelevel.org/vulcan/api/",
+        "-doc-footer", "Licensed under Apache License, Version 2.0. Copyright © 2019 OVO Energy Limited.",
+        "-doc-title", "Vulcan",
+        "-doc-version", s"v$docVersion",
+        "-groups"
+      )
+      // format: on
+    }
+  )
+
+lazy val headerSettings = Seq(
+  headerLicense := Some(
+    HeaderLicense.ALv2(
+      startYear.value.get.toString,
+      "OVO Energy Limited",
+      HeaderLicenseStyle.SpdxSyntax
+    )
+  )
 )
 
 lazy val scalatestSettings = Seq(
@@ -191,197 +342,13 @@ lazy val scalatestSettings = Seq(
   ).map(_ % Test)
 )
 
-lazy val munitSettings = Seq(
-  libraryDependencies ++= Seq(
-    "org.scalameta" %% "munit" % munitVersion,
-    "org.scalameta" %% "munit-scalacheck" % munitScalaCheckVersion,
-    "org.slf4j" % "slf4j-nop" % slf4jNopVersion
-  ).map(_ % Test),
-  testFrameworks += new TestFramework("munit.Framework")
-)
+def scalaReflect(scalaVersion: String): Seq[ModuleID] =
+  if (scalaVersion.startsWith("2."))
+    Seq("org.scala-lang" % "scala-reflect" % scalaVersion % Provided)
+  else Seq()
 
-lazy val mdocSettings = Seq(
-  mdoc := (Compile / run).evaluated,
-  scalacOptions --= Seq("-Xfatal-warnings", "-Ywarn-unused"),
-  crossScalaVersions := Seq(scala213),
-  ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(core, enumeratum, generic, refined),
-  ScalaUnidoc / unidoc / target := (LocalRootProject / baseDirectory).value / "website" / "static" / "api",
-  cleanFiles += (ScalaUnidoc / unidoc / target).value,
-  docusaurusCreateSite := docusaurusCreateSite
-    .dependsOn(Compile / unidoc)
-    .dependsOn(ThisBuild / updateSiteVariables)
-    .value,
-  docusaurusPublishGhpages :=
-    docusaurusPublishGhpages
-      .dependsOn(Compile / unidoc)
-      .dependsOn(ThisBuild / updateSiteVariables)
-      .value,
-  // format: off
-  ScalaUnidoc / unidoc / scalacOptions ++= Seq(
-    "-doc-source-url", s"https://github.com/typelevel/vulcan/tree/v${(ThisBuild / latestVersion).value}€{FILE_PATH}.scala",
-    "-sourcepath", (LocalRootProject / baseDirectory).value.getAbsolutePath,
-    "-doc-title", "Vulcan",
-    "-doc-version", s"v${(ThisBuild / latestVersion).value}",
-    "-groups"
-  )
-  // format: on
-)
-
-lazy val buildInfoSettings = Seq(
-  buildInfoPackage := "vulcan.build",
-  buildInfoObject := "info",
-  buildInfoKeys := {
-    val magnolia: String =
-      if (scalaVersion.value.startsWith("3")) magnolia3Version else magnolia2Version
-    Seq[BuildInfoKey](
-      scalaVersion,
-      scalacOptions,
-      sourceDirectory,
-      ThisBuild / latestVersion,
-      BuildInfoKey.map(ThisBuild / version) { case (_, v) =>
-        "latestSnapshotVersion" -> v
-      },
-      BuildInfoKey.map(core / moduleName) { case (k, v) =>
-        "core" ++ k.capitalize -> v
-      },
-      BuildInfoKey.map(core / crossScalaVersions) { case (k, v) =>
-        "core" ++ k.capitalize -> v
-      },
-      BuildInfoKey.map(enumeratum / moduleName) { case (k, v) =>
-        "enumeratum" ++ k.capitalize -> v
-      },
-      BuildInfoKey.map(enumeratum / crossScalaVersions) { case (k, v) =>
-        "enumeratum" ++ k.capitalize -> v
-      },
-      BuildInfoKey.map(generic / moduleName) { case (k, v) =>
-        "generic" ++ k.capitalize -> v
-      },
-      BuildInfoKey.map(generic / crossScalaVersions) { case (k, v) =>
-        "generic" ++ k.capitalize -> v
-      },
-      BuildInfoKey.map(refined / moduleName) { case (k, v) =>
-        "refined" ++ k.capitalize -> v
-      },
-      BuildInfoKey.map(refined / crossScalaVersions) { case (k, v) =>
-        "refined" ++ k.capitalize -> v
-      },
-      LocalRootProject / organization,
-      core / crossScalaVersions,
-      BuildInfoKey("avroVersion" -> avroVersion),
-      BuildInfoKey("catsVersion" -> catsVersion),
-      BuildInfoKey("enumeratumVersion" -> enumeratumVersion),
-      BuildInfoKey("magnoliaVersion" -> magnolia),
-      BuildInfoKey("refinedVersion" -> refinedVersion),
-      BuildInfoKey("shapelessVersion" -> shapelessVersion)
-    )
-  }
-)
-
-lazy val metadataSettings = Seq(
-  organization := "com.github.fd4s"
-)
-
-ThisBuild / githubWorkflowBuild := Seq(
-  WorkflowStep.Sbt(List("ci")),
-  WorkflowStep.Sbt(
-    List("docs/run"),
-    cond = Some(s"matrix.scala == '2.13'")
-  )
-)
-
-ThisBuild / githubWorkflowArtifactUpload := false
-
-ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("21"))
-
-// Publish snapshots and the website from series/1.x until the 2.0.0 release
-ThisBuild / tlCiReleaseBranches := Seq("series/1.x")
-
-ThisBuild / githubWorkflowPublish := Seq(
-  WorkflowStep.Sbt(
-    List("tlCiRelease", "docs/docusaurusPublishGhpages"),
-    env = Map(
-      "GIT_DEPLOY_KEY" -> "${{ secrets.GIT_DEPLOY_KEY }}",
-      "PGP_PASSPHRASE" -> "${{ secrets.PGP_PASSPHRASE }}",
-      "PGP_SECRET" -> "${{ secrets.PGP_SECRET }}",
-      "SONATYPE_PASSWORD" -> "${{ secrets.SONATYPE_PASSWORD }}",
-      "SONATYPE_USERNAME" -> "${{ secrets.SONATYPE_USERNAME }}"
-    )
-  )
-)
-
-lazy val publishSettings =
-  metadataSettings ++ Seq(
-    Test / publishArtifact := false,
-    pomIncludeRepository := (_ => false),
-    homepage := Some(url("https://typelevel.org/vulcan")),
-    licenses := List("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0.txt")),
-    startYear := Some(2019),
-    headerLicense := Some(
-      de.heikoseeberger.sbtheader.License.ALv2(
-        s"${startYear.value.get}",
-        "OVO Energy Limited",
-        HeaderLicenseStyle.SpdxSyntax
-      )
-    ),
-    headerSources / excludeFilter := HiddenFileFilter,
-    developers := List(tlGitHubDev("vlovgr", "Viktor Rudebeck"))
-  )
-
-ThisBuild / mimaBinaryIssueFilters ++= {
-  import com.typesafe.tools.mima.core.*
-  // format: off
-  Seq(
-    ProblemFilters.exclude[Problem]("vulcan.internal.*"),
-    ProblemFilters.exclude[IncompatibleSignatureProblem]("*"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.Codec.withDecodingTypeName"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroError.decode*"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroError.encode*"),
-    ProblemFilters.exclude[MissingClassProblem]("vulcan.Codec$Field$"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.AvroException.*"),
-
-    // package-private
-    ProblemFilters.exclude[DirectMissingMethodProblem]("vulcan.Codec.instanceForTypes")
-  )
-  // format: on
-}
-
-lazy val noPublishSettings =
-  publishSettings ++ Seq(
-    publish / skip := true,
-    publishArtifact := false
-  )
-
-ThisBuild / scalaVersion := scala213
-
-ThisBuild / crossScalaVersions := Seq(scala212, scala213, scala3)
-
-ThisBuild / tlFatalWarnings := false
-
-lazy val scalaSettings = Seq(
-  Compile / console / scalacOptions --= Seq("-Xlint", "-Ywarn-unused"),
-  Test / console / scalacOptions := (Compile / console / scalacOptions).value,
-  Compile / unmanagedSourceDirectories ++= {
-    val sourceDir = (Compile / sourceDirectory).value
-    CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, 12)) => Seq(sourceDir / "scala-2.12", sourceDir / "scala-2")
-      case Some((2, 13)) => Seq(sourceDir / "scala-2.13+", sourceDir / "scala-2")
-      case _             => Seq(sourceDir / "scala-2.13+", sourceDir / "scala-3")
-    }
-  },
-  Test / unmanagedSourceDirectories ++= {
-    val sourceDir = (Test / sourceDirectory).value
-    CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, _)) => Seq(sourceDir / "scala-2")
-      case _            => Nil
-    }
-  }
-)
-
-lazy val testSettings = Seq(
-  Test / logBuffered := false,
-  Test / parallelExecution := false,
-  Test / testOptions += Tests.Argument("-oDF")
-)
+def majorVersion(version: String): String =
+  version.split('.').head
 
 def scalaVersionOf(version: String): String = {
   if (version.contains("-")) version
@@ -392,67 +359,9 @@ def scalaVersionOf(version: String): String = {
   }
 }
 
-val latestVersion = settingKey[String]("Latest stable released version")
-ThisBuild / latestVersion := tlLatestVersion.value
-  .getOrElse(
-    throw new IllegalStateException("No tagged version found")
-  )
-
-val updateSiteVariables = taskKey[Unit]("Update site variables")
-ThisBuild / updateSiteVariables := {
-  val file =
-    (LocalRootProject / baseDirectory).value / "website" / "variables.js"
-
-  val variables =
-    Map[String, String](
-      "organization" -> (LocalRootProject / organization).value,
-      "coreModuleName" -> (core / moduleName).value,
-      "latestVersion" -> (ThisBuild / latestVersion).value,
-      "scalaPublishVersions" -> {
-        val scalaVersions = (core / crossScalaVersions).value.map(scalaVersionOf)
-        if (scalaVersions.size <= 2) scalaVersions.mkString(" and ")
-        else scalaVersions.init.mkString(", ") ++ " and " ++ scalaVersions.last
-      }
-    )
-
-  val fileHeader =
-    "// Generated by sbt. Do not edit directly."
-
-  val fileContents =
-    variables.toList
-      .sortBy { case (key, _) => key }
-      .map { case (key, value) => s"  $key: '$value'" }
-      .mkString(s"$fileHeader\nmodule.exports = {\n", ",\n", "\n};\n")
-
-  IO.write(file, fileContents)
-}
-
-def addCommandsAlias(name: String, values: List[String]) =
-  addCommandAlias(name, values.mkString(";", ";", ""))
-
-addCommandsAlias(
-  "validate",
-  List(
-    "+clean",
-    "+test",
-    "+mimaReportBinaryIssues",
-    "+scalafmtCheck",
-    "scalafmtSbtCheck",
-    "+headerCheck",
-    "+doc",
-    "docs/run"
-  )
-)
-
-addCommandsAlias(
-  "ci",
-  List(
-    "clean",
-    "test",
-    "mimaReportBinaryIssues",
-    "scalafmtCheck",
-    "scalafmtSbtCheck",
-    "headerCheck",
-    "doc"
-  )
-)
+def crossScalaVersionsOf(project: Project): Def.Initialize[String] =
+  Def.setting {
+    val scalaVersions = (project / crossScalaVersions).value.map(scalaVersionOf)
+    if (scalaVersions.size <= 2) scalaVersions.mkString(" and ")
+    else scalaVersions.init.mkString(", ") ++ " and " ++ scalaVersions.last
+  }
