@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+  
+  <head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="generator" content="Typelevel Laika + Helium Theme" />
+  <title>Derivation · Vulcan</title>
+  
+  <meta name="author" content="Viktor Rudebeck"/>
+  
+  
+  <meta name="description" content="Functional Avro encodings for Scala using the official Apache Avro library."/>
+  <meta property="og:description" content="Functional Avro encodings for Scala using the official Apache Avro library."/>
+  
+  <meta name="theme-color" content="#2a1b12"/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:site_name" content="Vulcan"/>
+  <meta property="og:title" content="Derivation"/>
+  <meta property="og:image" content="https://typelevel.org/vulcan/img/social-preview.png"/>
+  <meta property="og:image:width" content="1200"/>
+  <meta property="og:image:height" content="630"/>
+  <meta property="og:image:alt" content="Vulcan · Functional Avro for Scala"/>
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="theme-color" content="#d9822b"/>
+  
+  
+  <link rel="icon" sizes="180x180" type="image/png" href="https://typelevel.org/vulcan/img/logo.png"/>
+  
+  <link rel="icon"  type="image/svg+xml" href="img/logo.svg"/>
+  
+  <link rel="apple-touch-icon" href="https://typelevel.org/vulcan/img/logo.png"/>
+  
+  <link rel="stylesheet" type="text/css" href="helium/site/icofont.min.css" />
+    <link rel="stylesheet" type="text/css" href="helium/site/laika-helium.css" />
+    <link rel="stylesheet" type="text/css" href="css/site.css" />
+  <script src="helium/site/laika-helium.js"></script>
+  
+  
+  <script> /* for avoiding page load transitions */ </script>
+</head>
+
+  <body>
+
+    <header id="top-bar" class="light-inverted dark-inverted">
+
+  <div class="row">
+    <a id="nav-icon">
+      <i class="icofont-laika navigationMenu" title="Navigation">&#xefa2;</i>
+    </a>
+    
+    
+  </div>
+
+  <a class="icon-link svg-link home-link" href="index.html"><span><svg xmlns="http://www.w3.org/2000/svg" width="433" height="500" viewBox="0 0 433.013 500" role="img" aria-labelledby="vulcan-logo-title">
+  <title id="vulcan-logo-title">Vulcan</title>
+  <polygon points="216.506,0 433.013,125 433.013,375 216.506,500 0,375 0,125" fill="#F6BD5C"/>
+  <path d="M216.51,103.5C218.76,103.5 227.61,129.75 228.01,152.25C228.29,168.5 252.89,196.77 270.26,214.75C285.89,230.94 313.66,245.79 329.01,262.25C340.94,275.05 357.47,288.69 360.26,308.5C361.3,315.93 362.87,331.43 355.51,330C328.51,324.75 296.4,321.9 269.01,319.5C261.54,318.85 259.95,318.59 256.51,323.5C255.07,325.55 255.51,328 252.51,328C246.26,328 240.76,328 234.51,328C231.01,328 227.37,329.52 227.01,332.5C226.34,337.96 225.68,339.04 225.01,344.5C224.46,348.97 221.51,353.5 216.51,353.5C211.51,353.5 208.55,348.97 208.01,344.5C207.34,339.04 206.68,337.96 206.01,332.5C205.64,329.52 202.01,328 198.51,328C192.26,328 186.76,328 180.51,328C177.51,328 177.94,325.55 176.51,323.5C173.07,318.59 171.48,318.85 164.01,319.5C136.61,321.9 104.5,324.75 77.51,330C70.14,331.43 71.71,315.93 72.76,308.5C75.54,288.69 92.07,275.05 104.01,262.25C119.35,245.79 147.13,230.94 162.76,214.75C180.12,196.77 204.72,168.5 205.01,152.25C205.4,129.75 214.26,103.5 216.51,103.5Z" fill="#D9822B" transform="translate(-9 -1.8)"/>
+  <path d="M235.26,323C235.26,324.67 235.71,324.25 235.26,328C234.8,331.75 233.12,339.67 232.53,345.5C231.93,351.33 231.68,357.17 231.69,363C231.7,368.83 232.04,374.67 232.59,380.5C233.15,386.33 234,392.17 235.02,398C236.03,403.83 237.32,409.67 238.66,415.5C240.01,421.33 241.67,427.17 243.08,433C244.49,438.83 245.78,444.67 247.14,450.5C247.72,444.67 248.15,438.83 248.87,433C249.6,427.17 250.66,421.33 251.48,415.5C252.3,409.67 253.15,403.83 253.79,398C254.43,392.17 254.99,386.33 255.29,380.5C255.6,374.67 255.76,368.83 255.64,363C255.51,357.17 255.19,351.33 254.54,345.5C253.89,339.67 252.22,331.75 251.76,328C251.29,324.25 251.76,324.67 251.76,323C246.26,323 240.76,323 235.26,323Z" fill="#AD2E37"/>
+  <path d="M239.79,323C239.79,324.67 240,325.42 239.79,328C239.59,330.58 238.83,335 238.56,338.5C238.29,342 238.17,345.5 238.16,349C238.15,352.5 238.29,356 238.52,359.5C238.74,363 239.1,366.5 239.52,370C239.95,373.5 240.49,377 241.05,380.5C241.6,384 242.3,387.5 242.87,391C243.44,394.5 243.95,398 244.49,401.5C244.82,398 245.09,394.5 245.48,391C245.86,387.5 246.4,384 246.81,380.5C247.23,377 247.65,373.5 247.97,370C248.29,366.5 248.57,363 248.73,359.5C248.89,356 248.98,352.5 248.94,349C248.89,345.5 248.75,342 248.47,338.5C248.18,335 247.43,330.58 247.22,328C247.01,325.42 247.22,324.67 247.22,323C244.74,323 242.27,323 239.79,323Z" fill="#D9822B"/>
+  <path d="M181.26,323C181.26,324.67 181.72,324.25 181.26,328C180.79,331.75 179.12,339.67 178.47,345.5C177.82,351.33 177.5,357.17 177.38,363C177.25,368.83 177.41,374.67 177.72,380.5C178.03,386.33 178.59,392.17 179.22,398C179.86,403.83 180.71,409.67 181.53,415.5C182.35,421.33 183.42,427.17 184.14,433C184.86,438.83 185.3,444.67 185.88,450.5C187.23,444.67 188.52,438.83 189.93,433C191.35,427.17 193,421.33 194.35,415.5C195.69,409.67 196.99,403.83 198,398C199.01,392.17 199.87,386.33 200.42,380.5C200.97,374.67 201.31,368.83 201.32,363C201.33,357.17 201.08,351.33 200.49,345.5C199.89,339.67 198.21,331.75 197.76,328C197.3,324.25 197.76,324.67 197.76,323C192.26,323 186.76,323 181.26,323Z" fill="#AD2E37"/>
+  <path d="M185.79,323C185.79,324.67 186,325.42 185.79,328C185.59,330.58 184.83,335 184.55,338.5C184.26,342 184.12,345.5 184.08,349C184.03,352.5 184.12,356 184.28,359.5C184.44,363 184.72,366.5 185.04,370C185.36,373.5 185.78,377 186.2,380.5C186.62,384 187.15,387.5 187.54,391C187.92,394.5 188.2,398 188.53,401.5C189.07,398 189.57,394.5 190.14,391C190.72,387.5 191.41,384 191.97,380.5C192.52,377 193.07,373.5 193.49,370C193.91,366.5 194.27,363 194.5,359.5C194.72,356 194.86,352.5 194.85,349C194.84,345.5 194.72,342 194.45,338.5C194.18,335 193.42,330.58 193.22,328C193.01,325.42 193.22,324.67 193.22,323C190.74,323 188.27,323 185.79,323Z" fill="#D9822B"/>
+  <path d="M216.51,103.5C218.76,103.5 227.61,129.75 228.01,152.25C228.29,168.5 252.89,196.77 270.26,214.75C285.89,230.94 313.66,245.79 329.01,262.25C340.94,275.05 357.47,288.69 360.26,308.5C361.3,315.93 362.87,331.43 355.51,330C328.51,324.75 296.4,321.9 269.01,319.5C261.54,318.85 259.95,318.59 256.51,323.5C255.07,325.55 255.51,328 252.51,328C246.26,328 240.76,328 234.51,328C231.01,328 227.37,329.52 227.01,332.5C226.34,337.96 225.68,339.04 225.01,344.5C224.46,348.97 221.51,353.5 216.51,353.5C211.51,353.5 208.55,348.97 208.01,344.5C207.34,339.04 206.68,337.96 206.01,332.5C205.64,329.52 202.01,328 198.51,328C192.26,328 186.76,328 180.51,328C177.51,328 177.94,325.55 176.51,323.5C173.07,318.59 171.48,318.85 164.01,319.5C136.61,321.9 104.5,324.75 77.51,330C70.14,331.43 71.71,315.93 72.76,308.5C75.54,288.69 92.07,275.05 104.01,262.25C119.35,245.79 147.13,230.94 162.76,214.75C180.12,196.77 204.72,168.5 205.01,152.25C205.4,129.75 214.26,103.5 216.51,103.5Z" fill="#2A1B12"/>
+  <path d="M216.51,128.5C217.41,128.5 218.47,128.89 219.21,129.35C219.96,129.81 220.51,130.45 220.97,131.26C221.44,132.08 221.83,133.1 222,134.24C222.18,135.37 222.19,136.72 222.01,138.06C221.82,139.41 221.41,140.93 220.91,142.31C220.4,143.69 219.71,145.11 218.98,146.35C218.25,147.59 217.33,148.62 216.51,149.75C215.68,148.62 214.77,147.59 214.03,146.35C213.3,145.11 212.61,143.69 212.11,142.31C211.6,140.93 211.19,139.41 211.01,138.06C210.82,136.72 210.84,135.37 211.01,134.24C211.18,133.1 211.58,132.08 212.04,131.26C212.5,130.45 213.05,129.81 213.8,129.35C214.54,128.89 215.6,128.5 216.51,128.5Z" fill="#F6BD5C"/>
+</svg>
+</span>Vulcan</a>
+
+  <div class="row links">
+    
+    <a class="icon-link svg-link" href="api/vulcan/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/typelevel/vulcan"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link glyph-link" href="https://discord.gg/Q8KBnyC776"><i class="icofont-laika chat" title="Chat">&#xeed5;</i></a>
+    
+  </div>  
+
+</header>
+    
+    <nav id="sidebar">
+
+  <div class="row">
+    
+    <a class="icon-link svg-link" href="api/vulcan/"><span class="api" title="API"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M75,47.5c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm-50,-0c13.246,-0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,-0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm2.705,16.735l7.239,0l0.622,-4.904l-21.833,0l-0,4.904l7.589,0l0,22.067l6.383,0l-0,-22.067Zm58.076,7.265c-0,-8.757 -3.698,-14.166 -10.781,-14.166c-7.083,-0 -10.781,5.604 -10.781,14.166c0,8.757 3.698,14.166 10.781,14.166c7.083,0 10.781,-5.604 10.781,-14.166Zm-6.539,0c0,6.538 -1.128,9.496 -4.242,9.496c-2.997,0 -4.242,-2.88 -4.242,-9.496c-0,-6.616 1.206,-9.496 4.242,-9.496c3.036,-0 4.242,2.88 4.242,9.496Zm-29.242,-67c13.246,0 24,10.754 24,24c0,13.246 -10.754,24 -24,24c-13.246,0 -24,-10.754 -24,-24c0,-13.246 10.754,-24 24,-24Zm0.512,9.834c-7.122,-0 -12.609,5.098 -12.609,14.127c-0,9.263 5.215,14.205 12.532,14.205c4.164,0 7.083,-1.634 9.068,-3.658l-2.88,-3.697c-1.518,1.206 -3.153,2.413 -5.838,2.413c-3.697,-0 -6.266,-2.763 -6.266,-9.263c-0,-6.616 2.724,-9.379 6.149,-9.379c2.102,-0 3.892,0.778 5.371,1.984l3.113,-3.775c-2.257,-1.868 -4.748,-2.957 -8.64,-2.957Z"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link svg-link" href="https://github.com/typelevel/vulcan"><span class="github" title="Source Code"><svg class="svg-icon" width="100%" height="100%" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+  <g class="svg-shape">
+    <path d="M49.995,1c-27.609,-0 -49.995,22.386 -49.995,50.002c-0,22.09 14.325,40.83 34.194,47.444c2.501,0.458 3.413,-1.086 3.413,-2.412c0,-1.185 -0.043,-4.331 -0.067,-8.503c-13.908,3.021 -16.843,-6.704 -16.843,-6.704c-2.274,-5.773 -5.552,-7.311 -5.552,-7.311c-4.54,-3.103 0.344,-3.042 0.344,-3.042c5.018,0.356 7.658,5.154 7.658,5.154c4.46,7.64 11.704,5.433 14.552,4.156c0.454,-3.232 1.744,-5.436 3.174,-6.685c-11.102,-1.262 -22.775,-5.553 -22.775,-24.713c-0,-5.457 1.949,-9.92 5.147,-13.416c-0.516,-1.265 -2.231,-6.348 0.488,-13.233c0,0 4.199,-1.344 13.751,5.126c3.988,-1.108 8.266,-1.663 12.518,-1.682c4.245,0.019 8.523,0.574 12.517,1.682c9.546,-6.47 13.736,-5.126 13.736,-5.126c2.728,6.885 1.013,11.968 0.497,13.233c3.204,3.496 5.141,7.959 5.141,13.416c0,19.209 -11.691,23.436 -22.83,24.673c1.795,1.544 3.394,4.595 3.394,9.26c0,6.682 -0.061,12.076 -0.061,13.715c0,1.338 0.899,2.894 3.438,2.406c19.853,-6.627 34.166,-25.354 34.166,-47.438c-0,-27.616 -22.389,-50.002 -50.005,-50.002"/>
+  </g>
+</svg></span></a>
+    
+    <a class="icon-link glyph-link" href="https://discord.gg/Q8KBnyC776"><i class="icofont-laika chat" title="Chat">&#xeed5;</i></a>
+    
+  </div>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="overview.html">Overview</a></li>
+    <li class="level1 nav-leaf"><a href="codecs.html">Codecs</a></li>
+    <li class="level1 active nav-leaf"><a href="#">Derivation</a></li>
+    <li class="level1 nav-header">integrations</li>
+    <li class="level2 nav-leaf"><a href="integrations/enumeratum.html">enumeratum</a></li>
+    <li class="level2 nav-leaf"><a href="integrations/refined.html">refined</a></li>
+  </ul>
+
+</nav>
+
+    <div id="container">
+
+      
+<nav id="page-nav">
+  <p class="header"><a href="#">Derivation</a></p>
+
+  <ul class="nav-list">
+    <li class="level1 nav-leaf"><a href="#getting-started">Getting Started</a></li>
+    <li class="level1 nav-leaf"><a href="#enumerations">Enumerations</a></li>
+    <li class="level1 nav-leaf"><a href="#fixed">Fixed</a></li>
+    <li class="level1 nav-leaf"><a href="#records">Records</a></li>
+    <li class="level1 nav-leaf"><a href="#unions">Unions</a></li>
+  </ul>
+
+  <p class="footer"><a href="https://github.com/typelevel/vulcan/tree/series/1.x/docs/derivation.md"><i class="icofont-laika edit" title="Edit">&#xef10;</i>Source for this page</a></p>
+</nav>
+
+
+      <main class="content">
+
+        <h1 id="derivation" class="title">Derivation</h1>
+        <p>The <code>vulcan-generic</code> module provides generic derivation of <a class="api" href="api/vulcan/Codec.html">Codec</a>s using <a href="https://github.com/softwaremill/magnolia">Magnolia</a> for records and unions, and reflection for enumerations and fixed types.</p>
+        
+        <h2 id="getting-started" class="section"><a class="anchor-link left" href="#getting-started"><i class="icofont-laika link">&#xef71;</i></a>Getting Started</h2>
+        <p>To get started with <a href="https://scala-sbt.org">sbt</a>, add the following line to your <code>build.sbt</code> file.</p>
+        <pre class="keep-together pdf epub"><code class="nohighlight"><span class="identifier">libraryDependencies</span><span> += </span><span class="string-literal">&quot;com.github.fd4s&quot;</span><span> %% </span><span class="string-literal">&quot;vulcan-generic&quot;</span><span> % </span><span class="string-literal">&quot;1.14.1&quot;</span></code></pre>
+        
+        <h2 id="enumerations" class="section"><a class="anchor-link left" href="#enumerations"><i class="icofont-laika link">&#xef71;</i></a>Enumerations</h2>
+        <p><code>deriveEnum</code> can be used to partly derive <a class="api" href="api/vulcan/Codec.html">Codec</a>s for enumeration types. Annotations like <code>@AvroDoc</code> can be used to customize the derivation.</p>
+        <pre><code class="nohighlight"><span class="keyword">import</span><span> </span><span class="identifier">vulcan</span><span>.</span><span class="type-name">AvroError</span><span>
+</span><span class="keyword">import</span><span> </span><span class="identifier">vulcan</span><span>.</span><span class="identifier">generic</span><span>.</span><span class="identifier">_</span><span>
+
+</span><span class="annotation">@AvroNamespace</span><span>(</span><span class="string-literal">&quot;com.example&quot;</span><span>)
+</span><span class="annotation">@AvroDoc</span><span>(</span><span class="string-literal">&quot;A selection of different fruits&quot;</span><span>)
+</span><span class="keyword">sealed</span><span> </span><span class="keyword">trait</span><span> </span><span class="type-name">Fruit</span><span>
+</span><span class="keyword">case</span><span> </span><span class="keyword">object</span><span> </span><span class="type-name">Apple</span><span> </span><span class="keyword">extends</span><span> </span><span class="type-name">Fruit</span><span>
+</span><span class="keyword">case</span><span> </span><span class="keyword">object</span><span> </span><span class="type-name">Banana</span><span> </span><span class="keyword">extends</span><span> </span><span class="type-name">Fruit</span><span>
+</span><span class="keyword">case</span><span> </span><span class="keyword">object</span><span> </span><span class="type-name">Cherry</span><span> </span><span class="keyword">extends</span><span> </span><span class="type-name">Fruit</span><span>
+
+</span><span class="identifier">deriveEnum</span><span>[</span><span class="type-name">Fruit</span><span>](
+  </span><span class="identifier">symbols</span><span> = </span><span class="type-name">List</span><span>(</span><span class="string-literal">&quot;apple&quot;</span><span>, </span><span class="string-literal">&quot;banana&quot;</span><span>, </span><span class="string-literal">&quot;cherry&quot;</span><span>),
+  </span><span class="identifier">encode</span><span> = {
+    </span><span class="keyword">case</span><span> </span><span class="type-name">Apple</span><span>  =&gt; </span><span class="string-literal">&quot;apple&quot;</span><span>
+    </span><span class="keyword">case</span><span> </span><span class="type-name">Banana</span><span> =&gt; </span><span class="string-literal">&quot;banana&quot;</span><span>
+    </span><span class="keyword">case</span><span> </span><span class="type-name">Cherry</span><span> =&gt; </span><span class="string-literal">&quot;cherry&quot;</span><span>
+  },
+  </span><span class="identifier">decode</span><span> = {
+    </span><span class="keyword">case</span><span> </span><span class="string-literal">&quot;apple&quot;</span><span>  =&gt; </span><span class="type-name">Right</span><span>(</span><span class="type-name">Apple</span><span>)
+    </span><span class="keyword">case</span><span> </span><span class="string-literal">&quot;banana&quot;</span><span> =&gt; </span><span class="type-name">Right</span><span>(</span><span class="type-name">Banana</span><span>)
+    </span><span class="keyword">case</span><span> </span><span class="string-literal">&quot;cherry&quot;</span><span> =&gt; </span><span class="type-name">Right</span><span>(</span><span class="type-name">Cherry</span><span>)
+    </span><span class="keyword">case</span><span> </span><span class="identifier">other</span><span>    =&gt; </span><span class="type-name">Left</span><span>(</span><span class="type-name">AvroError</span><span>(</span><span class="string-literal">s&quot;</span><span class="substitution">$other</span><span class="string-literal"> is not a Fruit&quot;</span><span>))
+  }
+)
+</span><span class="comment">// res1: vulcan.Codec.Aux[vulcan.Avro.EnumSymbol, Fruit] = WithTypeName(
+//   codec = Validated(
+//     codec = Codec({
+//   &quot;type&quot; : &quot;enum&quot;,
+//   &quot;name&quot; : &quot;Fruit&quot;,
+//   &quot;namespace&quot; : &quot;com.example&quot;,
+//   &quot;doc&quot; : &quot;A selection of different fruits&quot;,
+//   &quot;symbols&quot; : [ &quot;apple&quot;, &quot;banana&quot;, &quot;cherry&quot; ]
+// }),
+//     validSchema = {&quot;type&quot;:&quot;enum&quot;,&quot;name&quot;:&quot;Fruit&quot;,&quot;namespace&quot;:&quot;com.example&quot;,&quot;doc&quot;:&quot;A selection of different fruits&quot;,&quot;symbols&quot;:[&quot;apple&quot;,&quot;banana&quot;,&quot;cherry&quot;]}
+//   ),
+//   typeName = &quot;com.example.Fruit&quot;
+// )</span></code></pre>
+        
+        <h2 id="fixed" class="section"><a class="anchor-link left" href="#fixed"><i class="icofont-laika link">&#xef71;</i></a>Fixed</h2>
+        <p><code>deriveFixed</code> can be used to partly derive <a class="api" href="api/vulcan/Codec.html">Codec</a>s for fixed types. Annotations like <code>@AvroDoc</code> can be used to customize the derivation.</p>
+        <pre><code class="nohighlight"><span class="keyword">import</span><span> </span><span class="identifier">vulcan</span><span>.</span><span class="type-name">AvroError</span><span>
+
+</span><span class="keyword">sealed</span><span> </span><span class="keyword">abstract</span><span> </span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Pence</span><span>(</span><span class="identifier">value</span><span>: </span><span class="type-name">Byte</span><span>)
+
+</span><span class="keyword">object</span><span> </span><span class="type-name">Pence</span><span> {
+  </span><span class="keyword">def</span><span> </span><span class="declaration-name">apply</span><span>(</span><span class="identifier">value</span><span>: </span><span class="type-name">Byte</span><span>): </span><span class="type-name">Either</span><span>[</span><span class="type-name">AvroError</span><span>, </span><span class="type-name">Pence</span><span>] =
+    </span><span class="keyword">if</span><span>(</span><span class="number-literal">0</span><span> &lt;= </span><span class="identifier">value</span><span> &amp;&amp; </span><span class="identifier">value</span><span> &lt; </span><span class="number-literal">100</span><span>) </span><span class="type-name">Right</span><span>(</span><span class="keyword">new</span><span> </span><span class="type-name">Pence</span><span>(</span><span class="identifier">value</span><span>) {})
+    </span><span class="keyword">else</span><span> </span><span class="type-name">Left</span><span>(</span><span class="type-name">AvroError</span><span>(</span><span class="string-literal">s&quot;Expected pence value, got </span><span class="substitution">$value</span><span class="string-literal">&quot;</span><span>))
+}
+
+</span><span class="identifier">deriveFixed</span><span>[</span><span class="type-name">Pence</span><span>](
+  </span><span class="identifier">size</span><span> = </span><span class="number-literal">1</span><span>,
+  </span><span class="identifier">encode</span><span> = </span><span class="identifier">pence</span><span> =&gt; </span><span class="type-name">Array</span><span>[</span><span class="type-name">Byte</span><span>](</span><span class="identifier">pence</span><span>.</span><span class="identifier">value</span><span>),
+  </span><span class="identifier">decode</span><span> = </span><span class="identifier">bytes</span><span> =&gt; </span><span class="type-name">Pence</span><span>(</span><span class="identifier">bytes</span><span>.</span><span class="identifier">head</span><span>)
+)
+</span><span class="comment">// res2: vulcan.Codec.Aux[vulcan.Avro.Fixed, Pence] = WithTypeName(
+//   codec = Validated(
+//     codec = Codec({
+//   &quot;type&quot; : &quot;fixed&quot;,
+//   &quot;name&quot; : &quot;Pence&quot;,
+//   &quot;namespace&quot; : &quot;repl.MdocSession.MdocApp0&quot;,
+//   &quot;size&quot; : 1
+// }),
+//     validSchema = {&quot;type&quot;:&quot;fixed&quot;,&quot;name&quot;:&quot;Pence&quot;,&quot;namespace&quot;:&quot;repl.MdocSession.MdocApp0&quot;,&quot;size&quot;:1}
+//   ),
+//   typeName = &quot;repl.MdocSession.MdocApp0.Pence&quot;
+// )</span></code></pre>
+        
+        <h2 id="records" class="section"><a class="anchor-link left" href="#records"><i class="icofont-laika link">&#xef71;</i></a>Records</h2>
+        <p>To derive <a class="api" href="api/vulcan/Codec.html">Codec</a>s for <code>case class</code>es or <code>sealed trait</code>s, we can use <code>Codec.derive</code>. Annotations like <code>@AvroDoc</code> and <code>@AvroNamespace</code> can be used to customize the documentation and namespace during derivation.</p>
+        <pre><code class="nohighlight"><span class="keyword">import</span><span> </span><span class="identifier">vulcan</span><span>.</span><span class="type-name">Codec</span><span>
+</span><span class="keyword">import</span><span> </span><span class="identifier">vulcan</span><span>.</span><span class="identifier">generic</span><span>.</span><span class="identifier">_</span><span>
+
+</span><span class="annotation">@AvroNamespace</span><span>(</span><span class="string-literal">&quot;com.example&quot;</span><span>)
+</span><span class="annotation">@AvroDoc</span><span>(</span><span class="string-literal">&quot;Person with a first name, last name, and optional age&quot;</span><span>)
+</span><span class="keyword">final</span><span> </span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Person</span><span>(</span><span class="identifier">firstName</span><span>: </span><span class="type-name">String</span><span>, </span><span class="identifier">lastName</span><span>: </span><span class="type-name">String</span><span>, </span><span class="identifier">age</span><span>: </span><span class="type-name">Option</span><span>[</span><span class="type-name">Int</span><span>])
+
+</span><span class="type-name">Codec</span><span>.</span><span class="identifier">derive</span><span>[</span><span class="type-name">Person</span><span>]
+</span><span class="comment">// res3: Codec[Person] = WithTypeName(
+//   codec = Validated(
+//     codec = Codec({
+//   &quot;type&quot; : &quot;record&quot;,
+//   &quot;name&quot; : &quot;Person&quot;,
+//   &quot;namespace&quot; : &quot;com.example&quot;,
+//   &quot;doc&quot; : &quot;Person with a first name, last name, and optional age&quot;,
+//   &quot;fields&quot; : [ {
+//     &quot;name&quot; : &quot;firstName&quot;,
+//     &quot;type&quot; : &quot;string&quot;
+//   }, {
+//     &quot;name&quot; : &quot;lastName&quot;,
+//     &quot;type&quot; : &quot;string&quot;
+//   }, {
+//     &quot;name&quot; : &quot;age&quot;,
+//     &quot;type&quot; : [ &quot;null&quot;, &quot;int&quot; ]
+//   } ]
+// }),
+//     validSchema = {&quot;type&quot;:&quot;record&quot;,&quot;name&quot;:&quot;Person&quot;,&quot;namespace&quot;:&quot;com.example&quot;,&quot;doc&quot;:&quot;Person with a first name, last name, and optional age&quot;,&quot;fields&quot;:[{&quot;name&quot;:&quot;firstName&quot;,&quot;type&quot;:&quot;string&quot;},{&quot;name&quot;:&quot;lastName&quot;,&quot;type&quot;:&quot;string&quot;},{&quot;name&quot;:&quot;age&quot;,&quot;type&quot;:[&quot;null&quot;,&quot;int&quot;]}]}
+//   ),
+//   typeName = &quot;com.example.Person&quot;
+// )</span></code></pre>
+        
+        <h2 id="unions" class="section"><a class="anchor-link left" href="#unions"><i class="icofont-laika link">&#xef71;</i></a>Unions</h2>
+        <p>While <code>case class</code>es correspond to Avro records, <code>sealed trait</code>s correspond to unions.</p>
+        <pre><code class="nohighlight"><span class="keyword">sealed</span><span> </span><span class="keyword">trait</span><span> </span><span class="type-name">FirstOrSecond</span><span>
+
+</span><span class="annotation">@AvroNamespace</span><span>(</span><span class="string-literal">&quot;com.example&quot;</span><span>)
+</span><span class="keyword">final</span><span> </span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">First</span><span>(</span><span class="identifier">value</span><span>: </span><span class="type-name">Int</span><span>) </span><span class="keyword">extends</span><span> </span><span class="type-name">FirstOrSecond</span><span>
+
+</span><span class="annotation">@AvroNamespace</span><span>(</span><span class="string-literal">&quot;com.example&quot;</span><span>)
+</span><span class="keyword">final</span><span> </span><span class="keyword">case</span><span> </span><span class="keyword">class</span><span> </span><span class="type-name">Second</span><span>(</span><span class="identifier">value</span><span>: </span><span class="type-name">String</span><span>) </span><span class="keyword">extends</span><span> </span><span class="type-name">FirstOrSecond</span><span>
+
+</span><span class="type-name">Codec</span><span>.</span><span class="identifier">derive</span><span>[</span><span class="type-name">FirstOrSecond</span><span>]
+</span><span class="comment">// res4: Codec.Aux[Any, FirstOrSecond] = WithTypeName(
+//   codec = Validated(
+//     codec = WithTypeName(
+//       codec = Validated(
+//         codec = UnionCodec(
+//           alts = Append(
+//             leftNE = Singleton(a = vulcan.Codec$Alt$$anon$6@57deef8b),
+//             rightNE = Singleton(a = vulcan.Codec$Alt$$anon$6@15a8fd47)
+//           )
+//         ),
+//         validSchema = [{&quot;type&quot;:&quot;record&quot;,&quot;name&quot;:&quot;First&quot;,&quot;namespace&quot;:&quot;com.example&quot;,&quot;fields&quot;:[{&quot;name&quot;:&quot;value&quot;,&quot;type&quot;:&quot;int&quot;}]},{&quot;type&quot;:&quot;record&quot;,&quot;name&quot;:&quot;Second&quot;,&quot;namespace&quot;:&quot;com.example&quot;,&quot;fields&quot;:[{&quot;name&quot;:&quot;value&quot;,&quot;type&quot;:&quot;string&quot;}]}]
+//       ),
+//       typeName = &quot;union&quot;
+//     ),
+//     validSchema = [{&quot;type&quot;:&quot;record&quot;,&quot;name&quot;:&quot;First&quot;,&quot;namespace&quot;:&quot;com.example&quot;,&quot;fields&quot;:[{&quot;name&quot;:&quot;value&quot;,&quot;type&quot;:&quot;int&quot;}]},{&quot;type&quot;:&quot;record&quot;,&quot;name&quot;:&quot;Second&quot;,&quot;namespace&quot;:&quot;com.example&quot;,&quot;fields&quot;:[{&quot;name&quot;:&quot;value&quot;,&quot;type&quot;:&quot;string&quot;}]}]
+//   ),
+//   typeName = &quot;repl.MdocSession.MdocApp0.FirstOrSecond&quot;
+// )</span></code></pre>
+        <p><a href="https://github.com/milessabin/shapeless">Shapeless</a> <code>Coproduct</code>s are also supported and correspond to Avro unions.</p>
+        <pre><code class="nohighlight"><span class="keyword">import</span><span> </span><span class="identifier">shapeless</span><span>.{:+:, </span><span class="type-name">CNil</span><span>}
+
+</span><span class="type-name">Codec</span><span>[</span><span class="type-name">Int</span><span> :+: </span><span class="type-name">String</span><span> :+: </span><span class="type-name">CNil</span><span>]
+</span><span class="comment">// res5: Codec[Int :+: String :+: CNil] = WithTypeName(
+//   codec = Validated(
+//     codec = UnionCodec(
+//       alts = Append(
+//         leftNE = Singleton(a = vulcan.Codec$Alt$$anon$6@b9e5ede),
+//         rightNE = Singleton(a = vulcan.Codec$Alt$$anon$6@c007b3f)
+//       )
+//     ),
+//     validSchema = [&quot;int&quot;,&quot;string&quot;]
+//   ),
+//   typeName = &quot;Coproduct&quot;
+// )</span></code></pre>
+
+        
+<hr class="footer-rule"/>
+<footer>
+  Licensed under <a href="https://github.com/typelevel/vulcan/blob/main/license.txt">Apache License, Version 2.0</a>.<br>Copyright © 2019 OVO Energy Limited.
+</footer>
+
+
+      </main>
+
+    </div>
+
+  </body>
+
+</html>
