@@ -1,6 +1,6 @@
 # Derivation
 
-The `@GENERIC_MODULE_NAME@` module provides generic derivation of @:api(vulcan.Codec)s using [Magnolia](https://github.com/softwaremill/magnolia) for records and unions, and reflection for enumerations and fixed types.
+The `@GENERIC_MODULE_NAME@` module provides generic derivation of @:api(vulcan.Codec)s using [Magnolia](https://github.com/softwaremill/magnolia) for records and unions, and compile-time macros for enumerations and fixed types.
 
 ## Getting Started
 
