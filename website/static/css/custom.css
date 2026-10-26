@@ -44,15 +44,9 @@
 }
 
 .projectTitleLogo {
-  width: 45px;
-  vertical-align: top;
-  margin-right: 8px;
-  margin-top: 4px;
-}
-
-.fixedHeaderContainer header img {
-  margin-right: 8px;
-  width: 30px;
+  height: 1.3em;
+  vertical-align: -0.3em;
+  margin-right: 0.25em;
 }
 
 .buttonWrapper {
