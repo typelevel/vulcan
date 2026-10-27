@@ -36,7 +36,22 @@ inThisBuild(
 lazy val root = project
   .in(file("."))
   .enablePlugins(NoPublishPlugin)
-  .aggregate(core, enumeratum, generic, refined)
+  .aggregate(benchmarks, core, enumeratum, generic, refined)
+
+lazy val benchmarks = project
+  .in(file("modules/benchmarks"))
+  .enablePlugins(JmhPlugin, NoPublishPlugin)
+  .dependsOn(core)
+  .settings(
+    name := "vulcan-benchmarks",
+    libraryDependencies ++= Seq(
+      "org.apache.avro" % "avro" % avroVersion,
+      "org.slf4j" % "slf4j-nop" % slf4jNopVersion
+    ),
+    // JMH generates Java sources, which are compiled for Java 8
+    javacOptions += "-Xlint:-options",
+    headerSettings
+  )
 
 lazy val core = project
   .in(file("modules/core"))

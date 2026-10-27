@@ -24,6 +24,24 @@ private[v2] object SchemaNames {
     else if (!name.forall(isNamePart)) Some("can only contain letters, digits, and underscores")
     else None
 
+  /** The key for distinguishing types in unions, being the full name for named schemas. */
+  def unionKey(schema: Schema): String =
+    schema match {
+      case named: Schema.Named => named.fullName
+      case ref: Schema.Ref     => ref.fullName
+      case _: Schema.Null      => "null"
+      case _: Schema.Boolean   => "boolean"
+      case _: Schema.Int       => "int"
+      case _: Schema.Long      => "long"
+      case _: Schema.Float     => "float"
+      case _: Schema.Double    => "double"
+      case _: Schema.Bytes     => "bytes"
+      case _: Schema.String    => "string"
+      case _: Schema.Array     => "array"
+      case _: Schema.Map       => "map"
+      case _: Schema.Union     => "union"
+    }
+
   val PrimitiveNames: Set[String] =
     Set("boolean", "bytes", "double", "float", "int", "long", "null", "string")
 
