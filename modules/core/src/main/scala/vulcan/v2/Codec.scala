@@ -7,10 +7,14 @@
 package vulcan.v2
 
 import cats.{Invariant, Show}
+import cats.data.{Chain, NonEmptyChain, NonEmptyList, NonEmptyMap, NonEmptySet, NonEmptyVector}
 import io.circe.Json
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicReferenceArray
-import scala.annotation.implicitNotFound
+import java.util.Arrays
+import scala.annotation.{implicitNotFound, tailrec}
+import scala.collection.immutable.{ArraySeq, SortedMap, SortedSet}
+import scala.collection.mutable
 import scala.util.Try
 import scodec.bits.ByteVector
 import vulcan.AvroError
@@ -110,6 +114,11 @@ sealed abstract class Codec[A] {
   * @groupdesc General
   *   Default codecs for standard library types.
   *
+  * @groupname Collection Collection Codecs
+  * @groupprio Collection 1
+  * @groupdesc Collection
+  *   Default codecs for standard library collection types.
+  *
   * @groupname Cats Cats Codecs
   * @groupprio Cats 2
   * @groupdesc Cats
@@ -153,6 +162,12 @@ object Codec {
     */
   implicit lazy val bytes: Codec[ByteVector] =
     BytesCodec
+
+  /** @group Cats
+    */
+  implicit final def chain[A](implicit codec: Codec[A]): Codec[Chain[A]] =
+    ArrayCodec[A, Chain[A]](codec, _.length.toInt, _.iterator, chainBuilder)
+      .withTypeName("Chain")
 
   /** @group General
     */
@@ -230,10 +245,72 @@ object Codec {
   implicit lazy val int: Codec[Int] =
     IntCodec
 
+  /** @group Collection
+    */
+  implicit final def list[A](implicit codec: Codec[A]): Codec[List[A]] =
+    ArrayCodec[A, List[A]](codec, _.length, _.iterator, _ => List.newBuilder)
+      .withTypeName("List")
+
   /** @group General
     */
   implicit lazy val long: Codec[Long] =
     LongCodec
+
+  /** @group Collection
+    */
+  implicit final def map[A](implicit codec: Codec[A]): Codec[Map[String, A]] =
+    MapCodec[A, Map[String, A]](codec, _.size, _.iterator, _ => Map.newBuilder)
+      .withTypeName("Map")
+
+  /** @group Cats
+    */
+  implicit final def nonEmptyChain[A](implicit codec: Codec[A]): Codec[NonEmptyChain[A]] =
+    ArrayCodec[A, Chain[A]](codec, _.length.toInt, _.iterator, chainBuilder)
+      .imapError(NonEmptyChain.fromChain(_).toRight(AvroError.decodeEmptyCollection))(_.toChain)
+      .withTypeName("NonEmptyChain")
+
+  /** @group Cats
+    */
+  implicit final def nonEmptyList[A](implicit codec: Codec[A]): Codec[NonEmptyList[A]] =
+    ArrayCodec[A, List[A]](codec, _.length, _.iterator, _ => List.newBuilder)
+      .imapError(NonEmptyList.fromList(_).toRight(AvroError.decodeEmptyCollection))(_.toList)
+      .withTypeName("NonEmptyList")
+
+  /** @group Cats
+    */
+  implicit final def nonEmptyMap[A](implicit codec: Codec[A]): Codec[NonEmptyMap[String, A]] =
+    MapCodec[A, SortedMap[String, A]](codec, _.size, _.iterator, _ => SortedMap.newBuilder)
+      .imapError(NonEmptyMap.fromMap(_).toRight(AvroError.decodeEmptyCollection))(_.toSortedMap)
+      .withTypeName("NonEmptyMap")
+
+  /** @group Cats
+    */
+  implicit final def nonEmptySet[A](implicit
+    codec: Codec[A],
+    ordering: Ordering[A]
+  ): Codec[NonEmptySet[A]] =
+    ArrayCodec[A, SortedSet[A]](codec, _.size, _.iterator, _ => SortedSet.newBuilder)
+      .imapError(NonEmptySet.fromSet(_).toRight(AvroError.decodeEmptyCollection))(_.toSortedSet)
+      .withTypeName("NonEmptySet")
+
+  /** @group Cats
+    */
+  implicit final def nonEmptyVector[A](implicit codec: Codec[A]): Codec[NonEmptyVector[A]] =
+    ArrayCodec[A, Vector[A]](codec, _.length, _.iterator, vectorBuilder)
+      .imapError(NonEmptyVector.fromVector(_).toRight(AvroError.decodeEmptyCollection))(_.toVector)
+      .withTypeName("NonEmptyVector")
+
+  /** @group Collection
+    */
+  implicit final def seq[A](implicit codec: Codec[A]): Codec[Seq[A]] =
+    ArrayCodec[A, Seq[A]](codec, _.length, _.iterator, _ => Seq.newBuilder)
+      .withTypeName("Seq")
+
+  /** @group Collection
+    */
+  implicit final def set[A](implicit codec: Codec[A]): Codec[Set[A]] =
+    ArrayCodec[A, Set[A]](codec, _.size, _.iterator, _ => Set.newBuilder)
+      .withTypeName("Set")
 
   /** @group General
     */
@@ -272,6 +349,12 @@ object Codec {
     */
   implicit lazy val unit: Codec[Unit] =
     NullCodec((), "Unit")
+
+  /** @group Collection
+    */
+  implicit final def vector[A](implicit codec: Codec[A]): Codec[Vector[A]] =
+    ArrayCodec[A, Vector[A]](codec, _.length, _.iterator, vectorBuilder)
+      .withTypeName("Vector")
 
   /** @group Cats
     */
@@ -343,6 +426,79 @@ object Codec {
       val decode = codec.resolve(writerSchema, definitions)
       decode(_).left.map(AvroError.errorDecodingTo(typeName, _))
     }
+  }
+
+  /** Codec for collections encoded as arrays, with a builder for the number of items. */
+  private[v2] final case class ArrayCodec[A, C](
+    items: Codec[A],
+    size: C => Int,
+    iterator: C => Iterator[A],
+    newBuilder: Int => mutable.Builder[A, C]
+  ) extends Codec[C] {
+    override lazy val schema: Either[AvroError, Schema] =
+      items.schema.map(Schema.Array(_))
+
+    override def encode(collection: C): Either[AvroError, AvroValue] =
+      build(iterator(collection), vectorBuilder[AvroValue](size(collection)))(items.encode)
+        .map(AvroValue.Array(_))
+
+    override def resolve(
+      writerSchema: Schema,
+      definitions: Definitions
+    ): AvroValue => Either[AvroError, C] =
+      writerSchema match {
+        case array: Schema.Array =>
+          val decode = items.decoder(array.items, definitions)
+          value =>
+            value match {
+              case AvroValue.Array(values) =>
+                build(values.iterator, newBuilder(values.size))(decode)
+
+              case _ =>
+                Left(invalidValue(value, writerSchema))
+            }
+
+        case _ =>
+          failing(unexpectedSchemaType(writerSchema, "array"))
+      }
+  }
+
+  /** Codec for maps with string keys, with a builder for the number of entries. */
+  private[v2] final case class MapCodec[A, M](
+    values: Codec[A],
+    size: M => Int,
+    iterator: M => Iterator[(String, A)],
+    newBuilder: Int => mutable.Builder[(String, A), M]
+  ) extends Codec[M] {
+    override lazy val schema: Either[AvroError, Schema] =
+      values.schema.map(Schema.Map(_))
+
+    override def encode(map: M): Either[AvroError, AvroValue] =
+      build(iterator(map), vectorBuilder[(String, AvroValue)](size(map))) { case (key, value) =>
+        values.encode(value).map((key, _))
+      }.map(AvroValue.Map(_))
+
+    override def resolve(
+      writerSchema: Schema,
+      definitions: Definitions
+    ): AvroValue => Either[AvroError, M] =
+      writerSchema match {
+        case map: Schema.Map =>
+          val decode = values.decoder(map.values, definitions)
+          value =>
+            value match {
+              case AvroValue.Map(entries) =>
+                build(entries.iterator, newBuilder(entries.size)) { case (key, entryValue) =>
+                  decode(entryValue).map((key, _))
+                }
+
+              case _ =>
+                Left(invalidValue(value, writerSchema))
+            }
+
+        case _ =>
+          failing(unexpectedSchemaType(writerSchema, "map"))
+      }
   }
 
   /** Codec for a primitive type, which also decodes types which can be promoted to the type. */
@@ -602,6 +758,59 @@ object Codec {
         decoder
       }
     }
+  }
+
+  /** Builds vectors of the given number of items without copying them, unlike `VectorBuilder`. */
+  private final class ExactVectorBuilder[A](size: Int) extends mutable.Builder[A, Vector[A]] {
+    private[this] var items: Array[AnyRef] =
+      new Array(size)
+
+    private[this] var count: Int =
+      0
+
+    override def addOne(item: A): this.type = {
+      items(count) = item.asInstanceOf[AnyRef]
+      count += 1
+      this
+    }
+
+    override def clear(): Unit = {
+      items = new Array(size)
+      count = 0
+    }
+
+    /** The items, which are not copied by `Vector.from` if there are at most 32. */
+    override def result(): Vector[A] = {
+      val exact = if (count == items.length) items else Arrays.copyOf(items, count)
+      Vector.from(ArraySeq.unsafeWrapArray(exact).asInstanceOf[ArraySeq[A]])
+    }
+  }
+
+  /** A builder for vectors of the given number of items, which only copies items if needed. */
+  private def vectorBuilder[A](size: Int): mutable.Builder[A, Vector[A]] =
+    if (size <= 32) new ExactVectorBuilder(size) else Vector.newBuilder
+
+  private def chainBuilder[A](size: Int): mutable.Builder[A, Chain[A]] =
+    vectorBuilder[A](size).mapResult(Chain.fromSeq)
+
+  /** Builds the results of the function on the values, stopping at the first error. */
+  private def build[A, B, C](
+    values: Iterator[A],
+    builder: mutable.Builder[B, C]
+  )(f: A => Either[AvroError, B]): Either[AvroError, C] = {
+    @tailrec def loop(): Either[AvroError, C] =
+      if (values.hasNext)
+        f(values.next()) match {
+          case Right(value) =>
+            builder += value
+            loop()
+
+          case Left(error) =>
+            Left(error)
+        }
+      else Right(builder.result())
+
+    loop()
   }
 
   /** A function decoding any value to the error. */

@@ -6,6 +6,7 @@
 
 package vulcan.v2
 
+import cats.data._
 import cats.syntax.all._
 import io.circe.Json
 import java.nio.charset.StandardCharsets
@@ -182,6 +183,51 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           assertDecodeIs[ByteVector](
             AvroValue.Bytes(bytes),
             Right(bytes)
+          )
+        }
+      }
+    }
+
+    describe("chain") {
+      describe("schema") {
+        it("should be encoded as array") {
+          assertSchemaIs[Chain[String]] {
+            """{"type":"array","items":"string"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as array using encoder for underlying type") {
+          assertEncodeIs[Chain[Int]](
+            Chain(1, 2, 3),
+            Right(AvroValue.Array(Vector(unsafeEncode(1), unsafeEncode(2), unsafeEncode(3))))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not array") {
+          assertDecodeError[Chain[Int]](
+            unsafeEncode(Chain(1, 2, 3)),
+            unsafeSchema[Int],
+            "Error decoding Chain: Got unexpected schema type int, expected schema type array"
+          )
+        }
+
+        it("should error if value is not array") {
+          assertDecodeError[Chain[Int]](
+            unsafeEncode(10),
+            unsafeSchema[Chain[Int]],
+            "Error decoding Chain: Invalid int value for array"
+          )
+        }
+
+        it("should decode as Chain") {
+          val value = Chain(1, 2, 3)
+          assertDecodeIs[Chain[Int]](
+            unsafeEncode(value),
+            Right(value)
           )
         }
       }
@@ -435,6 +481,14 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
         assert(Codec.fromBinary[Unit](ByteVector.empty, unsafeSchema[Unit]) == Right(()))
       }
 
+      it("should decode items promoted to types with larger encodings") {
+        val bytes = Codec.toBinary(List(0, 1, Int.MaxValue)).value
+        assert {
+          Codec.fromBinary[List[Float]](bytes, unsafeSchema[List[Int]]) ==
+            Right(List(0f, 1f, Int.MaxValue.toFloat))
+        }
+      }
+
       it("should error if the binary does not match the writer schema") {
         val result = Codec.fromBinary[Int](ByteVector.empty, unsafeSchema[Int])
         assert(result.swap.value.message == "Unexpected end of input at position 0")
@@ -661,6 +715,85 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       }
     }
 
+    describe("list") {
+      describe("schema") {
+        it("should be encoded as array") {
+          assertSchemaIs[List[String]] {
+            """{"type":"array","items":"string"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as array using encoder for underlying type") {
+          assertEncodeIs[List[Int]](
+            List(1, 2, 3),
+            Right(AvroValue.Array(Vector(unsafeEncode(1), unsafeEncode(2), unsafeEncode(3))))
+          )
+        }
+
+        it("should error if an item cannot be encoded") {
+          implicit val intCodec: Codec[Int] =
+            Codec.int.imapErrors(Right(_))(_ => Left(AvroError("error")))
+
+          assertEncodeError[List[Int]](
+            List(1, 2, 3),
+            "Error encoding List: error"
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not array") {
+          assertDecodeError[List[Int]](
+            unsafeEncode(List(1, 2, 3)),
+            unsafeSchema[Int],
+            "Error decoding List: Got unexpected schema type int, expected schema type array"
+          )
+        }
+
+        it("should error if value is not array") {
+          assertDecodeError[List[Int]](
+            unsafeEncode(10),
+            unsafeSchema[List[Int]],
+            "Error decoding List: Invalid int value for array"
+          )
+        }
+
+        it("should error if an item cannot be decoded") {
+          assertDecodeError[List[Int]](
+            AvroValue.Array(Vector(AvroValue.Long(1L))),
+            Schema.Array(Schema.Long),
+            "Error decoding List: Error decoding Int: Got unexpected schema type long, expected schema type int"
+          )
+        }
+
+        it("should decode items using the writer schema") {
+          assertDecodeIs[List[Long]](
+            AvroValue.Array(Vector(AvroValue.Int(1), AvroValue.Int(2))),
+            Right(List(1L, 2L)),
+            Some(Schema.Array(Schema.Int))
+          )
+        }
+
+        it("should decode empty arrays even if items cannot be decoded") {
+          assertDecodeIs[List[Int]](
+            AvroValue.Array(Vector.empty),
+            Right(List.empty),
+            Some(Schema.Array(Schema.String))
+          )
+        }
+
+        it("should decode as List") {
+          val value = List(1, 2, 3)
+          assertDecodeIs[List[Int]](
+            unsafeEncode(value),
+            Right(value)
+          )
+        }
+      }
+    }
+
     describe("long") {
       describe("schema") {
         it("should be encoded as long") {
@@ -708,6 +841,428 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
         it("should decode long as long") {
           val value = 123L
           assertDecodeIs[Long](
+            unsafeEncode(value),
+            Right(value)
+          )
+        }
+      }
+    }
+
+    describe("map") {
+      describe("schema") {
+        it("should be encoded as map") {
+          assertSchemaIs[Map[String, Int]] {
+            """{"type":"map","values":"int"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as map using encoder for value") {
+          assertEncodeIs[Map[String, Int]](
+            Map("key" -> 1),
+            Right(AvroValue.Map(Vector("key" -> unsafeEncode(1))))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not map") {
+          assertDecodeError[Map[String, Int]](
+            unsafeEncode[Map[String, Int]](Map("key" -> 1)),
+            unsafeSchema[Int],
+            "Error decoding Map: Got unexpected schema type int, expected schema type map"
+          )
+        }
+
+        it("should error if value is not map") {
+          assertDecodeError[Map[String, Int]](
+            unsafeEncode(123),
+            unsafeSchema[Map[String, Int]],
+            "Error decoding Map: Invalid int value for map"
+          )
+        }
+
+        it("should decode values using the writer schema") {
+          assertDecodeIs[Map[String, Long]](
+            AvroValue.Map(Vector("key" -> AvroValue.Int(1))),
+            Right(Map("key" -> 1L)),
+            Some(Schema.Map(Schema.Int))
+          )
+        }
+
+        it("should decode the last value for duplicate keys") {
+          assertDecodeIs[Map[String, Int]](
+            AvroValue.Map(Vector("key" -> AvroValue.Int(1), "key" -> AvroValue.Int(2))),
+            Right(Map("key" -> 2))
+          )
+        }
+
+        it("should decode to map using decoder for value") {
+          assertDecodeIs[Map[String, Int]](
+            unsafeEncode[Map[String, Int]](Map("key" -> 1)),
+            Right(Map("key" -> 1))
+          )
+        }
+      }
+    }
+
+    describe("nonEmptyChain") {
+      describe("schema") {
+        it("should be encoded as array") {
+          assertSchemaIs[NonEmptyChain[String]] {
+            """{"type":"array","items":"string"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as array using encoder for underlying type") {
+          assertEncodeIs[NonEmptyChain[Int]](
+            NonEmptyChain(1, 2, 3),
+            Right(AvroValue.Array(Vector(unsafeEncode(1), unsafeEncode(2), unsafeEncode(3))))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not array") {
+          assertDecodeError[NonEmptyChain[Int]](
+            unsafeEncode(NonEmptyChain(1, 2, 3)),
+            unsafeSchema[Int],
+            "Error decoding NonEmptyChain: Got unexpected schema type int, expected schema type array"
+          )
+        }
+
+        it("should error if value is not array") {
+          assertDecodeError[NonEmptyChain[Int]](
+            unsafeEncode(10),
+            unsafeSchema[NonEmptyChain[Int]],
+            "Error decoding NonEmptyChain: Invalid int value for array"
+          )
+        }
+
+        it("should error on empty collection") {
+          assertDecodeError[NonEmptyChain[Int]](
+            unsafeEncode(Chain.empty[Int]),
+            unsafeSchema[NonEmptyChain[Int]],
+            "Error decoding NonEmptyChain: Got unexpected empty collection"
+          )
+        }
+
+        it("should decode as NonEmptyChain") {
+          val value = NonEmptyChain(1, 2, 3)
+          assertDecodeIs[NonEmptyChain[Int]](
+            unsafeEncode(value),
+            Right(value)
+          )
+        }
+      }
+    }
+
+    describe("nonEmptyList") {
+      describe("schema") {
+        it("should be encoded as array") {
+          assertSchemaIs[NonEmptyList[String]] {
+            """{"type":"array","items":"string"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as array using encoder for underlying type") {
+          assertEncodeIs[NonEmptyList[Int]](
+            NonEmptyList.of(1, 2, 3),
+            Right(AvroValue.Array(Vector(unsafeEncode(1), unsafeEncode(2), unsafeEncode(3))))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not array") {
+          assertDecodeError[NonEmptyList[Int]](
+            unsafeEncode(NonEmptyList.of(1, 2, 3)),
+            unsafeSchema[Int],
+            "Error decoding NonEmptyList: Got unexpected schema type int, expected schema type array"
+          )
+        }
+
+        it("should error if value is not array") {
+          assertDecodeError[NonEmptyList[Int]](
+            unsafeEncode(10),
+            unsafeSchema[NonEmptyList[Int]],
+            "Error decoding NonEmptyList: Invalid int value for array"
+          )
+        }
+
+        it("should error on empty collection") {
+          assertDecodeError[NonEmptyList[Int]](
+            unsafeEncode(List.empty[Int]),
+            unsafeSchema[NonEmptyList[Int]],
+            "Error decoding NonEmptyList: Got unexpected empty collection"
+          )
+        }
+
+        it("should decode as NonEmptyList") {
+          val value = NonEmptyList.of(1, 2, 3)
+          assertDecodeIs[NonEmptyList[Int]](
+            unsafeEncode(value),
+            Right(value)
+          )
+        }
+      }
+    }
+
+    describe("nonEmptyMap") {
+      describe("schema") {
+        it("should be encoded as map") {
+          assertSchemaIs[NonEmptyMap[String, Int]] {
+            """{"type":"map","values":"int"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as map using encoder for value") {
+          assertEncodeIs[NonEmptyMap[String, Int]](
+            NonEmptyMap.of("key1" -> 1, "key2" -> 2, "key3" -> 3),
+            Right(
+              AvroValue.Map(
+                Vector(
+                  "key1" -> unsafeEncode(1),
+                  "key2" -> unsafeEncode(2),
+                  "key3" -> unsafeEncode(3)
+                )
+              )
+            )
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not map") {
+          assertDecodeError[NonEmptyMap[String, Int]](
+            unsafeEncode[NonEmptyMap[String, Int]](NonEmptyMap.one("key", 1)),
+            unsafeSchema[Int],
+            "Error decoding NonEmptyMap: Got unexpected schema type int, expected schema type map"
+          )
+        }
+
+        it("should error if value is not map") {
+          assertDecodeError[NonEmptyMap[String, Int]](
+            unsafeEncode(123),
+            unsafeSchema[NonEmptyMap[String, Int]],
+            "Error decoding NonEmptyMap: Invalid int value for map"
+          )
+        }
+
+        it("should error on empty collection") {
+          assertDecodeError[NonEmptyMap[String, Int]](
+            unsafeEncode(Map.empty[String, Int]),
+            unsafeSchema[NonEmptyMap[String, Int]],
+            "Error decoding NonEmptyMap: Got unexpected empty collection"
+          )
+        }
+
+        it("should decode to map using decoder for value") {
+          val value = NonEmptyMap.of("key1" -> 1, "key2" -> 2, "key3" -> 3)
+          assertDecodeIs[NonEmptyMap[String, Int]](
+            unsafeEncode[NonEmptyMap[String, Int]](value),
+            Right(value)
+          )
+        }
+      }
+    }
+
+    describe("nonEmptySet") {
+      describe("schema") {
+        it("should be encoded as array") {
+          assertSchemaIs[NonEmptySet[String]] {
+            """{"type":"array","items":"string"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as array using encoder for underlying type") {
+          assertEncodeIs[NonEmptySet[Int]](
+            NonEmptySet.of(1, 2, 3),
+            Right(AvroValue.Array(Vector(unsafeEncode(1), unsafeEncode(2), unsafeEncode(3))))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not array") {
+          assertDecodeError[NonEmptySet[Int]](
+            unsafeEncode(NonEmptySet.of(1, 2, 3)),
+            unsafeSchema[Int],
+            "Error decoding NonEmptySet: Got unexpected schema type int, expected schema type array"
+          )
+        }
+
+        it("should error if value is not array") {
+          assertDecodeError[NonEmptySet[Int]](
+            unsafeEncode(10),
+            unsafeSchema[NonEmptySet[Int]],
+            "Error decoding NonEmptySet: Invalid int value for array"
+          )
+        }
+
+        it("should error on empty collection") {
+          assertDecodeError[NonEmptySet[Int]](
+            unsafeEncode(Set.empty[Int]),
+            unsafeSchema[NonEmptySet[Int]],
+            "Error decoding NonEmptySet: Got unexpected empty collection"
+          )
+        }
+
+        it("should decode as NonEmptySet") {
+          val value = NonEmptySet.of(1, 2, 3)
+          assertDecodeIs[NonEmptySet[Int]](
+            unsafeEncode(value),
+            Right(value)
+          )
+        }
+      }
+    }
+
+    describe("nonEmptyVector") {
+      describe("schema") {
+        it("should be encoded as array") {
+          assertSchemaIs[NonEmptyVector[String]] {
+            """{"type":"array","items":"string"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as array using encoder for underlying type") {
+          assertEncodeIs[NonEmptyVector[Int]](
+            NonEmptyVector.of(1, 2, 3),
+            Right(AvroValue.Array(Vector(unsafeEncode(1), unsafeEncode(2), unsafeEncode(3))))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not array") {
+          assertDecodeError[NonEmptyVector[Int]](
+            unsafeEncode(NonEmptyVector.of(1, 2, 3)),
+            unsafeSchema[Int],
+            "Error decoding NonEmptyVector: Got unexpected schema type int, expected schema type array"
+          )
+        }
+
+        it("should error if value is not array") {
+          assertDecodeError[NonEmptyVector[Int]](
+            unsafeEncode(10),
+            unsafeSchema[NonEmptyVector[Int]],
+            "Error decoding NonEmptyVector: Invalid int value for array"
+          )
+        }
+
+        it("should error on empty collection") {
+          assertDecodeError[NonEmptyVector[Int]](
+            unsafeEncode(Vector.empty[Int]),
+            unsafeSchema[NonEmptyVector[Int]],
+            "Error decoding NonEmptyVector: Got unexpected empty collection"
+          )
+        }
+
+        it("should decode as NonEmptyVector") {
+          val value = NonEmptyVector.of(1, 2, 3)
+          assertDecodeIs[NonEmptyVector[Int]](
+            unsafeEncode(value),
+            Right(value)
+          )
+        }
+      }
+    }
+
+    describe("seq") {
+      describe("schema") {
+        it("should be encoded as array") {
+          assertSchemaIs[Seq[String]] {
+            """{"type":"array","items":"string"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as array using encoder for underlying type") {
+          assertEncodeIs[Seq[Int]](
+            Seq(1, 2, 3),
+            Right(AvroValue.Array(Vector(unsafeEncode(1), unsafeEncode(2), unsafeEncode(3))))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not array") {
+          assertDecodeError[Seq[Int]](
+            unsafeEncode(Seq(1, 2, 3)),
+            unsafeSchema[Int],
+            "Error decoding Seq: Got unexpected schema type int, expected schema type array"
+          )
+        }
+
+        it("should error if value is not array") {
+          assertDecodeError[Seq[Int]](
+            unsafeEncode(10),
+            unsafeSchema[Seq[Int]],
+            "Error decoding Seq: Invalid int value for array"
+          )
+        }
+
+        it("should decode as Seq") {
+          val value = Seq(1, 2, 3)
+          assertDecodeIs[Seq[Int]](
+            unsafeEncode(value),
+            Right(value)
+          )
+        }
+      }
+    }
+
+    describe("set") {
+      describe("schema") {
+        it("should be encoded as array") {
+          assertSchemaIs[Set[String]] {
+            """{"type":"array","items":"string"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as array using encoder for underlying type") {
+          assertEncodeIs[Set[Int]](
+            Set(1, 2, 3),
+            Right(AvroValue.Array(Vector(unsafeEncode(1), unsafeEncode(2), unsafeEncode(3))))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not array") {
+          assertDecodeError[Set[Int]](
+            unsafeEncode(Set(1, 2, 3)),
+            unsafeSchema[Int],
+            "Error decoding Set: Got unexpected schema type int, expected schema type array"
+          )
+        }
+
+        it("should error if value is not array") {
+          assertDecodeError[Set[Int]](
+            unsafeEncode(10),
+            unsafeSchema[Set[Int]],
+            "Error decoding Set: Invalid int value for array"
+          )
+        }
+
+        it("should decode as Set") {
+          val value = Set(1, 2, 3)
+          assertDecodeIs[Set[Int]](
             unsafeEncode(value),
             Right(value)
           )
@@ -913,6 +1468,61 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
             unsafeEncode(()),
             Right(())
           )
+        }
+      }
+    }
+
+    describe("vector") {
+      describe("schema") {
+        it("should be encoded as array") {
+          assertSchemaIs[Vector[String]] {
+            """{"type":"array","items":"string"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as array using encoder for underlying type") {
+          assertEncodeIs[Vector[Int]](
+            Vector(1, 2, 3),
+            Right(AvroValue.Array(Vector(unsafeEncode(1), unsafeEncode(2), unsafeEncode(3))))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not array") {
+          assertDecodeError[Vector[Int]](
+            unsafeEncode(Vector(1, 2, 3)),
+            unsafeSchema[Int],
+            "Error decoding Vector: Got unexpected schema type int, expected schema type array"
+          )
+        }
+
+        it("should error if value is not array") {
+          assertDecodeError[Vector[Int]](
+            unsafeEncode(10),
+            unsafeSchema[Vector[Int]],
+            "Error decoding Vector: Invalid int value for array"
+          )
+        }
+
+        it("should decode as Vector") {
+          val value = Vector(1, 2, 3)
+          assertDecodeIs[Vector[Int]](
+            unsafeEncode(value),
+            Right(value)
+          )
+        }
+
+        it("should decode as Vector for any number of items") {
+          (0 to 64).foreach { size =>
+            val value = Vector.range(0, size)
+            assertDecodeIs[Vector[Int]](
+              unsafeEncode(value),
+              Right(value)
+            )
+          }
         }
       }
     }
