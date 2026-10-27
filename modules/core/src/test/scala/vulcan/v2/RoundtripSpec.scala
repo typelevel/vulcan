@@ -63,6 +63,8 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
 
   describe("Double") { it("roundtrip") { roundtrip[Double] } }
 
+  describe("Either") { it("roundtrip") { roundtrip[Either[Int, String]] } }
+
   describe("Enum") { it("roundtrip") { roundtrip[SealedTraitEnum] } }
 
   describe("Fixed") { it("roundtrip") { roundtrip[FixedBoolean] } }
@@ -230,6 +232,12 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
 
       roundtrip[NonEmptyVector[Int]]
     }
+  }
+
+  describe("Option") {
+    it("roundtrip") { roundtrip[Option[Int]] }
+
+    it("roundtrip with the types of unions") { roundtrip[Option[Either[Int, String]]] }
   }
 
   describe("Seq") {

@@ -113,6 +113,40 @@ final class CodecJavaSpec extends BaseSpec {
       }
     }
 
+    it("should decode unions the same as the Java Avro library resolves schemas") {
+      val either =
+        Reader[Either[Long, String]](
+          Codec.either[Long, String],
+          {
+            case long: java.lang.Long => Left(long.longValue)
+            case string               => Right(string.toString)
+          }
+        )
+
+      val option =
+        Reader[Option[Long]](
+          Codec.option[Long],
+          value => Option(value).map(_.asInstanceOf[java.lang.Long].longValue)
+        )
+
+      val writerSchemas =
+        primitiveSchemas ++ List(
+          Schema.Union(Vector(Schema.Int, Schema.String)),
+          Schema.Union(Vector(Schema.String, Schema.Long)),
+          Schema.Union(Vector(Schema.Null, Schema.Int)),
+          Schema.Union(Vector(Schema.Bytes, Schema.Null)),
+          Schema.Union(Vector(Schema.Float, Schema.Int))
+        )
+
+      writerSchemas.foreach { writerSchema =>
+        List(either, option).foreach { reader =>
+          forAll(AvroValueGenerators.genValue(writerSchema)) { value =>
+            assertSameAsJava(reader, writerSchema, value)
+          }
+        }
+      }
+    }
+
     it("should decode fixed the same as the Java Avro library resolves schemas") {
       val reader =
         Reader[ByteVector](

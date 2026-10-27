@@ -18,7 +18,7 @@ import scala.collection.immutable.{ArraySeq, SortedMap, SortedSet}
 import scala.collection.mutable
 import scala.util.Try
 import scodec.bits.ByteVector
-import vulcan.AvroError
+import vulcan.{AvroError, Prism}
 import vulcan.v2.internal._
 
 /** Provides a schema, along with encoding and decoding functions for a given type. */
@@ -215,6 +215,16 @@ object Codec {
   implicit lazy val double: Codec[Double] =
     DoubleCodec
 
+  /** @group General
+    */
+  implicit final def either[A, B](implicit
+    codecA: Codec[A],
+    codecB: Codec[B]
+  ): Codec[Either[A, B]] =
+    Codec
+      .union[Either[A, B]](alt => alt[Left[A, B]] ++ alt[Right[A, B]])
+      .withTypeName("Either")
+
   /** Returns the result of encoding the specified value.
     *
     * @group Utilities
@@ -364,6 +374,11 @@ object Codec {
   implicit lazy val int: Codec[Int] =
     IntCodec
 
+  /** @group General
+    */
+  implicit final def left[A, B](implicit codec: Codec[A]): Codec[Left[A, B]] =
+    codec.imap(Left[A, B](_))(_.value)
+
   /** @group Collection
     */
   implicit final def list[A](implicit codec: Codec[A]): Codec[List[A]] =
@@ -427,6 +442,11 @@ object Codec {
     MapCodec[A, Map[String, A]](codec, _.size, _.iterator, _ => Map.newBuilder)
       .withTypeName("Map")
 
+  /** @group General
+    */
+  implicit lazy val none: Codec[None.type] =
+    NullCodec(None, "None")
+
   /** @group Cats
     */
   implicit final def nonEmptyChain[A](implicit codec: Codec[A]): Codec[NonEmptyChain[A]] =
@@ -465,6 +485,20 @@ object Codec {
       .imapError(NonEmptyVector.fromVector(_).toRight(AvroError.decodeEmptyCollection))(_.toVector)
       .withTypeName("NonEmptyVector")
 
+  /** Returns a [[Codec]] for options, encoded as a union with `null` first.
+    *
+    * If the underlying codec is for a union, the types of that union are included in the union.
+    *
+    * @group General
+    */
+  implicit final def option[A](implicit codec: Codec[A]): Codec[Option[A]] =
+    OptionCodec(codec).withTypeName("Option")
+
+  /** @group General
+    */
+  implicit final def right[A, B](implicit codec: Codec[B]): Codec[Right[A, B]] =
+    codec.imap(Right[A, B](_))(_.value)
+
   /** @group Collection
     */
   implicit final def seq[A](implicit codec: Codec[A]): Codec[Seq[A]] =
@@ -489,6 +523,11 @@ object Codec {
 
   /** @group General
     */
+  implicit final def some[A](implicit codec: Codec[A]): Codec[Some[A]] =
+    codec.imap(Some(_))(_.value)
+
+  /** @group General
+    */
   implicit lazy val string: Codec[String] =
     StringCodec
 
@@ -509,6 +548,18 @@ object Codec {
     val codec = Codec[A]
     codec.jsonEncoder.flatMap(encoder => codec.encode(a).flatMap(encoder.encode))
   }
+
+  /** Returns a new union [[Codec]] for type `A`.
+    *
+    * Values are encoded with the first alternative which includes the value. Values are decoded
+    * with the alternative for the written type: the same type, or a named type with the same full
+    * name or alias, then the same name, and otherwise the first type the written type can be
+    * promoted to.
+    *
+    * @group Create
+    */
+  final def union[A](f: AltBuilder[A] => Chain[Alt[A]]): Codec[A] =
+    UnionCodec(f(AltBuilder.instance))
 
   /** @group General
     */
@@ -546,6 +597,54 @@ object Codec {
     */
   implicit final def codecShow[A]: Show[Codec[A]] =
     Show.fromToString
+
+  /** @group Create
+    */
+  sealed abstract class Alt[A] {
+    type B
+
+    def codec: Codec[B]
+
+    def prism: Prism[A, B]
+
+    def imap[A0](f: A0 => Option[A], g: A => A0): Alt[A0] =
+      Alt(codec, prism.imap(f, g))
+  }
+
+  private[v2] object Alt {
+    final def apply[A, B0](
+      _codec: Codec[B0],
+      _prism: Prism[A, B0]
+    ): Alt[A] =
+      new Alt[A] {
+        override final type B = B0
+        override final val codec: Codec[B] = _codec
+        override final val prism: Prism[A, B] = _prism
+      }
+  }
+
+  /** @group Create
+    */
+  sealed abstract class AltBuilder[A] {
+    def apply[B](implicit codec: Codec[B], prism: Prism[A, B]): Chain[Alt[A]]
+  }
+
+  private[v2] object AltBuilder {
+    private[this] final val Instance: AltBuilder[Any] =
+      new AltBuilder[Any] {
+        override final def apply[B](implicit
+          codec: Codec[B],
+          prism: Prism[Any, B]
+        ): Chain[Alt[Any]] =
+          Chain.one(Alt(codec, prism))
+
+        override final def toString: String =
+          "AltBuilder"
+      }
+
+    final def instance[A]: AltBuilder[A] =
+      Instance.asInstanceOf[AltBuilder[A]]
+  }
 
   private[v2] final case class ImapErrors[A, B](
     codec: Codec[A],
@@ -676,6 +775,112 @@ object Codec {
 
         case _ =>
           failing(unexpectedSchemaType(writerSchema, "map"))
+      }
+  }
+
+  /** Codec for options, as unions with `null` first, including the types of unions. */
+  private[v2] final case class OptionCodec[A](codec: Codec[A]) extends Codec[Option[A]] {
+    override lazy val schema: Either[AvroError, Schema] =
+      codec.schema.flatMap { schema =>
+        val types =
+          schema match {
+            case union: Schema.Union => union.types
+            case _                   => Vector(schema)
+          }
+
+        validated(Schema.Union(Schema.Null +: types))
+      }
+
+    /** Whether the types of the union of the codec are included in the union of the option. */
+    private lazy val includesUnion: Boolean =
+      codec.schema.exists(_.isInstanceOf[Schema.Union])
+
+    override def encode(option: Option[A]): Either[AvroError, AvroValue] =
+      (schema, option) match {
+        case (Right(_), Some(a)) =>
+          codec.encode(a).flatMap {
+            case AvroValue.Union(index, value) if includesUnion =>
+              Right(AvroValue.Union(index + 1, value))
+
+            case value if !includesUnion =>
+              Right(AvroValue.Union(1, value))
+
+            case value =>
+              Left(AvroError(s"Invalid ${ValueNames.typeName(value)} value for union"))
+          }
+
+        case (Right(_), None) =>
+          EncodedNone
+
+        case (Left(error), _) =>
+          Left(error)
+      }
+
+    override def resolve(
+      writerSchema: Schema,
+      definitions: Definitions
+    ): AvroValue => Either[AvroError, Option[A]] =
+      (schema, writerSchema) match {
+        case (Left(error), _) =>
+          failing(error)
+
+        case (Right(_), _: Schema.Null) => {
+          case AvroValue.Null => DecodedNone
+          case value          => Left(invalidValue(value, writerSchema))
+        }
+
+        case (Right(_), _) =>
+          val decode = codec.resolve(writerSchema, definitions)
+          decode(_).map(Some(_))
+      }
+  }
+
+  /** Codec for unions, which decodes using the alternative for the written type. */
+  private[v2] final case class UnionCodec[A](alternatives: Chain[Alt[A]]) extends Codec[A] {
+    private val alts: Vector[Alt[A]] =
+      alternatives.toVector
+
+    private lazy val types: Either[AvroError, Vector[Schema]] =
+      build(alts.iterator, vectorBuilder[Schema](alts.size))(_.codec.schema)
+
+    override lazy val schema: Either[AvroError, Schema] =
+      types.flatMap(types => validated(Schema.Union(types)))
+
+    override def encode(a: A): Either[AvroError, AvroValue] =
+      schema match {
+        case Right(_)    => encodeWith(a, 0)
+        case Left(error) => Left(error)
+      }
+
+    @tailrec private def encodeWith(a: A, index: Int): Either[AvroError, AvroValue] =
+      if (index < alts.length) {
+        val alt = alts(index)
+        alt.prism.getOption(a) match {
+          case Some(value) => alt.codec.encode(value).map(AvroValue.Union(index, _))
+          case None        => encodeWith(a, index + 1)
+        }
+      } else Left(AvroError("Exhausted alternatives for union"))
+
+    override def resolve(
+      writerSchema: Schema,
+      definitions: Definitions
+    ): AvroValue => Either[AvroError, A] =
+      schema.flatMap(_ => types) match {
+        case Right(types) =>
+          unionType(writerSchema, types) match {
+            case Some(index) =>
+              val alt = alts(index)
+              val decode = alt.codec.resolve(writerSchema, definitions)
+              decode(_).map(alt.prism.reverseGet)
+
+            case None =>
+              failing {
+                AvroError(s"Missing alternative for ${SchemaNames.describe(writerSchema)} in union")
+              }
+          }
+
+        case Left(error) =>
+          failing(error)
       }
   }
 
@@ -1226,6 +1431,57 @@ object Codec {
     logicalType match {
       case Some(logicalType) => AvroError(s"Got unexpected logical type ${logicalType.name}")
       case None              => AvroError("Got unexpected missing logical type")
+    }
+
+  private val EncodedNone: Either[AvroError, AvroValue] =
+    Right(AvroValue.Union(0, AvroValue.Null))
+
+  private val DecodedNone: Either[AvroError, Option[Nothing]] =
+    Right(None)
+
+  /** The index of the union type to decode values of the writer schema with: the same type, or a
+    * named type with the same full name or alias, then the same name, then a promoted type.
+    */
+  private def unionType(writerSchema: Schema, types: Vector[Schema]): Option[Int] = {
+    def find(matches: Schema => Boolean): Option[Int] =
+      Some(types.indexWhere(matches)).filter(_ >= 0)
+
+    writerSchema match {
+      case named: Schema.Named =>
+        find(sameNamedType(named, _)(_.fullName))
+          .orElse(find(sameNamedType(named, _)(_.name)))
+
+      case _ =>
+        find(SchemaNames.typeName(_) == SchemaNames.typeName(writerSchema))
+          .orElse(find(isPromotion(writerSchema, _)))
+    }
+  }
+
+  /** Returns `true` if the schema is the same kind of named schema, with the name of the writer
+    * schema as its name or as an alias, comparing names using the function.
+    */
+  private def sameNamedType(writerSchema: Schema.Named, schema: Schema)(
+    name: Schema.Name => String
+  ): Boolean =
+    schema match {
+      case named: Schema.Named
+          if SchemaNames.typeName(named) == SchemaNames.typeName(writerSchema) =>
+        val aliases = named.aliases.map(SchemaNames.resolve(_, named.name.namespace))
+        (named.name +: aliases).exists(name(_) == name(writerSchema.name))
+
+      case _ =>
+        false
+    }
+
+  /** Returns `true` if values of the writer schema can be promoted to the schema. */
+  private def isPromotion(writerSchema: Schema, schema: Schema): Boolean =
+    (writerSchema, schema) match {
+      case (_: Schema.Int, _: Schema.Long | _: Schema.Float | _: Schema.Double) => true
+      case (_: Schema.Long, _: Schema.Float | _: Schema.Double)                 => true
+      case (_: Schema.Float, _: Schema.Double)                                  => true
+      case (_: Schema.String, _: Schema.Bytes)                                  => true
+      case (_: Schema.Bytes, _: Schema.String)                                  => true
+      case _                                                                    => false
     }
 
   /** The schema, if it is valid, including defaults. */

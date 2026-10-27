@@ -17,7 +17,7 @@ import org.scalacheck.Gen
 import org.scalatest.Assertion
 import scala.util.{Failure, Success, Try}
 import scodec.bits._
-import vulcan.{AvroError, BaseSpec}
+import vulcan.{AvroError, BaseSpec, Prism}
 import vulcan.v2.Codec.InstantMicros
 import vulcan.v2.examples._
 
@@ -541,6 +541,56 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           assertDecodeIs[Double](
             unsafeEncode(value),
             Right(value)
+          )
+        }
+      }
+    }
+
+    describe("either") {
+      describe("schema") {
+        it("should be encoded as union") {
+          assertSchemaIs[Either[Int, Double]] {
+            """["int","double"]"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode left using left schema") {
+          assertEncodeIs[Either[Int, Double]](
+            Left(1),
+            Right(AvroValue.Union(0, AvroValue.Int(1)))
+          )
+        }
+
+        it("should encode right using right schema") {
+          assertEncodeIs[Either[Int, Double]](
+            Right(1d),
+            Right(AvroValue.Union(1, AvroValue.Double(1d)))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema type not in union") {
+          assertDecodeError[Either[Int, Double]](
+            unsafeEncode[Either[Int, Double]](Right(1d)),
+            unsafeSchema[String],
+            "Error decoding Either: Missing alternative for string in union"
+          )
+        }
+
+        it("should decode left value as left") {
+          assertDecodeIs[Either[Int, Double]](
+            unsafeEncode[Either[Int, Double]](Left(1)),
+            Right(Left(1))
+          )
+        }
+
+        it("should decode right value as right") {
+          assertDecodeIs[Either[Int, Double]](
+            unsafeEncode[Either[Int, Double]](Right(1d)),
+            Right(Right(1d))
           )
         }
       }
@@ -1655,6 +1705,50 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       }
     }
 
+    describe("none") {
+      describe("schema") {
+        it("should be encoded as null") {
+          assertSchemaIs[None.type] {
+            """"null""""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as null") {
+          assertEncodeIs[None.type](
+            None,
+            Right(AvroValue.Null)
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not null") {
+          assertDecodeError[None.type](
+            unsafeEncode(None),
+            unsafeSchema[Int],
+            "Error decoding None: Got unexpected schema type int, expected schema type null"
+          )
+        }
+
+        it("should error if value is not null") {
+          assertDecodeError[None.type](
+            unsafeEncode(10),
+            unsafeSchema[None.type],
+            "Error decoding None: Invalid int value for null"
+          )
+        }
+
+        it("should decode null as None") {
+          assertDecodeIs[None.type](
+            unsafeEncode(()),
+            Right(None)
+          )
+        }
+      }
+    }
+
     describe("nonEmptyChain") {
       describe("schema") {
         it("should be encoded as array") {
@@ -1928,6 +2022,217 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       }
     }
 
+    describe("option") {
+      describe("schema") {
+        it("should be encoded as union") {
+          assertSchemaIs[Option[Double]] {
+            """["null","double"]"""
+          }
+        }
+
+        it("should include the types of unions") {
+          assertSchemaIs[Option[Either[Int, String]]] {
+            """["null","int","string"]"""
+          }
+        }
+
+        it("should capture errors on nested unions") {
+          assertSchemaError[Option[Option[Int]]] {
+            """Duplicate null in union ["null","null","int"]"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode Some") {
+          assertEncodeIs[Option[Int]](
+            Some(1),
+            Right(AvroValue.Union(1, AvroValue.Int(1)))
+          )
+        }
+
+        it("should encode None as null") {
+          assertEncodeIs[Option[Int]](
+            None,
+            Right(AvroValue.Union(0, AvroValue.Null))
+          )
+        }
+
+        it("should encode Some using the types of unions") {
+          assertEncodeIs[Option[Either[Int, String]]](
+            Some(Right("a")),
+            Right(AvroValue.Union(2, AvroValue.String("a")))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not in union") {
+          assertDecodeError[Option[Int]](
+            unsafeEncode(Option(1)),
+            unsafeSchema[String],
+            "Error decoding Option: Error decoding Int: Got unexpected schema type string, expected schema type int"
+          )
+        }
+
+        it("should decode if schema is part of union") {
+          assertDecodeIs[Option[Int]](
+            AvroValue.Int(1),
+            Right(Some(1)),
+            Some(unsafeSchema[Int])
+          )
+        }
+
+        it("should decode even if there is one schema in union") {
+          assertDecodeIs[Option[Int]](
+            AvroValue.Union(0, AvroValue.Int(1)),
+            Right(Some(1)),
+            Some(Schema.Union(Vector(Schema.Int)))
+          )
+        }
+
+        it("should decode even if there is not null in union") {
+          assertDecodeIs[Option[Int]](
+            AvroValue.Union(0, AvroValue.Int(1)),
+            Right(Some(1)),
+            Some(Schema.Union(Vector(Schema.Int, Schema.String)))
+          )
+        }
+
+        it("should decode if there are more than two schemas in union") {
+          assertDecodeIs[Option[Int]](
+            AvroValue.Union(0, AvroValue.Int(1)),
+            Right(Some(1)),
+            Some(Schema.Union(Vector(Schema.Int, Schema.String, Schema.Null)))
+          )
+        }
+
+        it("should support null as first schema type in union") {
+          assertDecodeIs[Option[Int]](
+            AvroValue.Union(1, AvroValue.Int(1)),
+            Right(Some(1)),
+            Some(Schema.Union(Vector(Schema.Null, Schema.Int)))
+          )
+        }
+
+        it("should support null as second schema type in union") {
+          assertDecodeIs[Option[Int]](
+            AvroValue.Union(0, AvroValue.Int(1)),
+            Right(Some(1)),
+            Some(Schema.Union(Vector(Schema.Int, Schema.Null)))
+          )
+        }
+
+        it("should decode the written type using its schema") {
+          assertDecodeIs[Option[Long]](
+            AvroValue.Union(1, AvroValue.Int(1)),
+            Right(Some(1L)),
+            Some(Schema.Union(Vector(Schema.Null, Schema.Int)))
+          )
+        }
+
+        it("should decode using the types of unions") {
+          assertDecodeIs[Option[Either[Int, String]]](
+            AvroValue.Union(2, AvroValue.String("a")),
+            Right(Some(Right("a")))
+          )
+        }
+
+        it("should decode null as None") {
+          assertDecodeIs[Option[Int]](
+            unsafeEncode(Option.empty[Int]),
+            Right(None)
+          )
+        }
+
+        it("should decode null as None if the writer schema is not a union") {
+          assertDecodeIs[Option[Int]](
+            AvroValue.Null,
+            Right(None),
+            Some(Schema.Null)
+          )
+        }
+      }
+    }
+
+    describe("option.union") {
+      sealed trait FirstOrSecond
+
+      final case class First(value: Int) extends FirstOrSecond
+      object First {
+        implicit val firstCodec: Codec[First] =
+          Codec[Int].imap(apply)(_.value)
+      }
+
+      final case class Second(value: Double) extends FirstOrSecond
+      object Second {
+        implicit val secondCodec: Codec[Second] =
+          Codec[Double].imap(apply)(_.value)
+      }
+
+      implicit val codec: Codec[Option[FirstOrSecond]] =
+        Codec.union(alt => alt[None.type] ++ alt[Some[First]] ++ alt[Some[Second]])
+
+      describe("schema") {
+        it("should be encoded as union") {
+          assertSchemaIs[Option[FirstOrSecond]] {
+            """["null","int","double"]"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode none as null") {
+          assert(codec.encode(None) == Right(AvroValue.Union(0, AvroValue.Null)))
+        }
+
+        it("should encode first as int") {
+          forAll { (n: Int) =>
+            assert(codec.encode(Some(First(n))) == Right(AvroValue.Union(1, AvroValue.Int(n))))
+          }
+        }
+
+        it("should encode second as double") {
+          forAll { (n: Double) =>
+            assert(codec.encode(Some(Second(n))) == Right(AvroValue.Union(2, AvroValue.Double(n))))
+          }
+        }
+      }
+
+      describe("decode") {
+        it("should decode null as none") {
+          assert {
+            codec.decode(
+              AvroValue.Union(0, AvroValue.Null),
+              unsafeSchema[Option[FirstOrSecond]]
+            ) == Right(None)
+          }
+        }
+
+        it("should decode int as first") {
+          forAll { (n: Int) =>
+            assert {
+              codec.decode(
+                AvroValue.Union(1, AvroValue.Int(n)),
+                unsafeSchema[Option[FirstOrSecond]]
+              ) == Right(Some(First(n)))
+            }
+          }
+        }
+
+        it("should decode double as second") {
+          forAll { (n: Double) =>
+            assert {
+              codec.decode(
+                AvroValue.Union(2, AvroValue.Double(n)),
+                unsafeSchema[Option[FirstOrSecond]]
+              ) == Right(Some(Second(n)))
+            }
+          }
+        }
+      }
+    }
+
     describe("seq") {
       describe("schema") {
         it("should be encoded as array") {
@@ -2180,6 +2485,156 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
     describe("toJson") {
       it("should encode to avro json") {
         assert(Codec.toJson[Int](1) == Right(Json.fromInt(1)))
+      }
+    }
+
+    describe("union") {
+      def enumCodec(
+        name: String,
+        namespace: String,
+        aliases: Seq[String] = Seq.empty
+      ): Codec[String] =
+        Codec.enumeration[String](
+          name = name,
+          namespace = namespace,
+          symbols = List("A", "B"),
+          encode = identity,
+          decode = Right(_),
+          aliases = aliases
+        )
+
+      def unionOf(first: Codec[String], second: Codec[String]): Codec[Either[String, String]] =
+        Codec.union[Either[String, String]] { alt =>
+          alt[Left[String, String]](Codec.left(first), Prism.left) ++
+            alt[Right[String, String]](Codec.right(second), Prism.right)
+        }
+
+      def enumSchema(name: String, namespace: String): Schema =
+        Schema.Enum(Schema.Name(name, Some(namespace)), Vector("A", "B"))
+
+      describe("schema") {
+        it("should encode as union") {
+          assertSchemaIs[Either[String, String]] {
+            """[{"type":"enum","name":"Suit","namespace":"a","symbols":["A","B"]},{"type":"enum","name":"Suit","namespace":"b","symbols":["A","B"]}]"""
+          }(unionOf(enumCodec("Suit", "a"), enumCodec("Suit", "b")))
+        }
+
+        it("should capture errors on nested unions") {
+          assertSchemaError[SealedTraitCaseClassNestedUnion] {
+            """Unions cannot directly contain other unions: [["null","int"]]"""
+          }
+        }
+
+        it("should capture errors on duplicate types") {
+          assertSchemaError[Either[Int, Int]] {
+            """Duplicate int in union ["int","int"]"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should error if subtype is not an alternative") {
+          assertEncodeError[SealedTraitCaseClassIncomplete](
+            SecondInSealedTraitCaseClassIncomplete(0d),
+            "Exhausted alternatives for union"
+          )
+        }
+
+        it("should error if subtype is not an alternative and value null") {
+          assertEncodeError[SealedTraitCaseClassIncomplete](
+            null,
+            "Exhausted alternatives for union"
+          )
+        }
+
+        it("should encode with encoder for alternative") {
+          assertEncodeIs[SealedTraitCaseClassIncomplete](
+            FirstInSealedTraitCaseClassIncomplete(0),
+            Right(AvroValue.Union(0, AvroValue.Int(0)))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if there is no alternative for the written type") {
+          assertDecodeError[Either[Int, String]](
+            AvroValue.Boolean(true),
+            Schema.Boolean,
+            "Error decoding Either: Missing alternative for boolean in union"
+          )
+        }
+
+        it("should decode using the alternative for the written type") {
+          assertDecodeIs[Either[Int, String]](
+            AvroValue.Union(1, AvroValue.Int(1)),
+            Right(Left(1)),
+            Some(Schema.Union(Vector(Schema.String, Schema.Int)))
+          )
+        }
+
+        it("should decode written types which are not unions") {
+          assertDecodeIs[Either[Int, String]](
+            AvroValue.String("a"),
+            Right(Right("a")),
+            Some(Schema.String)
+          )
+        }
+
+        it("should decode using the alternative of the same type before promotion") {
+          assertDecodeIs[Either[Double, Long]](
+            AvroValue.Long(1L),
+            Right(Right(1L)),
+            Some(Schema.Long)
+          )
+        }
+
+        it("should decode using promotion if there is no alternative of the same type") {
+          assertDecodeIs[Either[Long, String]](
+            AvroValue.Int(1),
+            Right(Left(1L)),
+            Some(Schema.Int)
+          )
+        }
+
+        it("should return the error of the alternative for the written type") {
+          assertDecodeError[Either[Byte, String]](
+            AvroValue.Int(1000),
+            Schema.Int,
+            "Error decoding Either: Error decoding Byte: Got unexpected Int value 1000, expected value in range -128 to 127"
+          )
+        }
+
+        it("should decode named types using the full name") {
+          assertDecodeIs[Either[String, String]](
+            AvroValue.Enum("A"),
+            Right(Right("A")),
+            Some(enumSchema("Suit", "b"))
+          )(unionOf(enumCodec("Suit", "a"), enumCodec("Suit", "b")))
+        }
+
+        it("should decode named types using an alias") {
+          assertDecodeIs[Either[String, String]](
+            AvroValue.Enum("A"),
+            Right(Right("A")),
+            Some(enumSchema("Old", "a"))
+          )(unionOf(enumCodec("Card", "a"), enumCodec("Suit", "b", aliases = List("a.Old"))))
+        }
+
+        it("should decode named types using the name if there is no full name") {
+          assertDecodeIs[Either[String, String]](
+            AvroValue.Enum("A"),
+            Right(Right("A")),
+            Some(enumSchema("Suit", "c"))
+          )(unionOf(enumCodec("Card", "a"), enumCodec("Suit", "b")))
+        }
+
+        it("should error if there is no named type of the same kind") {
+          assertDecodeError[Either[String, String]](
+            AvroValue.Fixed(hex"00"),
+            Schema.Fixed(Schema.Name("Suit", Some("b")), 1),
+            "Missing alternative for fixed b.Suit in union"
+          )(unionOf(enumCodec("Card", "a"), enumCodec("Suit", "b")))
+        }
       }
     }
 
