@@ -6,6 +6,7 @@
 
 package vulcan.v2.internal
 
+import scala.collection.immutable.ArraySeq
 import scala.collection.mutable
 import scodec.bits.ByteVector
 import vulcan.AvroError
@@ -161,13 +162,13 @@ private[v2] object BinaryDecoder {
 
   private final class RecordNode(fields: Array[Node]) extends Node {
     override def read(input: Input): AvroValue = {
-      val values = Vector.newBuilder[AvroValue]
+      val values = new Array[AnyRef](fields.length)
       var index = 0
       while (index < fields.length) {
-        values += fields(index).read(input)
+        values(index) = fields(index).read(input)
         index += 1
       }
-      AvroValue.Record(values.result())
+      AvroValue.Record(Vector.from(arraySeq[AvroValue](values)))
     }
   }
 
@@ -188,37 +189,57 @@ private[v2] object BinaryDecoder {
       AvroValue.Fixed(input.reader.readFixed(size))
   }
 
-  private final class ArrayNode(items: Node, minItemSize: Long) extends Node {
-    override def read(input: Input): AvroValue = {
-      val values = Vector.newBuilder[AvroValue]
+  /** Arrays and maps, which are encoded in blocks, usually with all items in a single block. */
+  private sealed abstract class BlocksNode[A <: AnyRef](minItemSize: Long) extends Node {
+    protected def readItem(input: Input): A
+
+    protected final def readItems(input: Input): Vector[A] = {
       var count = readBlockCount(input, minItemSize)
-      while (count > 0) {
-        var index = 0L
-        while (index < count) {
-          values += items.read(input)
+      if (count == 0) Vector.empty
+      else {
+        val first = new Array[AnyRef](count.toInt)
+        var index = 0
+        while (index < first.length) {
+          first(index) = readItem(input)
           index += 1
         }
+
         count = readBlockCount(input, minItemSize)
+        if (count == 0) Vector.from(arraySeq[A](first))
+        else {
+          val items = Vector.newBuilder[A] ++= arraySeq[A](first)
+          while (count > 0) {
+            var index = 0L
+            while (index < count) {
+              items += readItem(input)
+              index += 1
+            }
+            count = readBlockCount(input, minItemSize)
+          }
+          items.result()
+        }
       }
-      AvroValue.Array(values.result())
     }
   }
 
-  private final class MapNode(values: Node, minEntrySize: Long) extends Node {
-    override def read(input: Input): AvroValue = {
-      val entries = Vector.newBuilder[(String, AvroValue)]
-      var count = readBlockCount(input, minEntrySize)
-      while (count > 0) {
-        var index = 0L
-        while (index < count) {
-          val key = input.reader.readString()
-          entries += ((key, values.read(input)))
-          index += 1
-        }
-        count = readBlockCount(input, minEntrySize)
-      }
-      AvroValue.Map(entries.result())
+  private final class ArrayNode(items: Node, minItemSize: Long)
+      extends BlocksNode[AvroValue](minItemSize) {
+    override protected def readItem(input: Input): AvroValue =
+      items.read(input)
+
+    override def read(input: Input): AvroValue =
+      AvroValue.Array(readItems(input))
+  }
+
+  private final class MapNode(values: Node, minEntrySize: Long)
+      extends BlocksNode[(String, AvroValue)](minEntrySize) {
+    override protected def readItem(input: Input): (String, AvroValue) = {
+      val key = input.reader.readString()
+      (key, values.read(input))
     }
+
+    override def read(input: Input): AvroValue =
+      AvroValue.Map(readItems(input))
   }
 
   private final class UnionNode(types: Array[Node]) extends Node {
@@ -308,4 +329,7 @@ private[v2] object BinaryDecoder {
 
   private def add(first: Long, second: Long): Long =
     if (first > Long.MaxValue - second) Long.MaxValue else first + second
+
+  private def arraySeq[A](values: Array[AnyRef]): ArraySeq[A] =
+    ArraySeq.unsafeWrapArray(values).asInstanceOf[ArraySeq[A]]
 }
