@@ -12,14 +12,11 @@ import vulcan.AvroError
 import vulcan.v2.{AvroValue, Schema}
 
 /** Decodes values in the Avro binary encoding of a writer schema, compiled once for the schema. */
-private[v2] final class BinaryDecoder private (
-  root: BinaryDecoder.Node,
-  maxZeroByteItems: Long
-) {
+private[v2] final class BinaryDecoder private (root: BinaryDecoder.Node) {
 
   /** Reads a value, throwing [[BinaryException]] for invalid input. */
   def read(reader: BinaryReader): AvroValue =
-    root.read(new BinaryDecoder.Input(reader, maxZeroByteItems))
+    root.read(new BinaryDecoder.Input(reader))
 
   /** Decodes a value from the start of the bytes, ignoring any remaining bytes. */
   def decode(bytes: ByteVector): Either[AvroError, AvroValue] =
@@ -31,15 +28,12 @@ private[v2] final class BinaryDecoder private (
 
 private[v2] object BinaryDecoder {
 
-  /** The default limit for the total number of array items which are encoded using zero bytes. */
-  val DefaultMaxZeroByteItems: Long =
+  /** The limit for the total number of array items in a value encoded using zero bytes. */
+  val MaxZeroByteItems: Long =
     1000000L
 
   /** Returns a decoder for the writer schema, if the schema is valid. */
-  def apply(
-    writerSchema: Schema,
-    maxZeroByteItems: Long = DefaultMaxZeroByteItems
-  ): Either[AvroError, BinaryDecoder] =
+  def apply(writerSchema: Schema): Either[AvroError, BinaryDecoder] =
     SchemaValidator.validate(writerSchema, validateDefaults = false).flatMap { _ =>
       val definitions = namedSchemas(writerSchema)
 
@@ -56,12 +50,12 @@ private[v2] object BinaryDecoder {
 
         case None =>
           val root = new Compilation(definitions).compile(writerSchema)
-          Right(new BinaryDecoder(root, maxZeroByteItems))
+          Right(new BinaryDecoder(root))
       }
     }
 
   /** The state of reading a value, including the number of zero byte items read so far. */
-  private final class Input(val reader: BinaryReader, val maxZeroByteItems: Long) {
+  private final class Input(val reader: BinaryReader) {
     var zeroByteItems: Long = 0L
   }
 
@@ -249,9 +243,9 @@ private[v2] object BinaryDecoder {
           s"Invalid block count $count at position $begin, exceeding the remaining input"
         )
     } else {
-      if (count > input.maxZeroByteItems - input.zeroByteItems)
+      if (count > MaxZeroByteItems - input.zeroByteItems)
         throw new BinaryException(
-          s"Invalid block count $count at position $begin, exceeding the limit of ${input.maxZeroByteItems} zero byte items"
+          s"Invalid block count $count at position $begin, exceeding the limit of $MaxZeroByteItems zero byte items"
         )
       input.zeroByteItems += count
     }

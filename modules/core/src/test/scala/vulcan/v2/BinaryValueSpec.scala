@@ -8,7 +8,7 @@ package vulcan.v2
 
 import scodec.bits._
 import vulcan.BaseSpec
-import vulcan.v2.internal.{BinaryDecoder, BinaryEncoder, BinaryReader}
+import vulcan.v2.internal.{BinaryDecoder, BinaryEncoder, BinaryReader, BinaryWriter}
 
 final class BinaryValueSpec extends BaseSpec {
   private def encode(schema: Schema, value: AvroValue): ByteVector =
@@ -27,6 +27,13 @@ final class BinaryValueSpec extends BaseSpec {
 
   private def decodeError(schema: Schema, bytes: ByteVector): String =
     BinaryDecoder(schema).value.decode(bytes).swap.value.message
+
+  /** Block counts without items, which is valid for items encoded using zero bytes. */
+  private def blockCounts(counts: Long*): ByteVector = {
+    val writer = new BinaryWriter(0)
+    counts.foreach(writer.writeLong)
+    writer.toByteVector
+  }
 
   private def name(name: String): Schema.Name =
     Schema.Name(name)
@@ -211,29 +218,33 @@ final class BinaryValueSpec extends BaseSpec {
 
     it("should limit the total number of items which are encoded using zero bytes") {
       val nulls = Schema.Array(Schema.Null)
-      val decoder = BinaryDecoder(nulls, maxZeroByteItems = 2L).value
-      assert(decoder.decode(hex"0400") == Right(AvroValue.Array(Vector.fill(2)(AvroValue.Null))))
+      val limit = BinaryDecoder.MaxZeroByteItems
 
       assert {
-        decoder.decode(hex"0600").swap.value.message ==
-          "Invalid block count 3 at position 0, exceeding the limit of 2 zero byte items"
+        decode(nulls, blockCounts(limit, 0L)) ==
+          AvroValue.Array(Vector.fill(limit.toInt)(AvroValue.Null))
+      }
+
+      assert {
+        decodeError(nulls, blockCounts(limit + 1, 0L)) ==
+          s"Invalid block count ${limit + 1} at position 0, exceeding the limit of $limit zero byte items"
       }
 
       val twoArrays =
         Schema.Record(name("Nulls"), Vector(Schema.Field("a", nulls), Schema.Field("b", nulls)))
 
+      val first = limit / 2 + 1
+      val second = limit - first + 1
+      val position = blockCounts(first, 0L).size
+
       assert {
-        BinaryDecoder(twoArrays, maxZeroByteItems = 3L).value
-          .decode(hex"04000400")
-          .swap
-          .value
-          .message ==
-          "Invalid block count 2 at position 2, exceeding the limit of 3 zero byte items"
+        decodeError(twoArrays, blockCounts(first, 0L, second, 0L)) ==
+          s"Invalid block count $second at position $position, exceeding the limit of $limit zero byte items"
       }
 
       assert {
-        decodeError(Schema.Array(Schema.Null), hex"feffffffffffffffff01") ==
-          s"Invalid block count ${Long.MaxValue} at position 0, exceeding the limit of ${BinaryDecoder.DefaultMaxZeroByteItems} zero byte items"
+        decodeError(nulls, blockCounts(Long.MaxValue)) ==
+          s"Invalid block count ${Long.MaxValue} at position 0, exceeding the limit of $limit zero byte items"
       }
     }
 
