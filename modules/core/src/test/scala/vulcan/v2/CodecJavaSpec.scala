@@ -12,6 +12,7 @@ import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, ZoneOffset}
 import java.util.UUID
 import org.apache.avro.Conversions
 import org.apache.avro.data.TimeConversions
+import org.apache.avro.generic.GenericFixed
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalatest.Assertion
@@ -77,6 +78,58 @@ final class CodecJavaSpec extends BaseSpec {
           forAll(AvroValueGenerators.genValue(writerSchema)) { value =>
             assertSameAsJava(Reader.map(reader), writerSchema, value)
           }
+        }
+      }
+    }
+
+    it("should decode enums the same as the Java Avro library resolves schemas") {
+      def reader(default: Option[String]): Reader[String] =
+        Reader(
+          Codec.enumeration[String](
+            name = "Suit",
+            namespace = "",
+            symbols = List("Hearts", "Spades"),
+            encode = identity,
+            decode = Right(_),
+            default = default
+          ),
+          _.toString
+        )
+
+      val writerSymbols =
+        List(
+          Vector("Hearts", "Spades"),
+          Vector("Spades", "Hearts"),
+          Vector("Clubs", "Hearts", "Spades")
+        )
+
+      writerSymbols.foreach { symbols =>
+        List(reader(Some("Hearts")), reader(None)).foreach { reader =>
+          val writerSchema = Schema.Enum(Schema.Name("Suit"), symbols)
+          forAll(AvroValueGenerators.genValue(writerSchema)) { value =>
+            assertSameAsJava(reader, writerSchema, value)
+          }
+        }
+      }
+    }
+
+    it("should decode fixed the same as the Java Avro library resolves schemas") {
+      val reader =
+        Reader[ByteVector](
+          Codec.fixed[ByteVector](
+            name = "Id",
+            namespace = "",
+            size = 2,
+            encode = identity,
+            decode = Right(_)
+          ),
+          fixed => ByteVector(fixed.asInstanceOf[GenericFixed].bytes)
+        )
+
+      List(1, 2, 3).foreach { size =>
+        val writerSchema = Schema.Fixed(Schema.Name("Id"), size)
+        forAll(AvroValueGenerators.genValue(writerSchema)) { value =>
+          assertSameAsJava(reader, writerSchema, value)
         }
       }
     }

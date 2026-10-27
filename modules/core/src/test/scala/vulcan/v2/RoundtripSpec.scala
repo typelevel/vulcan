@@ -17,6 +17,7 @@ import scala.collection.immutable.{SortedMap, SortedSet}
 import scodec.bits.ByteVector
 import vulcan.{AvroError, BaseSpec}
 import vulcan.v2.Codec.InstantMicros
+import vulcan.v2.examples._
 
 final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
   describe("BigDecimal") {
@@ -61,6 +62,10 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
   describe("Char") { it("roundtrip") { roundtrip[Char] } }
 
   describe("Double") { it("roundtrip") { roundtrip[Double] } }
+
+  describe("Enum") { it("roundtrip") { roundtrip[SealedTraitEnum] } }
+
+  describe("Fixed") { it("roundtrip") { roundtrip[FixedBoolean] } }
 
   describe("Float") { it("roundtrip") { roundtrip[Float] } }
 

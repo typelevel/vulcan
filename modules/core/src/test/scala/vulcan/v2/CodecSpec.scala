@@ -8,7 +8,7 @@ package vulcan.v2
 
 import cats.data._
 import cats.syntax.all._
-import io.circe.Json
+import io.circe.{Json, JsonObject}
 import java.nio.charset.StandardCharsets
 import java.time._
 import java.time.temporal.ChronoUnit
@@ -19,6 +19,7 @@ import scala.util.{Failure, Success, Try}
 import scodec.bits._
 import vulcan.{AvroError, BaseSpec}
 import vulcan.v2.Codec.InstantMicros
+import vulcan.v2.examples._
 
 final class CodecSpec extends BaseSpec with CodecSpecHelpers {
   describe("Codec") {
@@ -549,6 +550,244 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       it("should encode using codec for type") {
         forAll { (n: Int) =>
           assert(Codec.encode(n).value == AvroValue.Int(n))
+        }
+      }
+    }
+
+    describe("enum") {
+      def enumCodec(
+        default: Option[String] = None,
+        props: JsonObject = JsonObject.empty
+      ): Codec[String] =
+        Codec.enumeration[String](
+          name = "Enum",
+          namespace = "",
+          symbols = List("first", "second"),
+          encode = identity,
+          decode = Right(_),
+          default = default,
+          props = props
+        )
+
+      describe("schema") {
+        it("should have expected schema") {
+          assertSchemaIs[SealedTraitEnum] {
+            """{"type":"enum","name":"SealedTraitEnum","namespace":"vulcan.examples","doc":"documentation","symbols":["first","second"],"default":"first","custom1":10,"custom2":"value2","aliases":["first","second"]}"""
+          }
+        }
+
+        it("should capture errors on invalid schema") {
+          assertSchemaError[`-SealedTraitEnumInvalidName`] {
+            """Invalid name "-SealedTraitEnumInvalidName": must start with a letter or underscore"""
+          }
+        }
+
+        it("should error if the default is not a symbol") {
+          assertSchemaError[String] {
+            """Default "third" is not a symbol of enum Enum"""
+          }(enumCodec(default = Some("third")))
+        }
+
+        it("should error if properties are reserved") {
+          assertSchemaError[String] {
+            """Invalid property "symbols" of enum Enum: name is reserved"""
+          }(enumCodec(props = JsonObject("symbols" -> Json.fromString("first"))))
+        }
+      }
+
+      describe("encode") {
+        it("should error if returned string is not a schema symbol") {
+          implicit val codec: Codec[SealedTraitEnum] =
+            Codec.enumeration(
+              name = "SealedTraitEnum",
+              namespace = "vulcan.examples",
+              symbols = List("symbol"),
+              encode = _ => "not-symbol",
+              decode = _ => Left(AvroError("error"))
+            )
+
+          assertEncodeError[SealedTraitEnum](
+            FirstInSealedTraitEnum,
+            "Error encoding vulcan.examples.SealedTraitEnum: Symbol not-symbol is not part of schema symbols [symbol]"
+          )
+        }
+
+        it("should encode a valid symbol") {
+          assertEncodeIs[SealedTraitEnum](
+            FirstInSealedTraitEnum,
+            Right(AvroValue.Enum("first"))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema type is not enum") {
+          assertDecodeError[SealedTraitEnum](
+            unsafeEncode[SealedTraitEnum](FirstInSealedTraitEnum),
+            unsafeSchema[String],
+            "Error decoding vulcan.examples.SealedTraitEnum: Got unexpected schema type string, expected schema type enum"
+          )
+        }
+
+        it("should error if value is not enum") {
+          assertDecodeError[SealedTraitEnum](
+            unsafeEncode(10),
+            unsafeSchema[SealedTraitEnum],
+            "Error decoding vulcan.examples.SealedTraitEnum: Invalid int value for enum vulcan.examples.SealedTraitEnum"
+          )
+        }
+
+        it("should return default value if encoded value is not a schema symbol") {
+          assertDecodeIs[SealedTraitEnum](
+            AvroValue.Enum("symbol"),
+            Right(FirstInSealedTraitEnum),
+            Some(
+              Schema.Enum(Schema.Name("SealedTraitEnum", Some("vulcan.examples")), Vector("symbol"))
+            )
+          )
+        }
+
+        it("should error if encoded value is not a schema symbol and there is no default value") {
+          assertDecodeError[SealedTraitEnumNoDefault](
+            AvroValue.Enum("symbol"),
+            Schema.Enum(
+              Schema.Name("SealedTraitEnumNoDefault", Some("vulcan.examples")),
+              Vector("symbol")
+            ),
+            "Error decoding vulcan.examples.SealedTraitEnumNoDefault: symbol is not one of schema symbols [first, second]"
+          )
+        }
+
+        it("should decode a valid symbol") {
+          assertDecodeIs[SealedTraitEnum](
+            unsafeEncode[SealedTraitEnum](FirstInSealedTraitEnum),
+            Right(FirstInSealedTraitEnum)
+          )
+        }
+
+        it("should decode a valid symbol with a different namespace") {
+          assertDecodeIs[SealedTraitEnum](
+            AvroValue.Enum("second"),
+            Right(SecondInSealedTraitEnum),
+            Some(
+              Schema.Enum(
+                Schema.Name("SealedTraitEnum", Some("vulcan.examples.alt")),
+                Vector("first", "second")
+              )
+            )
+          )
+        }
+
+        it("should decode symbols by name, regardless of their order") {
+          assertDecodeIs[SealedTraitEnum](
+            AvroValue.Enum("first"),
+            Right(FirstInSealedTraitEnum),
+            Some(
+              Schema.Enum(
+                Schema.Name("SealedTraitEnum", Some("vulcan.examples")),
+                Vector("second", "first")
+              )
+            )
+          )
+        }
+      }
+    }
+
+    describe("fixed") {
+      def fixedCodec(size: Int): Codec[ByteVector] =
+        Codec.fixed[ByteVector](
+          name = "Name",
+          namespace = "",
+          size = size,
+          encode = bytes => bytes,
+          decode = bytes => Right(bytes)
+        )
+
+      describe("schema") {
+        it("should have the expected schema") {
+          assertSchemaIs[FixedBoolean] {
+            """{"type":"fixed","name":"FixedBoolean","namespace":"vulcan.examples","doc":"A boolean represented as a byte","size":1,"custom":"value","aliases":["SomeOtherBoolean"]}"""
+          }
+        }
+
+        it("should fail for negative size") {
+          assertSchemaError[ByteVector] {
+            "Invalid size -1 for fixed Name"
+          }(fixedCodec(size = -1))
+        }
+      }
+
+      describe("encode") {
+        it("should error if length exceeds schema size") {
+          assertEncodeError[ByteVector](
+            hex"0001",
+            "Error encoding Name: Got 2 bytes, expected maximum fixed size 1"
+          )(fixedCodec(size = 1))
+        }
+
+        it("should encode as fixed") {
+          assertEncodeIs[FixedBoolean](
+            FalseFixedBoolean,
+            Right(AvroValue.Fixed(hex"00"))
+          )
+
+          assertEncodeIs[FixedBoolean](
+            TrueFixedBoolean,
+            Right(AvroValue.Fixed(hex"01"))
+          )
+        }
+
+        it("should pad bytes with zeros to the size") {
+          assertEncodeIs[ByteVector](
+            hex"01",
+            Right(AvroValue.Fixed(hex"010000"))
+          )(fixedCodec(size = 3))
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not fixed") {
+          assertDecodeError[FixedBoolean](
+            unsafeEncode[FixedBoolean](FalseFixedBoolean),
+            unsafeSchema[String],
+            "Error decoding vulcan.examples.FixedBoolean: Got unexpected schema type string, expected schema type fixed"
+          )
+        }
+
+        it("should error if value is not fixed") {
+          assertDecodeError[FixedBoolean](
+            AvroValue.Int(123),
+            unsafeSchema[FixedBoolean],
+            "Error decoding vulcan.examples.FixedBoolean: Invalid int value for fixed vulcan.examples.FixedBoolean"
+          )
+        }
+
+        it("should error if length does not match schema size") {
+          assertDecodeError[FixedBoolean](
+            AvroValue.Fixed(hex"0001"),
+            unsafeSchema[FixedBoolean],
+            "Error decoding vulcan.examples.FixedBoolean: Got 2 bytes, expected fixed size 1"
+          )
+        }
+
+        it("should error if size of writer schema is different") {
+          assertDecodeError[FixedBoolean](
+            AvroValue.Fixed(hex"0001"),
+            Schema.Fixed(Schema.Name("FixedBoolean", Some("vulcan.examples")), 2),
+            "Error decoding vulcan.examples.FixedBoolean: Got unexpected fixed size 2, expected fixed size 1"
+          )
+        }
+
+        it("should decode as fixed") {
+          assertDecodeIs[FixedBoolean](
+            unsafeEncode[FixedBoolean](FalseFixedBoolean),
+            Right(FalseFixedBoolean)
+          )
+
+          assertDecodeIs[FixedBoolean](
+            unsafeEncode[FixedBoolean](TrueFixedBoolean),
+            Right(TrueFixedBoolean)
+          )
         }
       }
     }

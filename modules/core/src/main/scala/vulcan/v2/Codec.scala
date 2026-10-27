@@ -8,7 +8,7 @@ package vulcan.v2
 
 import cats.{Invariant, Show}
 import cats.data.{Chain, NonEmptyChain, NonEmptyList, NonEmptyMap, NonEmptySet, NonEmptyVector}
-import io.circe.Json
+import io.circe.{Json, JsonObject}
 import java.nio.charset.StandardCharsets
 import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, ZoneOffset}
 import java.util.concurrent.atomic.AtomicReferenceArray
@@ -221,6 +221,51 @@ object Codec {
     */
   final def encode[A](a: A)(implicit codec: Codec[A]): Either[AvroError, AvroValue] =
     codec.encode(a)
+
+  /** Returns a new enum [[Codec]] for type `A`.
+    *
+    * Symbols which are not part of the enum decode to the default, if there is one.
+    *
+    * @group Create
+    */
+  final def enumeration[A](
+    name: String,
+    namespace: String,
+    symbols: Seq[String],
+    encode: A => String,
+    decode: String => Either[AvroError, A],
+    default: Option[A] = None,
+    doc: Option[String] = None,
+    aliases: Seq[String] = Seq.empty,
+    props: JsonObject = JsonObject.empty
+  ): Codec[A] = {
+    val enumName = SchemaNames.resolve(name, Some(namespace))
+    EnumCodec(enumName, symbols.toVector, encode, decode, default, doc, aliases.toVector, props)
+      .withTypeName(enumName.fullName)
+  }
+
+  /** Returns a new fixed [[Codec]] for type `A`.
+    *
+    * When encoding, bytes are zero-padded to the specified size. Zero-padding is applied at the
+    * end, and will remain in the input to `decode`. Encoding checks to ensure the size is not
+    * exceeded, while decoding ensures the exact size.
+    *
+    * @group Create
+    */
+  final def fixed[A](
+    name: String,
+    namespace: String,
+    size: Int,
+    encode: A => ByteVector,
+    decode: ByteVector => Either[AvroError, A],
+    doc: Option[String] = None,
+    aliases: Seq[String] = Seq.empty,
+    props: JsonObject = JsonObject.empty
+  ): Codec[A] = {
+    val fixedName = SchemaNames.resolve(name, Some(namespace))
+    FixedCodec(fixedName, size, encode, decode, doc, aliases.toVector, props)
+      .withTypeName(fixedName.fullName)
+  }
 
   /** @group General
     */
@@ -631,6 +676,113 @@ object Codec {
 
         case _ =>
           failing(unexpectedSchemaType(writerSchema, "map"))
+      }
+  }
+
+  /** Codec for enums, where unknown symbols decode to the default, if there is one. */
+  private[v2] final case class EnumCodec[A](
+    name: Schema.Name,
+    symbols: Vector[String],
+    encodeSymbol: A => String,
+    decodeSymbol: String => Either[AvroError, A],
+    default: Option[A],
+    doc: Option[String],
+    aliases: Vector[String],
+    props: JsonObject
+  ) extends Codec[A] {
+    private val symbolSet: Set[String] =
+      symbols.toSet
+
+    override lazy val schema: Either[AvroError, Schema] =
+      validated {
+        Schema
+          .Enum(name, symbols)
+          .withDefault(default.map(encodeSymbol))
+          .withDoc(doc)
+          .withAliases(aliases)
+          .withProps(props)
+      }
+
+    override def encode(a: A): Either[AvroError, AvroValue] =
+      schema match {
+        case Right(_) =>
+          val symbol = encodeSymbol(a)
+          if (symbolSet.contains(symbol)) Right(AvroValue.Enum(symbol))
+          else Left(AvroError.encodeSymbolNotInSchema(symbol, symbols))
+
+        case Left(error) =>
+          Left(error)
+      }
+
+    override def resolve(
+      writerSchema: Schema,
+      definitions: Definitions
+    ): AvroValue => Either[AvroError, A] =
+      (schema, writerSchema) match {
+        case (Left(error), _) =>
+          failing(error)
+
+        case (Right(_), _: Schema.Enum) => {
+          case AvroValue.Enum(symbol) =>
+            if (symbolSet.contains(symbol)) decodeSymbol(symbol)
+            else default.toRight(AvroError.decodeSymbolNotInSchema(symbol, symbols))
+
+          case value =>
+            Left(invalidValue(value, writerSchema))
+        }
+
+        case (Right(_), _) =>
+          failing(unexpectedSchemaType(writerSchema, "enum"))
+      }
+  }
+
+  /** Codec for fixed, which pads bytes when encoding, and requires the same size when decoding. */
+  private[v2] final case class FixedCodec[A](
+    name: Schema.Name,
+    size: Int,
+    encodeBytes: A => ByteVector,
+    decodeBytes: ByteVector => Either[AvroError, A],
+    doc: Option[String],
+    aliases: Vector[String],
+    props: JsonObject
+  ) extends Codec[A] {
+    override lazy val schema: Either[AvroError, Schema] =
+      validated(Schema.Fixed(name, size).withDoc(doc).withAliases(aliases).withProps(props))
+
+    override def encode(a: A): Either[AvroError, AvroValue] =
+      schema match {
+        case Right(_) =>
+          val bytes = encodeBytes(a)
+          if (bytes.size == size) Right(AvroValue.Fixed(bytes))
+          else if (bytes.size < size) Right(AvroValue.Fixed(bytes.padRight(size.toLong)))
+          else Left(AvroError.encodeExceedsFixedSize(bytes.size.toInt, size))
+
+        case Left(error) =>
+          Left(error)
+      }
+
+    override def resolve(
+      writerSchema: Schema,
+      definitions: Definitions
+    ): AvroValue => Either[AvroError, A] =
+      (schema, writerSchema) match {
+        case (Left(error), _) =>
+          failing(error)
+
+        case (Right(_), fixed: Schema.Fixed) if fixed.size == size => {
+          case AvroValue.Fixed(bytes) =>
+            if (bytes.size == size) decodeBytes(bytes)
+            else Left(AvroError.decodeNotEqualFixedSize(bytes.size.toInt, size))
+
+          case value =>
+            Left(invalidValue(value, writerSchema))
+        }
+
+        case (Right(_), fixed: Schema.Fixed) =>
+          failing(AvroError(s"Got unexpected fixed size ${fixed.size}, expected fixed size $size"))
+
+        case (Right(_), _) =>
+          failing(unexpectedSchemaType(writerSchema, "fixed"))
       }
   }
 
@@ -1063,9 +1215,9 @@ object Codec {
         Left(AvroError(s"Unable to encode $value as epoch $unit exceeding the maximum long size"))
     }
 
-  private final val MillisPerDay = 86400000
+  private final val MillisPerDay: Int = 86400000
 
-  private final val MicrosPerDay = 86400000000L
+  private final val MicrosPerDay: Long = 86400000000L
 
   private def unexpectedTime(typeName: String, value: Long, perDay: Long): AvroError =
     AvroError(s"Got unexpected $typeName value $value, expected value in range 0 to ${perDay - 1}")
@@ -1075,6 +1227,10 @@ object Codec {
       case Some(logicalType) => AvroError(s"Got unexpected logical type ${logicalType.name}")
       case None              => AvroError("Got unexpected missing logical type")
     }
+
+  /** The schema, if it is valid, including defaults. */
+  private def validated(schema: Schema): Either[AvroError, Schema] =
+    SchemaValidator.validate(schema, validateDefaults = true).map(_ => schema)
 
   /** A function decoding any value to the error. */
   private[v2] def failing[A](error: AvroError): AvroValue => Either[AvroError, A] = {
