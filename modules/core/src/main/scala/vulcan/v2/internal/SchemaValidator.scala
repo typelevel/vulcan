@@ -7,7 +7,7 @@
 package vulcan.v2.internal
 
 import cats.syntax.all._
-import io.circe.{Json, JsonNumber}
+import io.circe.{Json, JsonNumber, JsonObject}
 import scala.collection.mutable
 import vulcan.AvroError
 import vulcan.v2.Schema
@@ -80,13 +80,15 @@ private[v2] object SchemaValidator {
           validateUnionTypes(union) >> union.types.traverse_(validate)
 
         case array: Schema.Array =>
-          validate(array.items)
+          validateProps(array.props, SchemaEncoder.SchemaReserved, "array") >>
+            validate(array.items)
 
         case map: Schema.Map =>
-          validate(map.values)
+          validateProps(map.props, SchemaEncoder.SchemaReserved, "map") >>
+            validate(map.values)
 
         case _ =>
-          Right(())
+          validateProps(schema.props, SchemaEncoder.SchemaReserved, SchemaNames.typeName(schema))
       }
 
     private def validateNamed(named: Schema.Named): Either[AvroError, Unit] =
@@ -105,6 +107,13 @@ private[v2] object SchemaValidator {
             named.aliases.traverse_ { alias =>
               val aliasName = SchemaNames.resolve(alias, named.name.namespace).name
               validateName(aliasName, s"""alias "$alias" of ${named.fullName}""")
+            } >> {
+              val reserved = named match {
+                case _: Schema.Enum => SchemaEncoder.EnumReserved
+                case _              => SchemaEncoder.SchemaReserved
+              }
+
+              validateProps(named.props, reserved, SchemaNames.describe(named))
             } >> {
               named match {
                 case record: Schema.Record =>
@@ -143,13 +152,29 @@ private[v2] object SchemaValidator {
         .foldLeftM(Set.empty[String]) { (names, field) =>
           if (names.contains(field.name))
             Left(AvroError(s"""Duplicate field "${field.name}" in record ${record.fullName}"""))
-          else
-            validateName(field.name, s"""field "${field.name}" in record ${record.fullName}""") >>
+          else {
+            val description = s"""field "${field.name}" in record ${record.fullName}"""
+            validateName(field.name, description) >>
+              validateProps(field.props, SchemaEncoder.FieldReserved, description) >>
               validate(field.schema) >>
               validateDefault(record, field) >>
               Right(names + field.name)
+          }
         }
         .void
+
+    private def validateProps(
+      props: JsonObject,
+      reserved: Set[String],
+      description: => String
+    ): Either[AvroError, Unit] =
+      props.keys.find(reserved.contains) match {
+        case Some(key) =>
+          Left(AvroError(s"""Invalid property "$key" of $description: name is reserved"""))
+
+        case None =>
+          Right(())
+      }
 
     private def validateDefault(
       record: Schema.Record,

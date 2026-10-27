@@ -7,8 +7,8 @@
 package vulcan.v2
 
 import org.scalacheck.{Arbitrary, Gen}
-import scala.collection.mutable
 import scodec.bits.ByteVector
+import vulcan.v2.internal.SchemaNames
 
 /** Generators for values which are valid for a schema. */
 object AvroValueGenerators {
@@ -18,30 +18,7 @@ object AvroValueGenerators {
     SchemaGenerators.genSchema.flatMap(schema => genValue(schema).map((schema, _)))
 
   def genValue(schema: Schema): Gen[AvroValue] =
-    genValue(schema, namedSchemas(schema), 0)
-
-  /** The named schemas defined in the schema, by full name. */
-  def namedSchemas(schema: Schema): collection.Map[String, Schema.Named] = {
-    val definitions = mutable.Map.empty[String, Schema.Named]
-
-    def collect(schema: Schema): Unit =
-      schema match {
-        case named: Schema.Named if !definitions.contains(named.fullName) =>
-          definitions.update(named.fullName, named)
-          named match {
-            case record: Schema.Record => record.fields.foreach(field => collect(field.schema))
-            case _                     => ()
-          }
-
-        case array: Schema.Array => collect(array.items)
-        case map: Schema.Map     => collect(map.values)
-        case union: Schema.Union => union.types.foreach(collect)
-        case _                   => ()
-      }
-
-    collect(schema)
-    definitions
-  }
+    genValue(schema, SchemaNames.definitions(schema), 0)
 
   /** Unions choose types without references beyond this depth, so values are finite. */
   private val MaxDepth: Int = 3

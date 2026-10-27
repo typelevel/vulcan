@@ -115,9 +115,11 @@ private[v2] final class BinaryWriter(initialCapacity: Int) {
     }
   }
 
-  /** The bytes written so far. The writer must not be used afterwards. */
+  /** The bytes written so far, copied only if most of the buffer is unused. The writer must not be
+    * used afterwards.
+    */
   def toByteVector: ByteVector =
-    if (size == buffer.length) ByteVector.view(buffer)
+    if (size >= buffer.length / 2) ByteVector.view(buffer, 0, size)
     else ByteVector.view(Arrays.copyOf(buffer, size))
 
   private def writeIntBits(bits: Int): Unit = {

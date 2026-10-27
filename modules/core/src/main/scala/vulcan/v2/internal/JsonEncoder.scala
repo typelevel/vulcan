@@ -24,19 +24,28 @@ private[v2] object JsonEncoder {
 
   /** Returns an encoder for the schema, if the schema is valid. */
   def apply(schema: Schema): Either[AvroError, JsonEncoder] =
+    compile(schema, unionTypes = true)
+
+  /** Returns an encoder which encodes values of unions without the type, same as for defaults in
+    * schemas.
+    */
+  def withoutUnionTypes(schema: Schema): Either[AvroError, JsonEncoder] =
+    compile(schema, unionTypes = false)
+
+  private def compile(schema: Schema, unionTypes: Boolean): Either[AvroError, JsonEncoder] =
     SchemaValidator
       .validate(schema, validateDefaults = false)
-      .map(_ => new JsonEncoder(new Compilation().compile(schema)))
+      .map(_ => new JsonEncoder(new Compilation(unionTypes).compile(schema)))
 
   /** Bytes as a string with one character per byte, same as the Java Avro library. */
   private def bytesJson(bytes: ByteVector): Json =
-    Json.fromString(new String(bytes.toArray, StandardCharsets.ISO_8859_1))
+    Json.fromString(ByteVectors.decodeString(bytes, StandardCharsets.ISO_8859_1))
 
   private sealed abstract class Node {
     def encode(value: AvroValue): Either[AvroError, Json]
   }
 
-  private final class Compilation {
+  private final class Compilation(unionTypes: Boolean) {
     private val compiled = mutable.Map.empty[String, Reference]
 
     def compile(schema: Schema): Node =
@@ -54,8 +63,9 @@ private[v2] object JsonEncoder {
         case union: Schema.Union =>
           new UnionNode(union.types.map { schema =>
             val key = schema match {
-              case _: Schema.Null => None
-              case _              => Some(SchemaNames.unionKey(schema))
+              case _: Schema.Null  => None
+              case _ if unionTypes => Some(SchemaNames.unionKey(schema))
+              case _               => None
             }
 
             (key, compile(schema))
@@ -237,7 +247,9 @@ private[v2] object JsonEncoder {
       }
   }
 
-  /** Encodes the value as an object with the key of the type, unless the value is `null`. */
+  /** Encodes the value as an object with the key of the type, unless the value is `null` or the
+    * type is not included.
+    */
   private final class UnionNode(types: Vector[(Option[String], Node)]) extends Node {
     override def encode(value: AvroValue): Either[AvroError, Json] =
       value match {
