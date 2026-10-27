@@ -1412,6 +1412,14 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
             Some(unsafeSchema[ByteVector])
           )
         }
+
+        it("should decode a slice of bytes as string") {
+          assertDecodeIs[String](
+            AvroValue.Bytes(ByteVector("xabcx".getBytes(StandardCharsets.UTF_8)).slice(1, 4)),
+            Right("abc"),
+            Some(unsafeSchema[ByteVector])
+          )
+        }
       }
     }
 

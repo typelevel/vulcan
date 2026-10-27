@@ -716,8 +716,9 @@ object Codec {
         }
 
         case _: Schema.Bytes => {
-          case AvroValue.Bytes(bytes) => Right(new String(bytes.toArray, StandardCharsets.UTF_8))
-          case value                  => invalid(value, writerSchema)
+          case AvroValue.Bytes(bytes) =>
+            Right(ByteVectors.decodeString(bytes, StandardCharsets.UTF_8))
+          case value => invalid(value, writerSchema)
         }
 
         case _ =>

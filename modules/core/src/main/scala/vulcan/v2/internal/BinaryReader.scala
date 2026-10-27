@@ -155,14 +155,8 @@ private[v2] final class BinaryReader private (bytes: Array[Byte], start: Int, li
 private[v2] object BinaryReader {
 
   /** Returns a reader for the bytes, without copying them if they are backed by an array. */
-  def apply(bytes: ByteVector): BinaryReader = {
-    val buffer = bytes.toByteBufferUnsafe
-    if (buffer.hasArray) {
-      val start = buffer.arrayOffset + buffer.position
-      new BinaryReader(buffer.array, start, start + buffer.remaining)
-    } else {
-      val array = bytes.toArray
-      new BinaryReader(array, 0, array.length)
+  def apply(bytes: ByteVector): BinaryReader =
+    ByteVectors.withArray(bytes) { (array, offset, length) =>
+      new BinaryReader(array, offset, offset + length)
     }
-  }
 }
