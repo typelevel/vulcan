@@ -10,8 +10,9 @@ import cats.{Invariant, Show}
 import cats.data.{Chain, NonEmptyChain, NonEmptyList, NonEmptyMap, NonEmptySet, NonEmptyVector}
 import io.circe.Json
 import java.nio.charset.StandardCharsets
+import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, ZoneOffset}
 import java.util.concurrent.atomic.AtomicReferenceArray
-import java.util.Arrays
+import java.util.{Arrays, UUID}
 import scala.annotation.{implicitNotFound, tailrec}
 import scala.collection.immutable.{ArraySeq, SortedMap, SortedSet}
 import scala.collection.mutable
@@ -94,6 +95,9 @@ sealed abstract class Codec[A] {
   private[vulcan] final def withTypeName(typeName: String): Codec[A] =
     Codec.WithTypeName(this, typeName)
 
+  private[v2] final def withLogicalType(logicalType: LogicalType): Codec[A] =
+    Codec.LogicalTypeCodec(this, logicalType)
+
   /** The binary encoder for the schema, compiled once for the codec. */
   private[v2] final lazy val binaryEncoder: Either[AvroError, BinaryEncoder] =
     schema.flatMap(BinaryEncoder(_))
@@ -123,6 +127,16 @@ sealed abstract class Codec[A] {
   * @groupprio Cats 2
   * @groupdesc Cats
   *   Default codecs for Cats data types and type class instances for [[Codec]].
+  *
+  * @groupname JavaTime Java Time Codecs
+  * @groupprio JavaTime 3
+  * @groupdesc JavaTime
+  *   Default codecs for `java.time` types.
+  *
+  * @groupname JavaUtil Java Util Codecs
+  * @groupprio JavaUtil 4
+  * @groupdesc JavaUtil
+  *   Default codecs for `java.util` types.
   *
   * @groupname Create Create Codecs
   * @groupprio Create 5
@@ -178,6 +192,15 @@ object Codec {
         else Left(AvroError.unexpectedChar(string.length))
       }(_.toString)
       .withTypeName("Char")
+
+  /** Returns a new decimal [[Codec]] for `BigDecimal`.
+    *
+    * Values are decoded using the precision and scale of the writer schema.
+    *
+    * @group Create
+    */
+  final def decimal(precision: Int, scale: Int): Codec[BigDecimal] =
+    DecimalCodec(precision, scale).withTypeName("BigDecimal")
 
   /** Returns the result of decoding the specified value to the specified type, using the schema of
     * the codec as the writer schema.
@@ -240,6 +263,57 @@ object Codec {
   ): Codec[A] =
     Instance(schema, encode, decode)
 
+  /** @group JavaTime
+    */
+  implicit lazy val instant: Codec[Instant] =
+    Codec.long
+      .imapErrors(millis => Right(Instant.ofEpochMilli(millis))) { instant =>
+        epochTime(instant, "milliseconds")(instant.toEpochMilli)
+      }
+      .withLogicalType(LogicalType.timestampMillis)
+      .withTypeName("Instant")
+
+  /** `Instant` with microsecond precision, encoded with logical type `timestamp-micros`.
+    *
+    * @group JavaTime
+    */
+  final case class InstantMicros(value: Instant) {
+
+    /** The microseconds since the epoch, throwing `ArithmeticException` if exceeding a long. */
+    def toEpochMicro: Long = {
+      val seconds = value.getEpochSecond
+      val micros = value.getNano / 1000L
+
+      // Avoids overflowing for the earliest instants, by not multiplying the floor of the seconds
+      if (seconds < 0 && micros > 0)
+        Math.addExact(Math.multiplyExact(seconds + 1, 1000000L), micros - 1000000L)
+      else Math.addExact(Math.multiplyExact(seconds, 1000000L), micros)
+    }
+  }
+
+  object InstantMicros {
+    def fromEpochMicro(epochMicros: Long): InstantMicros =
+      InstantMicros(
+        Instant.ofEpochSecond(
+          Math.floorDiv(epochMicros, 1000000L),
+          Math.floorMod(epochMicros, 1000000L) * 1000L
+        )
+      )
+
+    override def toString: String =
+      "InstantMicros"
+  }
+
+  /** @group JavaTime
+    */
+  implicit lazy val instantMicros: Codec[InstantMicros] =
+    Codec.long
+      .imapErrors(micros => Right(InstantMicros.fromEpochMicro(micros))) { instantMicros =>
+        epochTime(instantMicros.value, "microseconds")(instantMicros.toEpochMicro)
+      }
+      .withLogicalType(LogicalType.timestampMicros)
+      .withTypeName("InstantMicros")
+
   /** @group General
     */
   implicit lazy val int: Codec[Int] =
@@ -250,6 +324,52 @@ object Codec {
   implicit final def list[A](implicit codec: Codec[A]): Codec[List[A]] =
     ArrayCodec[A, List[A]](codec, _.length, _.iterator, _ => List.newBuilder)
       .withTypeName("List")
+
+  /** @group JavaTime
+    */
+  implicit lazy val localDate: Codec[LocalDate] =
+    Codec.int
+      .imapErrors(days => Right(LocalDate.ofEpochDay(days.toLong))) { date =>
+        val days = date.toEpochDay
+        if (days.isValidInt) Right(days.toInt)
+        else Left(AvroError.encodeDateSizeExceeded(date))
+      }
+      .withLogicalType(LogicalType.date)
+      .withTypeName("LocalDate")
+
+  /** @group JavaTime
+    */
+  implicit lazy val localDateTime: Codec[LocalDateTime] =
+    Codec.long
+      .imapErrors { millis =>
+        Right(LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneOffset.UTC))
+      } { dateTime =>
+        epochTime(dateTime, "milliseconds")(dateTime.toInstant(ZoneOffset.UTC).toEpochMilli)
+      }
+      .withLogicalType(LogicalType.localTimestampMillis)
+      .withTypeName("LocalDateTime")
+
+  /** @group JavaTime
+    */
+  final lazy val localTimeMicros: Codec[LocalTime] =
+    Codec.long
+      .imapError { micros =>
+        if (micros >= 0 && micros < MicrosPerDay) Right(LocalTime.ofNanoOfDay(micros * 1000L))
+        else Left(unexpectedTime("Long", micros, MicrosPerDay))
+      }(_.toNanoOfDay / 1000L)
+      .withLogicalType(LogicalType.timeMicros)
+      .withTypeName("LocalTime")
+
+  /** @group JavaTime
+    */
+  final lazy val localTimeMillis: Codec[LocalTime] =
+    Codec.int
+      .imapError { millis =>
+        if (millis >= 0 && millis < MillisPerDay) Right(LocalTime.ofNanoOfDay(millis * 1000000L))
+        else Left(unexpectedTime("Int", millis.toLong, MillisPerDay.toLong))
+      }(time => (time.toNanoOfDay / 1000000L).toInt)
+      .withLogicalType(LogicalType.timeMillis)
+      .withTypeName("LocalTime")
 
   /** @group General
     */
@@ -349,6 +469,19 @@ object Codec {
     */
   implicit lazy val unit: Codec[Unit] =
     NullCodec((), "Unit")
+
+  /** @group JavaUtil
+    */
+  implicit lazy val uuid: Codec[UUID] =
+    Codec.string
+      .imapError { string =>
+        try Right(UUID.fromString(string))
+        catch {
+          case _: IllegalArgumentException => Left(AvroError(s"Invalid UUID string: $string"))
+        }
+      }(_.toString)
+      .withLogicalType(LogicalType.uuid)
+      .withTypeName("UUID")
 
   /** @group Collection
     */
@@ -499,6 +632,85 @@ object Codec {
         case _ =>
           failing(unexpectedSchemaType(writerSchema, "map"))
       }
+  }
+
+  /** Codec for decimals, which decodes using the precision and scale of the writer schema. */
+  private[v2] final case class DecimalCodec(precision: Int, scale: Int) extends Codec[BigDecimal] {
+    override val schema: Either[AvroError, Schema] =
+      if (precision <= 0)
+        Left(AvroError(s"Invalid decimal precision $precision: must be positive"))
+      else if (scale < 0)
+        Left(AvroError(s"Invalid decimal scale $scale: cannot be negative"))
+      else if (scale > precision)
+        Left(AvroError(s"Invalid decimal scale $scale: cannot exceed precision $precision"))
+      else
+        Right(Schema.Bytes.withLogicalType(LogicalType.decimal(precision, scale)))
+
+    override def encode(decimal: BigDecimal): Either[AvroError, AvroValue] =
+      schema match {
+        case Right(_) if decimal.scale != scale =>
+          Left(AvroError.encodeDecimalScalesMismatch(decimal.scale, scale))
+
+        case Right(_) if decimal.precision > precision =>
+          Left(AvroError.encodeDecimalPrecisionExceeded(decimal.precision, precision))
+
+        case Right(_) =>
+          Right(AvroValue.Bytes(ByteVector.view(decimal.underlying.unscaledValue.toByteArray)))
+
+        case Left(error) =>
+          Left(error)
+      }
+
+    override def resolve(
+      writerSchema: Schema,
+      definitions: Definitions
+    ): AvroValue => Either[AvroError, BigDecimal] =
+      (schema, writerSchema) match {
+        case (Left(error), _) =>
+          failing(error)
+
+        case (Right(_), _: Schema.Bytes) =>
+          writerSchema.logicalType match {
+            case Some(LogicalType.Decimal(writerPrecision, writerScale)) => {
+              case AvroValue.Bytes(bytes) => decodeDecimal(bytes, writerPrecision, writerScale)
+              case value                  => Left(invalidValue(value, writerSchema))
+            }
+
+            case writerLogicalType =>
+              failing(unexpectedLogicalType(writerLogicalType))
+          }
+
+        case (Right(_), _) =>
+          failing(unexpectedSchemaType(writerSchema, "bytes"))
+      }
+  }
+
+  /** Codec for a logical type, which must be the logical type of writer schemas. */
+  private[v2] final case class LogicalTypeCodec[A](
+    codec: Codec[A],
+    logicalType: LogicalType
+  ) extends Codec[A] {
+    override lazy val schema: Either[AvroError, Schema] =
+      codec.schema.flatMap(addLogicalType(_, logicalType))
+
+    override def encode(a: A): Either[AvroError, AvroValue] =
+      codec.encode(a)
+
+    /** Checks the logical type after decoding, so errors for the writer schema type come first. */
+    override def resolve(
+      writerSchema: Schema,
+      definitions: Definitions
+    ): AvroValue => Either[AvroError, A] = {
+      val decode = codec.resolve(writerSchema, definitions)
+      writerSchema.logicalType match {
+        case Some(writerLogicalType) if writerLogicalType == logicalType =>
+          decode
+
+        case writerLogicalType =>
+          val error = Left(unexpectedLogicalType(writerLogicalType))
+          decode(_).flatMap(_ => error)
+      }
+    }
   }
 
   /** Codec for a primitive type, which also decodes types which can be promoted to the type. */
@@ -813,6 +1025,56 @@ object Codec {
 
     loop()
   }
+
+  private def addLogicalType(schema: Schema, logicalType: LogicalType): Either[AvroError, Schema] =
+    schema match {
+      case int: Schema.Int       => Right(int.withLogicalType(logicalType))
+      case long: Schema.Long     => Right(long.withLogicalType(logicalType))
+      case bytes: Schema.Bytes   => Right(bytes.withLogicalType(logicalType))
+      case string: Schema.String => Right(string.withLogicalType(logicalType))
+      case fixed: Schema.Fixed   => Right(fixed.withLogicalType(logicalType))
+      case _                     =>
+        Left {
+          AvroError(
+            s"Unable to add logical type ${logicalType.name} to ${SchemaNames.describe(schema)}"
+          )
+        }
+    }
+
+  /** Decodes the decimal using the scale, and checks that it does not exceed the precision. */
+  private def decodeDecimal(
+    bytes: ByteVector,
+    precision: Int,
+    scale: Int
+  ): Either[AvroError, BigDecimal] =
+    if (bytes.isEmpty) Left(AvroError("Unable to decode decimal from empty bytes"))
+    else {
+      val unscaled = new java.math.BigInteger(bytes.toArray)
+      val decimal = BigDecimal(new java.math.BigDecimal(unscaled, scale))
+      if (decimal.precision <= precision) Right(decimal)
+      else Left(AvroError.decodeDecimalPrecisionExceeded(decimal.precision, precision))
+    }
+
+  /** The time since the epoch in the unit, or an error if it exceeds a long. */
+  private def epochTime(value: Any, unit: String)(time: => Long): Either[AvroError, Long] =
+    try Right(time)
+    catch {
+      case _: ArithmeticException =>
+        Left(AvroError(s"Unable to encode $value as epoch $unit exceeding the maximum long size"))
+    }
+
+  private final val MillisPerDay = 86400000
+
+  private final val MicrosPerDay = 86400000000L
+
+  private def unexpectedTime(typeName: String, value: Long, perDay: Long): AvroError =
+    AvroError(s"Got unexpected $typeName value $value, expected value in range 0 to ${perDay - 1}")
+
+  private[v2] def unexpectedLogicalType(logicalType: Option[LogicalType]): AvroError =
+    logicalType match {
+      case Some(logicalType) => AvroError(s"Got unexpected logical type ${logicalType.name}")
+      case None              => AvroError("Got unexpected missing logical type")
+    }
 
   /** A function decoding any value to the error. */
   private[v2] def failing[A](error: AvroError): AvroValue => Either[AvroError, A] = {

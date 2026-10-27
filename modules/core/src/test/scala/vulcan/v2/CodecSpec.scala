@@ -10,11 +10,15 @@ import cats.data._
 import cats.syntax.all._
 import io.circe.Json
 import java.nio.charset.StandardCharsets
+import java.time._
+import java.time.temporal.ChronoUnit
+import java.util.UUID
 import org.scalacheck.Gen
 import org.scalatest.Assertion
 import scala.util.{Failure, Success, Try}
 import scodec.bits._
 import vulcan.{AvroError, BaseSpec}
+import vulcan.v2.Codec.InstantMicros
 
 final class CodecSpec extends BaseSpec with CodecSpecHelpers {
   describe("Codec") {
@@ -276,6 +280,149 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
               Right(char)
             )
           }
+        }
+      }
+    }
+
+    describe("decimal") {
+      describe("schema") {
+        it("should be encoded as bytes with logical type decimal") {
+          implicit val codec: Codec[BigDecimal] =
+            Codec.decimal(precision = 10, scale = 5)
+
+          assertSchemaIs[BigDecimal] {
+            """{"type":"bytes","logicalType":"decimal","precision":10,"scale":5}"""
+          }
+        }
+
+        it("should error if precision is not positive") {
+          implicit val codec: Codec[BigDecimal] =
+            Codec.decimal(precision = -1, scale = -1)
+
+          assertSchemaError[BigDecimal] {
+            "Invalid decimal precision -1: must be positive"
+          }
+        }
+
+        it("should error if scale is negative") {
+          implicit val codec: Codec[BigDecimal] =
+            Codec.decimal(precision = 5, scale = -1)
+
+          assertSchemaError[BigDecimal] {
+            "Invalid decimal scale -1: cannot be negative"
+          }
+        }
+
+        it("should error if scale exceeds precision") {
+          implicit val codec: Codec[BigDecimal] =
+            Codec.decimal(precision = 5, scale = 6)
+
+          assertSchemaError[BigDecimal] {
+            "Invalid decimal scale 6: cannot exceed precision 5"
+          }
+        }
+      }
+
+      describe("encode") {
+        implicit val codec: Codec[BigDecimal] =
+          Codec.decimal(precision = 10, scale = 5)
+
+        it("should error if scale is different in schema") {
+          assertEncodeError[BigDecimal](
+            BigDecimal("123"),
+            "Error encoding BigDecimal: Unable to encode decimal with scale 0 as scale 5"
+          )
+        }
+
+        it("should error if precision exceeds schema precision") {
+          assertEncodeError[BigDecimal](
+            BigDecimal("123456.45678"),
+            "Error encoding BigDecimal: Unable to encode decimal with precision 11 exceeding schema precision 10"
+          )
+        }
+
+        it("should error if the schema is invalid") {
+          assertEncodeError[BigDecimal](
+            BigDecimal("1"),
+            "Error encoding BigDecimal: Invalid decimal precision -1: must be positive"
+          )(Codec.decimal(precision = -1, scale = -1))
+        }
+
+        it("should encode as bytes") {
+          val value = BigDecimal("123.45678")
+          assertEncodeIs[BigDecimal](
+            value,
+            Right(AvroValue.Bytes(ByteVector(value.underlying.unscaledValue.toByteArray)))
+          )
+        }
+      }
+
+      describe("decode") {
+        implicit val codec: Codec[BigDecimal] =
+          Codec.decimal(precision = 10, scale = 5)
+
+        it("should error if schema is not bytes") {
+          assertDecodeError[BigDecimal](
+            unsafeEncode(BigDecimal("123.45678")),
+            unsafeSchema[String],
+            "Error decoding BigDecimal: Got unexpected schema type string, expected schema type bytes"
+          )
+        }
+
+        it("should error if value is not bytes") {
+          assertDecodeError[BigDecimal](
+            unsafeEncode(10),
+            unsafeSchema[BigDecimal],
+            "Error decoding BigDecimal: Invalid int value for bytes"
+          )
+        }
+
+        it("should error if logical type is missing") {
+          assertDecodeError[BigDecimal](
+            unsafeEncode(BigDecimal("123.45678")),
+            Schema.Bytes,
+            "Error decoding BigDecimal: Got unexpected missing logical type"
+          )
+        }
+
+        it("should error if logical type is not decimal") {
+          assertDecodeError[BigDecimal](
+            unsafeEncode(BigDecimal("123.45678")),
+            Schema.Bytes.withLogicalType(LogicalType.bigDecimal),
+            "Error decoding BigDecimal: Got unexpected logical type big-decimal"
+          )
+        }
+
+        it("should error if precision exceeds schema precision") {
+          assertDecodeError[BigDecimal](
+            unsafeEncode(BigDecimal("123.45678")),
+            Schema.Bytes.withLogicalType(LogicalType.decimal(6, 5)),
+            "Error decoding BigDecimal: Unable to decode decimal with precision 8 exceeding schema precision 6"
+          )
+        }
+
+        it("should error if bytes are empty") {
+          assertDecodeError[BigDecimal](
+            AvroValue.Bytes(ByteVector.empty),
+            unsafeSchema[BigDecimal],
+            "Error decoding BigDecimal: Unable to decode decimal from empty bytes"
+          )
+        }
+
+        it("should decode using the scale of the writer schema") {
+          assertDecodeIs[BigDecimal](
+            unsafeEncode(BigDecimal("123.45678")),
+            Right(BigDecimal("1234.5678")),
+            Some(Schema.Bytes.withLogicalType(LogicalType.decimal(10, 4)))
+          )
+        }
+
+        it("should decode bytes") {
+          val value = BigDecimal("123.45678")
+          assertDecodeIs[BigDecimal](
+            unsafeEncode(value),
+            Right(value)
+          )
         }
       }
     }
@@ -669,6 +816,169 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       }
     }
 
+    describe("instant") {
+      describe("schema") {
+        it("should be encoded as long with logical type timestamp-millis") {
+          assertSchemaIs[Instant] {
+            """{"type":"long","logicalType":"timestamp-millis"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as long") {
+          val value = Instant.now()
+          assertEncodeIs[Instant](
+            value,
+            Right(AvroValue.Long(value.toEpochMilli))
+          )
+        }
+
+        it("should error if epoch milliseconds exceed the maximum long size") {
+          assertEncodeError[Instant](
+            Instant.MAX,
+            s"Error encoding Instant: Unable to encode ${Instant.MAX} as epoch milliseconds exceeding the maximum long size"
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if schema is not long") {
+          assertDecodeError[Instant](
+            unsafeEncode("value"),
+            unsafeSchema[String],
+            "Error decoding Instant: Error decoding Long: Got unexpected schema type string, expected schema type long"
+          )
+        }
+
+        it("should error if logical type is missing") {
+          assertDecodeError[Instant](
+            unsafeEncode(Instant.now()),
+            unsafeSchema[Long],
+            "Error decoding Instant: Got unexpected missing logical type"
+          )
+        }
+
+        it("should error if logical type is not timestamp-millis") {
+          assertDecodeError[Instant](
+            unsafeEncode(Instant.now()),
+            Schema.Long.withLogicalType(LogicalType.timestampMicros),
+            "Error decoding Instant: Got unexpected logical type timestamp-micros"
+          )
+        }
+
+        it("should error if logical type is missing in nested writer schemas") {
+          assertDecodeError[List[Instant]](
+            unsafeEncode(List(Instant.now())),
+            Schema.Array(Schema.Long),
+            "Error decoding List: Error decoding Instant: Got unexpected missing logical type"
+          )
+        }
+
+        it("should check the logical type of the written type of unions") {
+          val value = Instant.ofEpochMilli(1767225600000L)
+
+          assertDecodeIs[Instant](
+            AvroValue.Union(1, unsafeEncode(value)),
+            Right(value),
+            Some(Schema.Union(Vector(Schema.Null, unsafeSchema[Instant])))
+          )
+
+          assertDecodeError[Instant](
+            AvroValue.Union(1, unsafeEncode(value)),
+            Schema.Union(Vector(Schema.Null, Schema.Long)),
+            "Error decoding Instant: Got unexpected missing logical type"
+          )
+        }
+
+        it("should decode as Instant") {
+          val value = Instant.ofEpochMilli(1767225600000L)
+          assertDecodeIs[Instant](
+            unsafeEncode(value),
+            Right(value)
+          )
+        }
+      }
+    }
+
+    describe("instant micros") {
+      describe("schema") {
+        it("should be encoded as long with logical type timestamp-micros") {
+          assertSchemaIs[InstantMicros] {
+            """{"type":"long","logicalType":"timestamp-micros"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as long") {
+          val instantMicros = InstantMicros(Instant.now())
+          assertEncodeIs[InstantMicros](
+            instantMicros,
+            Right(AvroValue.Long(instantMicros.toEpochMicro))
+          )
+        }
+
+        it("should encode mid-term future Instant") {
+          // Epoch 10_000_000_000, or 2286-11-20T17:46:40Z, exceeds Long.MaxValue in nanos
+          val futureEpoch = 10L * 1000 * 1000 * 1000
+          assertEncodeIs[InstantMicros](
+            InstantMicros(Instant.ofEpochSecond(futureEpoch, 0L)),
+            Right(AvroValue.Long(futureEpoch * 1000 * 1000))
+          )
+        }
+
+        it("should error if epoch microseconds exceed the maximum long size") {
+          assertEncodeError[InstantMicros](
+            InstantMicros(Instant.MAX),
+            s"Error encoding InstantMicros: Unable to encode ${Instant.MAX} as epoch microseconds exceeding the maximum long size"
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if logical type is missing") {
+          assertDecodeError[InstantMicros](
+            unsafeEncode(InstantMicros(Instant.now())),
+            unsafeSchema[Long],
+            "Error decoding InstantMicros: Got unexpected missing logical type"
+          )
+        }
+
+        it("should error if logical type is not timestamp-micros") {
+          assertDecodeError[InstantMicros](
+            unsafeEncode(InstantMicros(Instant.now())),
+            Schema.Long.withLogicalType(LogicalType.timestampMillis),
+            "Error decoding InstantMicros: Got unexpected logical type timestamp-millis"
+          )
+        }
+
+        it("should truncate Instant to micros") {
+          val instant = Instant.now()
+          assertDecodeIs[InstantMicros](
+            unsafeEncode(InstantMicros(instant)),
+            Right(InstantMicros(instant.truncatedTo(ChronoUnit.MICROS)))
+          )
+        }
+
+        it("should roundtrip negative Instant with microsecond offsets") {
+          // 1969-12-31T23:59:59.999999Z is one microsecond before the epoch
+          val instantMicros = InstantMicros(Instant.ofEpochSecond(-1L, 999999L * 1000))
+          assertDecodeIs[InstantMicros](
+            unsafeEncode(instantMicros),
+            Right(instantMicros)
+          )
+        }
+
+        it("should roundtrip the minimum and maximum epoch microseconds") {
+          List(Long.MinValue, Long.MaxValue).foreach { micros =>
+            val decoded = unsafeDecode[InstantMicros](AvroValue.Long(micros))
+            assert(unsafeEncode(decoded) == AvroValue.Long(micros))
+          }
+        }
+      }
+    }
+
     describe("int") {
       describe("schema") {
         it("should be encoded as int") {
@@ -789,6 +1099,205 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           assertDecodeIs[List[Int]](
             unsafeEncode(value),
             Right(value)
+          )
+        }
+      }
+    }
+
+    describe("localDate") {
+      describe("schema") {
+        it("should be encoded as int with logical type date") {
+          assertSchemaIs[LocalDate] {
+            """{"type":"int","logicalType":"date"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as int") {
+          val value = LocalDate.now()
+          assertEncodeIs[LocalDate](
+            value,
+            Right(AvroValue.Int(value.toEpochDay.toInt))
+          )
+        }
+
+        it("should error if epoch days exceed the maximum integer size") {
+          val value = LocalDate.MAX
+          assertEncodeError[LocalDate](
+            value,
+            s"Error encoding LocalDate: Unable to encode date as epoch days of ${value.toEpochDay} exceeds the maximum integer size"
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if logical type is not date") {
+          assertDecodeError[LocalDate](
+            unsafeEncode(LocalDate.now()),
+            unsafeSchema[Int],
+            "Error decoding LocalDate: Got unexpected missing logical type"
+          )
+        }
+
+        it("should decode int as local date") {
+          val value = LocalDate.now()
+          assertDecodeIs[LocalDate](
+            unsafeEncode(value),
+            Right(value)
+          )
+        }
+      }
+    }
+
+    describe("localDateTime") {
+      describe("schema") {
+        it("should be encoded as long with logical type local-timestamp-millis") {
+          assertSchemaIs[LocalDateTime] {
+            """{"type":"long","logicalType":"local-timestamp-millis"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as long") {
+          val value = LocalDateTime.ofInstant(Instant.ofEpochMilli(1767225600000L), ZoneOffset.UTC)
+          assertEncodeIs[LocalDateTime](
+            value,
+            Right(AvroValue.Long(1767225600000L))
+          )
+        }
+
+        it("should error if epoch milliseconds exceed the maximum long size") {
+          assertEncodeError[LocalDateTime](
+            LocalDateTime.MAX,
+            s"Error encoding LocalDateTime: Unable to encode ${LocalDateTime.MAX} as epoch milliseconds exceeding the maximum long size"
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if logical type is missing") {
+          assertDecodeError[LocalDateTime](
+            unsafeEncode(LocalDateTime.now()),
+            unsafeSchema[Long],
+            "Error decoding LocalDateTime: Got unexpected missing logical type"
+          )
+        }
+
+        it("should error if logical type is not local-timestamp-millis") {
+          assertDecodeError[LocalDateTime](
+            unsafeEncode(LocalDateTime.now()),
+            Schema.Long.withLogicalType(LogicalType.timestampMillis),
+            "Error decoding LocalDateTime: Got unexpected logical type timestamp-millis"
+          )
+        }
+
+        it("should decode as LocalDateTime") {
+          val value = LocalDateTime.ofInstant(Instant.ofEpochMilli(1767225600000L), ZoneOffset.UTC)
+          assertDecodeIs[LocalDateTime](
+            unsafeEncode(value),
+            Right(value)
+          )
+        }
+      }
+    }
+
+    describe("localTimeMicros") {
+      implicit val codec: Codec[LocalTime] = Codec.localTimeMicros
+
+      describe("schema") {
+        it("should be encoded as long with logical type time-micros") {
+          assertSchemaIs[LocalTime] {
+            """{"type":"long","logicalType":"time-micros"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as long") {
+          val value = LocalTime.now()
+          assertEncodeIs[LocalTime](
+            value,
+            Right(AvroValue.Long(value.toNanoOfDay / 1000L))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if logical type is not time-micros") {
+          assertDecodeError[LocalTime](
+            unsafeEncode(LocalTime.now()),
+            unsafeSchema[Long],
+            "Error decoding LocalTime: Got unexpected missing logical type"
+          )
+        }
+
+        it("should error if value is outside of the day") {
+          List(-1L, 86400000000L).foreach { micros =>
+            assertDecodeError[LocalTime](
+              AvroValue.Long(micros),
+              unsafeSchema[LocalTime],
+              s"Error decoding LocalTime: Got unexpected Long value $micros, expected value in range 0 to 86399999999"
+            )
+          }
+        }
+
+        it("should decode long as local time-micros") {
+          val value = LocalTime.now()
+          assertDecodeIs[LocalTime](
+            unsafeEncode(value),
+            Right(value.truncatedTo(ChronoUnit.MICROS))
+          )
+        }
+      }
+    }
+
+    describe("localTimeMillis") {
+      implicit val codec: Codec[LocalTime] = Codec.localTimeMillis
+
+      describe("schema") {
+        it("should be encoded as int with logical type time-millis") {
+          assertSchemaIs[LocalTime] {
+            """{"type":"int","logicalType":"time-millis"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as int") {
+          val value = LocalTime.now()
+          assertEncodeIs[LocalTime](
+            value,
+            Right(AvroValue.Int((value.toNanoOfDay / 1000000L).toInt))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if logical type is not time-millis") {
+          assertDecodeError[LocalTime](
+            unsafeEncode(LocalTime.now()),
+            unsafeSchema[Int],
+            "Error decoding LocalTime: Got unexpected missing logical type"
+          )
+        }
+
+        it("should error if value is outside of the day") {
+          List(-1, 86400000).foreach { millis =>
+            assertDecodeError[LocalTime](
+              AvroValue.Int(millis),
+              unsafeSchema[LocalTime],
+              s"Error decoding LocalTime: Got unexpected Int value $millis, expected value in range 0 to 86399999"
+            )
+          }
+        }
+
+        it("should decode int as local time-millis") {
+          val value = LocalTime.now()
+          assertDecodeIs[LocalTime](
+            unsafeEncode(value),
+            Right(value.truncatedTo(ChronoUnit.MILLIS))
           )
         }
       }
@@ -1475,6 +1984,52 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           assertDecodeIs[Unit](
             unsafeEncode(()),
             Right(())
+          )
+        }
+      }
+    }
+
+    describe("uuid") {
+      describe("schema") {
+        it("should be encoded as string with logical type uuid") {
+          assertSchemaIs[UUID] {
+            """{"type":"string","logicalType":"uuid"}"""
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as string") {
+          val value = UUID.randomUUID()
+          assertEncodeIs[UUID](
+            value,
+            Right(AvroValue.String(value.toString))
+          )
+        }
+      }
+
+      describe("decode") {
+        it("should error if logical type is not uuid") {
+          assertDecodeError[UUID](
+            unsafeEncode(UUID.randomUUID()),
+            unsafeSchema[String],
+            "Error decoding UUID: Got unexpected missing logical type"
+          )
+        }
+
+        it("should error if value is not uuid") {
+          assertDecodeError[UUID](
+            AvroValue.String("not-uuid"),
+            unsafeSchema[UUID],
+            "Error decoding UUID: Invalid UUID string: not-uuid"
+          )
+        }
+
+        it("should decode uuid") {
+          val value = UUID.randomUUID()
+          assertDecodeIs[UUID](
+            unsafeEncode(value),
+            Right(value)
           )
         }
       }

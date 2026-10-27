@@ -8,14 +8,21 @@ package vulcan.v2
 
 import java.io.EOFException
 import java.nio.ByteBuffer
+import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, ZoneOffset}
+import java.util.UUID
+import org.apache.avro.Conversions
+import org.apache.avro.data.TimeConversions
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 import org.scalatest.Assertion
 import scala.jdk.CollectionConverters._
 import scala.util.Try
 import scodec.bits.ByteVector
 import vulcan.BaseSpec
+import vulcan.v2.Codec.InstantMicros
 import vulcan.v2.CodecJavaSpec.{same, Reader}
 
-/** Checks decoding values against schema resolution in the Java Avro library. */
+/** Checks codecs against schema resolution and logical types in the Java Avro library. */
 final class CodecJavaSpec extends BaseSpec {
   private val primitiveReaders: List[Reader[_]] =
     List(
@@ -74,6 +81,188 @@ final class CodecJavaSpec extends BaseSpec {
       }
     }
   }
+
+  describe("logical types") {
+    it("should encode and decode decimal the same as the Java Avro library") {
+      val codec = Codec.decimal(precision = 10, scale = 5)
+      val schema = JavaAvro.schema(codec.schema.value)
+      val conversion = new Conversions.DecimalConversion
+      val genUnscaled = Gen.chooseNum(-9999999999L, 9999999999L)
+
+      forAll(genUnscaled.map(BigDecimal(_, 5))) { decimal =>
+        assertEncodeSameAsJava(codec, decimal) { decimal =>
+          val bytes = conversion.toBytes(decimal.underlying, schema, schema.getLogicalType)
+          AvroValue.Bytes(ByteVector(bytes))
+        }
+      }
+
+      forAll(genUnscaled.map(unscaled => ByteVector(BigInt(unscaled).toByteArray))) { bytes =>
+        assertDecodeSameAsJava(codec, AvroValue.Bytes(bytes)) { _ =>
+          BigDecimal(conversion.fromBytes(bytes.toByteBuffer, schema, schema.getLogicalType))
+        }
+      }
+    }
+
+    it("should encode and decode timestamp-millis the same as the Java Avro library") {
+      val conversion = new TimeConversions.TimestampMillisConversion
+
+      forAll(genInstant) { instant =>
+        assertEncodeSameAsJava(Codec.instant, instant) { instant =>
+          AvroValue.Long(conversion.toLong(instant, null, null))
+        }
+      }
+
+      forAll(arbitrary[Long]) { millis =>
+        assertDecodeSameAsJava(Codec.instant, AvroValue.Long(millis)) { _ =>
+          conversion.fromLong(millis, null, null)
+        }
+      }
+    }
+
+    it("should encode and decode timestamp-micros the same as the Java Avro library") {
+      val conversion = new TimeConversions.TimestampMicrosConversion
+
+      forAll(genInstant.map(InstantMicros(_))) { instantMicros =>
+        assertEncodeSameAsJava(Codec.instantMicros, instantMicros) { instantMicros =>
+          AvroValue.Long(conversion.toLong(instantMicros.value, null, null))
+        }
+      }
+
+      forAll(arbitrary[Long]) { micros =>
+        assertDecodeSameAsJava(Codec.instantMicros, AvroValue.Long(micros)) { _ =>
+          InstantMicros(conversion.fromLong(micros, null, null))
+        }
+      }
+    }
+
+    it("should encode and decode local-timestamp-millis the same as the Java Avro library") {
+      val conversion = new TimeConversions.LocalTimestampMillisConversion
+      val genLocalDateTime =
+        for {
+          seconds <- Gen.chooseNum(
+            LocalDateTime.MIN.toEpochSecond(ZoneOffset.UTC),
+            LocalDateTime.MAX.toEpochSecond(ZoneOffset.UTC)
+          )
+          nanos <- Gen.chooseNum(0, 999999999)
+        } yield LocalDateTime.ofEpochSecond(seconds, nanos, ZoneOffset.UTC)
+
+      forAll(genLocalDateTime) { dateTime =>
+        assertEncodeSameAsJava(Codec.localDateTime, dateTime) { dateTime =>
+          AvroValue.Long(conversion.toLong(dateTime, null, null))
+        }
+      }
+
+      forAll(arbitrary[Long]) { millis =>
+        assertDecodeSameAsJava(Codec.localDateTime, AvroValue.Long(millis)) { _ =>
+          conversion.fromLong(millis, null, null)
+        }
+      }
+    }
+
+    it("should encode and decode date the same as the Java Avro library") {
+      val conversion = new TimeConversions.DateConversion
+      val genLocalDate =
+        Gen.chooseNum(Int.MinValue.toLong, Int.MaxValue.toLong).map(LocalDate.ofEpochDay)
+
+      forAll(genLocalDate) { date =>
+        assertEncodeSameAsJava(Codec.localDate, date) { date =>
+          AvroValue.Int(conversion.toInt(date, null, null))
+        }
+      }
+
+      forAll(arbitrary[Int]) { days =>
+        assertDecodeSameAsJava(Codec.localDate, AvroValue.Int(days)) { _ =>
+          conversion.fromInt(days, null, null)
+        }
+      }
+    }
+
+    it("should encode and decode time-millis the same as the Java Avro library") {
+      val conversion = new TimeConversions.TimeMillisConversion
+
+      forAll(genLocalTime) { time =>
+        assertEncodeSameAsJava(Codec.localTimeMillis, time) { time =>
+          AvroValue.Int(conversion.toInt(time, null, null))
+        }
+      }
+
+      forAll(Gen.oneOf(Gen.chooseNum(0, 86399999), arbitrary[Int])) { millis =>
+        assertDecodeSameAsJava(Codec.localTimeMillis, AvroValue.Int(millis)) { _ =>
+          conversion.fromInt(millis, null, null)
+        }
+      }
+    }
+
+    it("should encode and decode time-micros the same as the Java Avro library") {
+      val conversion = new TimeConversions.TimeMicrosConversion
+
+      forAll(genLocalTime) { time =>
+        assertEncodeSameAsJava(Codec.localTimeMicros, time) { time =>
+          AvroValue.Long(conversion.toLong(time, null, null))
+        }
+      }
+
+      forAll(Gen.oneOf(Gen.chooseNum(0L, 86399999999L), arbitrary[Long])) { micros =>
+        assertDecodeSameAsJava(Codec.localTimeMicros, AvroValue.Long(micros)) { _ =>
+          conversion.fromLong(micros, null, null)
+        }
+      }
+    }
+
+    it("should encode and decode uuid the same as the Java Avro library") {
+      val conversion = new Conversions.UUIDConversion
+      val genUuid = Gen.zip(arbitrary[Long], arbitrary[Long]).map { case (most, least) =>
+        new UUID(most, least)
+      }
+
+      forAll(genUuid) { uuid =>
+        assertEncodeSameAsJava(Codec.uuid, uuid) { uuid =>
+          AvroValue.String(conversion.toCharSequence(uuid, null, null).toString)
+        }
+      }
+
+      forAll(Gen.oneOf(genUuid.map(_.toString), arbitrary[String])) { string =>
+        assertDecodeSameAsJava(Codec.uuid, AvroValue.String(string)) { _ =>
+          conversion.fromCharSequence(string, null, null)
+        }
+      }
+    }
+  }
+
+  /** Instants across the whole range, including ones exceeding the range of epoch milliseconds. */
+  private val genInstant: Gen[Instant] =
+    for {
+      seconds <- Gen.oneOf(
+        Gen.chooseNum(Instant.MIN.getEpochSecond, Instant.MAX.getEpochSecond),
+        Gen.chooseNum(-100000000000L, 100000000000L)
+      )
+      nanos <- Gen.chooseNum(0, 999999999)
+    } yield Instant.ofEpochSecond(seconds, nanos.toLong)
+
+  private val genLocalTime: Gen[LocalTime] =
+    Gen.chooseNum(0L, 86399999999999L).map(LocalTime.ofNanoOfDay)
+
+  /** Checks that encoding succeeds and fails the same way as for the Java Avro library. */
+  private def assertEncodeSameAsJava[A](codec: Codec[A], value: A)(
+    javaEncode: A => AvroValue
+  ): Assertion =
+    (codec.encode(value), Try(javaEncode(value)).toEither) match {
+      case (Right(encoded), Right(javaEncoded)) => assert(encoded == javaEncoded)
+      case (Left(_), Left(_))                   => succeed
+      case (encoded, javaEncoded)               =>
+        fail(s"Encoded $value as $encoded, Java Avro encoded $javaEncoded")
+    }
+
+  /** Checks that decoding succeeds and fails the same way as for the Java Avro library. */
+  private def assertDecodeSameAsJava[A](codec: Codec[A], value: AvroValue)(
+    javaDecode: AvroValue => A
+  ): Assertion =
+    (codec.decode(value, codec.schema.value), Try(javaDecode(value)).toEither) match {
+      case (Right(decoded), Right(javaDecoded)) => assert(decoded == javaDecoded)
+      case (Left(_), Left(_))                   => succeed
+      case (decoded, javaDecoded)               =>
+        fail(s"Decoded $value as $decoded, Java Avro decoded $javaDecoded")
+    }
 
   /** Checks that decoding succeeds and fails the same way as for the Java Avro library. */
   private def assertSameAsJava[A](
