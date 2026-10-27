@@ -6,9 +6,33 @@
 
 package vulcan.v2.internal
 
+import scala.collection.mutable
 import vulcan.v2.Schema
 
 private[v2] object SchemaNames {
+
+  /** The named schemas defined in the schema, by full name, in the order they are defined. */
+  def definitions(schema: Schema): collection.Map[String, Schema.Named] = {
+    val definitions = mutable.LinkedHashMap.empty[String, Schema.Named]
+
+    def collect(schema: Schema): Unit =
+      schema match {
+        case named: Schema.Named if !definitions.contains(named.fullName) =>
+          definitions.update(named.fullName, named)
+          named match {
+            case record: Schema.Record => record.fields.foreach(field => collect(field.schema))
+            case _                     => ()
+          }
+
+        case array: Schema.Array => collect(array.items)
+        case map: Schema.Map     => collect(map.values)
+        case union: Schema.Union => union.types.foreach(collect)
+        case _                   => ()
+      }
+
+    collect(schema)
+    definitions
+  }
 
   /** Resolve as full name if it includes a dot, otherwise relative to the namespace. */
   def resolve(name: String, namespace: Option[String]): Schema.Name =
@@ -40,6 +64,22 @@ private[v2] object SchemaNames {
       case _: Schema.Array     => "array"
       case _: Schema.Map       => "map"
       case _: Schema.Union     => "union"
+    }
+
+  /** The type of the schema, for use in error messages. */
+  def typeName(schema: Schema): String =
+    schema match {
+      case _: Schema.Record => "record"
+      case _: Schema.Enum   => "enum"
+      case _: Schema.Fixed  => "fixed"
+      case _                => unionKey(schema)
+    }
+
+  /** The type of the schema, with full names of named schemas, for use in error messages. */
+  def describe(schema: Schema): String =
+    schema match {
+      case named: Schema.Named => s"${typeName(named)} ${named.fullName}"
+      case _                   => typeName(schema)
     }
 
   val PrimitiveNames: Set[String] =

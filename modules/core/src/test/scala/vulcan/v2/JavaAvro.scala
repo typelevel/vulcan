@@ -13,6 +13,7 @@ import org.apache.avro.{Schema => JavaSchema}
 import org.apache.avro.generic.{GenericData, GenericDatumReader, GenericDatumWriter}
 import org.apache.avro.io.{DecoderFactory, Encoder, EncoderFactory}
 import scodec.bits.ByteVector
+import vulcan.v2.internal.SchemaNames
 
 /** Values and encodings of the Java Avro library, for checking against the library. */
 object JavaAvro {
@@ -21,13 +22,17 @@ object JavaAvro {
 
   /** Converts the value to the generic representation of the Java Avro library. */
   def toJava(value: AvroValue, schema: Schema, javaSchema: JavaSchema): Any =
-    toJava(value, schema, javaSchema, AvroValueGenerators.namedSchemas(schema))
+    toJava(value, schema, javaSchema, SchemaNames.definitions(schema))
 
   def writeBinary(javaSchema: JavaSchema, datum: Any): ByteVector =
     ByteVector.view(write(javaSchema, datum, EncoderFactory.get().binaryEncoder(_, null)))
 
   def readBinary(javaSchema: JavaSchema, bytes: ByteVector): Any =
-    new GenericDatumReader[Any](javaSchema)
+    readBinary(javaSchema, javaSchema, bytes)
+
+  /** Reads the value written using the writer schema, resolving it against the reader schema. */
+  def readBinary(writerSchema: JavaSchema, readerSchema: JavaSchema, bytes: ByteVector): Any =
+    new GenericDatumReader[Any](writerSchema, readerSchema)
       .read(null, DecoderFactory.get().binaryDecoder(bytes.toArray, null))
 
   def writeJson(javaSchema: JavaSchema, datum: Any): String = {

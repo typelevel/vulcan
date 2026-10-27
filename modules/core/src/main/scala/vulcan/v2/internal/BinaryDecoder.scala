@@ -36,7 +36,7 @@ private[v2] object BinaryDecoder {
   /** Returns a decoder for the writer schema, if the schema is valid. */
   def apply(writerSchema: Schema): Either[AvroError, BinaryDecoder] =
     SchemaValidator.validate(writerSchema, validateDefaults = false).flatMap { _ =>
-      val definitions = namedSchemas(writerSchema)
+      val definitions = SchemaNames.definitions(writerSchema)
 
       definitions.values.collectFirst {
         case record: Schema.Record if minSize(record, definitions, Set.empty) == Unbounded =>
@@ -272,29 +272,6 @@ private[v2] object BinaryDecoder {
     }
 
     count
-  }
-
-  /** The named schemas defined in the schema, by full name, in the order they are defined. */
-  private def namedSchemas(schema: Schema): collection.Map[String, Schema.Named] = {
-    val definitions = mutable.LinkedHashMap.empty[String, Schema.Named]
-
-    def collect(schema: Schema): Unit =
-      schema match {
-        case named: Schema.Named if !definitions.contains(named.fullName) =>
-          definitions.update(named.fullName, named)
-          named match {
-            case record: Schema.Record => record.fields.foreach(field => collect(field.schema))
-            case _                     => ()
-          }
-
-        case array: Schema.Array => collect(array.items)
-        case map: Schema.Map     => collect(map.values)
-        case union: Schema.Union => union.types.foreach(collect)
-        case _                   => ()
-      }
-
-    collect(schema)
-    definitions
   }
 
   /** The minimum size of records which always contain themselves. */
