@@ -6,8 +6,9 @@
 
 package vulcan.v2
 
-import cats.{Invariant, Show}
+import cats.{~>, Invariant, Show}
 import cats.data.{Chain, NonEmptyChain, NonEmptyList, NonEmptyMap, NonEmptySet, NonEmptyVector}
+import cats.free.FreeApplicative
 import io.circe.{Json, JsonObject}
 import java.nio.charset.StandardCharsets
 import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, ZoneOffset}
@@ -97,6 +98,15 @@ sealed abstract class Codec[A] {
 
   private[v2] final def withLogicalType(logicalType: LogicalType): Codec[A] =
     Codec.LogicalTypeCodec(this, logicalType)
+
+  /** Encodes the value as JSON for defaults in schemas, where unions are without the type. */
+  private[v2] final def encodeForSchema(a: A): Either[AvroError, Json] =
+    for {
+      validSchema <- schema
+      encoder <- JsonEncoder.withoutUnionTypes(validSchema)
+      value <- encode(a)
+      json <- encoder.encode(value)
+    } yield json
 
   /** The binary encoder for the schema, compiled once for the codec. */
   private[v2] final lazy val binaryEncoder: Either[AvroError, BinaryEncoder] =
@@ -494,6 +504,25 @@ object Codec {
   implicit final def option[A](implicit codec: Codec[A]): Codec[Option[A]] =
     OptionCodec(codec).withTypeName("Option")
 
+  /** Returns a new record [[Codec]] for type `A`.
+    *
+    * Fields are decoded from the writer field with the same name or the name of an alias of the
+    * field, and otherwise using the default of the field. Other writer fields are ignored.
+    *
+    * @group Create
+    */
+  final def record[A](
+    name: String,
+    namespace: String,
+    doc: Option[String] = None,
+    aliases: Seq[String] = Seq.empty,
+    props: JsonObject = JsonObject.empty
+  )(f: FieldBuilder[A] => FreeApplicative[Field[A, *], A]): Codec[A] = {
+    val recordName = SchemaNames.resolve(name, Some(namespace))
+    RecordCodec(recordName, doc, aliases.toVector, props, f(FieldBuilder.instance))
+      .withTypeName(recordName.fullName)
+  }
+
   /** @group General
     */
   implicit final def right[A, B](implicit codec: Codec[B]): Codec[Right[A, B]] =
@@ -644,6 +673,83 @@ object Codec {
 
     final def instance[A]: AltBuilder[A] =
       Instance.asInstanceOf[AltBuilder[A]]
+  }
+
+  /** @group Create
+    */
+  sealed abstract class Field[A, B] {
+    def name: String
+
+    def access: A => B
+
+    def codec: Codec[B]
+
+    def doc: Option[String]
+
+    def default: Option[B]
+
+    def order: Option[Schema.Field.Order]
+
+    def aliases: Seq[String]
+
+    def props: JsonObject
+  }
+
+  /** @group Create
+    */
+  sealed abstract class FieldBuilder[A] {
+    def apply[B](
+      name: String,
+      access: A => B,
+      doc: Option[String] = None,
+      default: Option[B] = None,
+      order: Option[Schema.Field.Order] = None,
+      aliases: Seq[String] = Seq.empty,
+      props: JsonObject = JsonObject.empty
+    )(implicit codec: Codec[B]): FreeApplicative[Field[A, *], B]
+  }
+
+  private[v2] object FieldBuilder {
+    private[this] final val Instance: FieldBuilder[Any] =
+      new FieldBuilder[Any] {
+        override final def apply[B](
+          name: String,
+          access: Any => B,
+          doc: Option[String],
+          default: Option[B],
+          order: Option[Schema.Field.Order],
+          aliases: Seq[String],
+          props: JsonObject
+        )(implicit codec: Codec[B]): FreeApplicative[Field[Any, *], B] = {
+          val _name = name
+          val _access = access
+          val _codec = codec
+          val _doc = doc
+          val _default = default
+          val _order = order
+          val _aliases = aliases
+          val _props = props
+
+          FreeApplicative.lift {
+            new Field[Any, B] {
+              override val name: String = _name
+              override val access: Any => B = _access
+              override val codec: Codec[B] = _codec
+              override val doc: Option[String] = _doc
+              override val default: Option[B] = _default
+              override val order: Option[Schema.Field.Order] = _order
+              override val aliases: Seq[String] = _aliases
+              override val props: JsonObject = _props
+            }
+          }
+        }
+
+        override final def toString: String =
+          "FieldBuilder"
+      }
+
+    final def instance[A]: FieldBuilder[A] =
+      Instance.asInstanceOf[FieldBuilder[A]]
   }
 
   private[v2] final case class ImapErrors[A, B](
@@ -882,6 +988,105 @@ object Codec {
         case Left(error) =>
           failing(error)
       }
+  }
+
+  /** Codec for records, which decodes fields from the writer field with the same name or an alias
+    * of the field, and otherwise uses the default of the field.
+    */
+  private[v2] final case class RecordCodec[A](
+    name: Schema.Name,
+    doc: Option[String],
+    aliases: Vector[String],
+    props: JsonObject,
+    fields: FreeApplicative[Field[A, *], A]
+  ) extends Codec[A] {
+
+    /** The fields, in the order of the record. */
+    private lazy val fieldVector: Vector[Field[A, _]] =
+      fields.analyze(new (Field[A, *] ~> λ[x => Vector[Field[A, _]]]) {
+        override def apply[B](field: Field[A, B]): Vector[Field[A, _]] = Vector(field)
+      })
+
+    /** Returns a value from the values of the fields, in the order of the record. */
+    private lazy val construct: Array[Any] => A =
+      fields.foldMap(new (Field[A, *] ~> λ[x => Array[Any] => x]) {
+        override def apply[B](field: Field[A, B]): Array[Any] => B = {
+          val index = fieldVector.indexWhere(_ eq field)
+          _(index).asInstanceOf[B]
+        }
+      })
+
+    private lazy val encoders: Vector[A => Either[AvroError, AvroValue]] =
+      fieldVector.map(fieldEncoder(_))
+
+    override lazy val schema: Either[AvroError, Schema] =
+      build(fieldVector.iterator, vectorBuilder[Schema.Field](fieldVector.size))(fieldSchema(_))
+        .flatMap { fields =>
+          validated {
+            Schema.Record(name, fields).withDoc(doc).withAliases(aliases).withProps(props)
+          }
+        }
+
+    override def encode(a: A): Either[AvroError, AvroValue] =
+      schema match {
+        case Right(_) =>
+          build(encoders.iterator, vectorBuilder[AvroValue](encoders.size))(_(a))
+            .map(AvroValue.Record(_))
+
+        case Left(error) =>
+          Left(error)
+      }
+
+    override def resolve(
+      writerSchema: Schema,
+      definitions: Definitions
+    ): AvroValue => Either[AvroError, A] =
+      (schema, writerSchema) match {
+        case (Left(error), _) =>
+          failing(error)
+
+        case (Right(_), record: Schema.Record) =>
+          val decoders = fieldVector.map(fieldDecoder(_, record, definitions)).toArray
+          value =>
+            value match {
+              case AvroValue.Record(values) if values.size == record.fields.size =>
+                decodeFields(values, decoders)
+
+              case AvroValue.Record(values) =>
+                Left {
+                  AvroError(
+                    s"Invalid record with ${values.size} values for record ${record.fullName} with ${record.fields.size} fields"
+                  )
+                }
+
+              case _ =>
+                Left(invalidValue(value, writerSchema))
+            }
+
+        case (Right(_), _) =>
+          failing(unexpectedSchemaType(writerSchema, "record"))
+      }
+
+    private def decodeFields(
+      values: Vector[AvroValue],
+      decoders: Array[Vector[AvroValue] => Either[AvroError, Any]]
+    ): Either[AvroError, A] = {
+      val decoded = new Array[Any](decoders.length)
+
+      @tailrec def loop(index: Int): Either[AvroError, A] =
+        if (index < decoders.length)
+          decoders(index)(values) match {
+            case Right(value) =>
+              decoded(index) = value
+              loop(index + 1)
+
+            case Left(error) =>
+              Left(error)
+          }
+        else Right(construct(decoded))
+
+      loop(0)
+    }
   }
 
   /** Codec for enums, where unknown symbols decode to the default, if there is one. */
@@ -1432,6 +1637,61 @@ object Codec {
       case Some(logicalType) => AvroError(s"Got unexpected logical type ${logicalType.name}")
       case None              => AvroError("Got unexpected missing logical type")
     }
+
+  /** The schema of the field, including the default encoded as JSON. */
+  private def fieldSchema[A, B](field: Field[A, B]): Either[AvroError, Schema.Field] =
+    for {
+      schema <- field.codec.schema
+      default <- field.default match {
+        case Some(default) =>
+          field.codec
+            .encodeForSchema(default)
+            .map(Some(_))
+            .left
+            .map(AvroError.errorEncodingFrom(s"default for field ${field.name}", _))
+
+        case None =>
+          Right(None)
+      }
+    } yield Schema
+      .Field(field.name, schema)
+      .withDoc(field.doc)
+      .withDefault(default)
+      .withOrder(field.order.getOrElse(Schema.Field.Order.Ascending))
+      .withAliases(field.aliases.toVector)
+      .withProps(field.props)
+
+  private def fieldEncoder[A, B](field: Field[A, B]): A => Either[AvroError, AvroValue] =
+    a =>
+      field.codec
+        .encode(field.access(a))
+        .left
+        .map(AvroError.errorEncodingFrom(s"field ${field.name}", _))
+
+  /** Decodes the value of the writer field with the same name or an alias of the field, or uses the
+    * default of the field if there is no such writer field.
+    */
+  private def fieldDecoder[A, B](
+    field: Field[A, B],
+    record: Schema.Record,
+    definitions: Definitions
+  ): Vector[AvroValue] => Either[AvroError, Any] = {
+    val writerIndex =
+      (field.name +: field.aliases).iterator
+        .map(name => record.fields.indexWhere(_.name == name))
+        .find(_ >= 0)
+
+    writerIndex match {
+      case Some(index) =>
+        val decode = field.codec.decoder(record.fields(index).schema, definitions)
+        values =>
+          decode(values(index)).left.map(AvroError.errorDecodingTo(s"field ${field.name}", _))
+
+      case None =>
+        val result = field.default.toRight(AvroError.decodeMissingRecordField(field.name))
+        _ => result
+    }
+  }
 
   private val EncodedNone: Either[AvroError, AvroValue] =
     Right(AvroValue.Union(0, AvroValue.Null))

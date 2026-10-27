@@ -2233,6 +2233,608 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       }
     }
 
+    describe("record") {
+      sealed trait CustomEnum
+      case object First extends CustomEnum
+      case object Second extends CustomEnum
+
+      implicit val customEnumCodec: Codec[CustomEnum] =
+        Codec.enumeration(
+          name = "CustomEnum",
+          symbols = List("first", "second"),
+          encode = {
+            case First  => "first"
+            case Second => "second"
+          },
+          decode = {
+            case "first"  => Right(First)
+            case "second" => Right(Second)
+            case other    => Left(AvroError(other))
+          },
+          namespace = ""
+        )
+
+      describe("schema") {
+        it("should have the expected schema") {
+          assert {
+            Codec[CaseClassTwoFields].schema.value.toString() ==
+              """{"type":"record","name":"CaseClassTwoFields","namespace":"vulcan.examples","doc":"some documentation for example","fields":[{"name":"name","type":"string","doc":"some doc","default":"default name","order":"descending","aliases":["TheAlias"],"custom":"value"},{"name":"age","type":"int"}],"custom":[1,2,3],"aliases":["FirstAlias","SecondAlias"]}"""
+          }
+        }
+
+        it("should error if default value can't be encoded") {
+          implicit val intCodec: Codec[Int] =
+            Codec.int.imapErrors(_ => Left(AvroError("error")))(_ => Left(AvroError("error")))
+
+          implicit val caseClassFieldCodec: Codec[CaseClassField] =
+            Codec.record[CaseClassField]("CaseClassField", "") { field =>
+              field("value", _.value, default = Some(10)).map(CaseClassField(_))
+            }
+
+          assert {
+            caseClassFieldCodec.schema.swap.value.message ==
+              "Error encoding default for field value: error"
+          }
+        }
+
+        it("should error if field names are not unique") {
+          case class Test(first: Int, second: Int)
+
+          implicit val testCodec: Codec[Test] =
+            Codec.record("Test", "") { field =>
+              (field("value", _.first), field("value", _.second)).mapN(Test(_, _))
+            }
+
+          assertSchemaError[Test] {
+            """Duplicate field "value" in record Test"""
+          }
+        }
+
+        it("should support None as default value") {
+          case class Test(value: Option[Int])
+
+          implicit val testCodec: Codec[Test] =
+            Codec.record("Test", "") { field =>
+              field("value", _.value, default = Some(None)).map(Test(_))
+            }
+
+          assertSchemaIs[Test] {
+            """{"type":"record","name":"Test","fields":[{"name":"value","type":["null","int"],"default":null}]}"""
+          }
+        }
+
+        it("should support Some as default value") {
+          case class Test(value: Option[Int])
+
+          implicit val testCodec: Codec[Test] =
+            Codec.record("Test", "") { field =>
+              field("value", _.value, default = Some(Some(0)))(
+                Codec.union(alt => alt[Some[Int]] ++ alt[None.type])
+              ).map(Test(_))
+            }
+
+          assertSchemaIs[Test] {
+            """{"type":"record","name":"Test","fields":[{"name":"value","type":["int","null"],"default":0}]}"""
+          }
+        }
+
+        describe("default") {
+          it("should support null default value") {
+            case class Test(value: Unit)
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some(())).map(Test(_))
+              }
+
+            assertSchemaIs[Test] {
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":"null","default":null}]}"""
+            }
+          }
+
+          it("should support boolean default value") {
+            case class Test(value: Boolean)
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some(false)).map(Test(_))
+              }
+
+            assertSchemaIs[Test] {
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":"boolean","default":false}]}"""
+            }
+          }
+
+          it("should support int default value") {
+            case class Test(value: Int)
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some(0)).map(Test(_))
+              }
+
+            assertSchemaIs[Test] {
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":"int","default":0}]}"""
+            }
+          }
+
+          it("should support long default value") {
+            case class Test(value: Long)
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some(0L)).map(Test(_))
+              }
+
+            assertSchemaIs[Test] {
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":"long","default":0}]}"""
+            }
+          }
+
+          it("should support float default value") {
+            case class Test(value: Float)
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some(0.0f)).map(Test(_))
+              }
+
+            assertSchemaIs[Test] {
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":"float","default":0.0}]}"""
+            }
+          }
+
+          it("should support double default value") {
+            case class Test(value: Double)
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some(0.0d)).map(Test(_))
+              }
+
+            assertSchemaIs[Test] {
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":"double","default":0.0}]}"""
+            }
+          }
+
+          it("should support bytes default value") {
+            case class Test(value: ByteVector)
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some(ByteVector(Byte.MinValue, Byte.MaxValue)))
+                  .map(Test(_))
+              }
+
+            val expectedDefault = "\u0080\u007f"
+
+            assertSchemaIs[Test] {
+              s"""{"type":"record","name":"Test","fields":[{"name":"value","type":"bytes","default":"$expectedDefault"}]}"""
+            }
+          }
+
+          it("should support string default value") {
+            case class Test(value: String)
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some("default-value")).map(Test(_))
+              }
+
+            assertSchemaIs[Test] {
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":"string","default":"default-value"}]}"""
+            }
+          }
+
+          it("should support record default value") {
+            case class Inner(value: Int, customEnum: CustomEnum)
+
+            implicit val innerCodec: Codec[Inner] =
+              Codec.record("Inner", "") { field =>
+                (
+                  field("value", _.value),
+                  field("customEnum", _.customEnum, default = Some(First))
+                ).mapN(Inner(_, _))
+              }
+
+            case class Test(value: Inner)
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some(Inner(0, Second))).map(Test(_))
+              }
+
+            assertSchemaIs[Test] {
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":{"type":"record","name":"Inner","fields":[{"name":"value","type":"int"},{"name":"customEnum","type":{"type":"enum","name":"CustomEnum","symbols":["first","second"]},"default":"first"}]},"default":{"value":0,"customEnum":"second"}}]}"""
+            }
+          }
+
+          it("should support enum default value") {
+            case class Test(value: CustomEnum)
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some(First)).map(Test(_))
+              }
+
+            assertSchemaIs[Test] {
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":{"type":"enum","name":"CustomEnum","symbols":["first","second"]},"default":"first"}]}"""
+            }
+          }
+
+          it("should support array default value") {
+            case class Test(value: List[Int])
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some(List(123, 456))).map(Test(_))
+              }
+
+            assertSchemaIs[Test] {
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":{"type":"array","items":"int"},"default":[123,456]}]}"""
+            }
+          }
+
+          it("should support record array default value") {
+            case class Test(value: List[Element])
+            case class Element(value: Int)
+
+            implicit val elementCodec: Codec[Element] =
+              Codec.record("Element", "") { field =>
+                field("value", _.value).map(Element(_))
+              }
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some(List(Element(123), Element(456))))
+                  .map(Test(_))
+              }
+
+            assertSchemaIs[Test] {
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":{"type":"array","items":{"type":"record","name":"Element","fields":[{"name":"value","type":"int"}]}},"default":[{"value":123},{"value":456}]}]}"""
+            }
+          }
+
+          it("should support map default value") {
+            case class Test(value: Map[String, Int])
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some(Map("key" -> 0))).map(Test(_))
+              }
+
+            assertSchemaIs[Test] {
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":{"type":"map","values":"int"},"default":{"key":0}}]}"""
+            }
+          }
+
+          it("should support record map default value") {
+            case class Test(value: Map[String, Value])
+            case class Value(value: Int)
+
+            implicit val valueCodec: Codec[Value] =
+              Codec.record("Value", "") { field =>
+                field("value", _.value).map(Value(_))
+              }
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some(Map("key" -> Value(0)))).map(Test(_))
+              }
+
+            assertSchemaIs[Test] {
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":{"type":"map","values":{"type":"record","name":"Value","fields":[{"name":"value","type":"int"}]}},"default":{"key":{"value":0}}}]}"""
+            }
+          }
+
+          it("should support fixed default value") {
+            case class Inner(value: ByteVector)
+
+            implicit val innerCodec: Codec[Inner] =
+              Codec.fixed(
+                name = "Inner",
+                size = 1,
+                encode = _.value,
+                decode = bytes => Right(Inner(bytes)),
+                namespace = ""
+              )
+
+            case class Test(value: Inner)
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, default = Some(Inner(ByteVector(Byte.MaxValue))))
+                  .map(Test(_))
+              }
+
+            val expectedDefault = "\u007f"
+
+            assertSchemaIs[Test] {
+              s"""{"type":"record","name":"Test","fields":[{"name":"value","type":{"type":"fixed","name":"Inner","size":1},"default":"$expectedDefault"}]}"""
+            }
+          }
+        }
+
+        describe("props") {
+          it("should support custom properties") {
+            case class Test(value: Int)
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record(
+                "Test",
+                "",
+                props = JsonObject("custom" -> Json.obj("key" -> Json.fromString("value")))
+              ) { field =>
+                field(
+                  "value",
+                  _.value,
+                  props = JsonObject(
+                    "boolean" -> Json.True,
+                    "number" -> Json.fromDoubleOrNull(123.0),
+                    "array" -> Json.arr(Json.fromInt(123), Json.fromInt(456))
+                  )
+                ).map(Test(_))
+              }
+
+            assertSchemaIs[Test] {
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":"int","boolean":true,"number":123.0,"array":[123,456]}],"custom":{"key":"value"}}"""
+            }
+          }
+
+          it("should error if properties are reserved") {
+            case class Test(value: Int)
+
+            implicit val testCodec: Codec[Test] =
+              Codec.record("Test", "") { field =>
+                field("value", _.value, props = JsonObject("default" -> Json.fromInt(1)))
+                  .map(Test(_))
+              }
+
+            assertSchemaError[Test] {
+              """Invalid property "default" of field "value" in record Test: name is reserved"""
+            }
+          }
+        }
+      }
+
+      describe("encode") {
+        it("should encode as record") {
+          assertEncodeIs[CaseClassTwoFields](
+            CaseClassTwoFields("name", 0),
+            Right(AvroValue.Record(Vector(AvroValue.String("name"), AvroValue.Int(0))))
+          )
+        }
+
+        it("should error if a field cannot be encoded") {
+          case class Test(value: Int)
+
+          implicit val testCodec: Codec[Test] =
+            Codec.record("Test", "") { field =>
+              field("value", _.value)(Codec.int.imapErrors(Right(_))(_ => Left(AvroError("error"))))
+                .map(Test(_))
+            }
+
+          assertEncodeError[Test](
+            Test(0),
+            "Error encoding Test: Error encoding field value: error"
+          )
+        }
+
+        it("should support None as default value") {
+          case class Test(value: Option[Int])
+
+          implicit val testCodec: Codec[Test] =
+            Codec.record("Test", "") { field =>
+              field("value", _.value, default = Some(None)).map(Test(_))
+            }
+
+          assertEncodeIs[Test](
+            Test(None),
+            Right(AvroValue.Record(Vector(AvroValue.Union(0, AvroValue.Null))))
+          )
+        }
+
+        it("should support Some as default value") {
+          case class Test(value: Option[Int])
+
+          implicit val testCodec: Codec[Test] =
+            Codec.record("Test", "") { field =>
+              field("value", _.value, default = Some(Some(0)))(
+                Codec.union(alt => alt[Some[Int]] ++ alt[None.type])
+              ).map(Test(_))
+            }
+
+          assertEncodeIs[Test](
+            Test(None),
+            Right(AvroValue.Record(Vector(AvroValue.Union(1, AvroValue.Null))))
+          )
+        }
+      }
+
+      describe("decode") {
+        val nameField = Schema.Field("name", Schema.String)
+        val ageField = Schema.Field("age", Schema.Int)
+
+        def writerSchema(fields: Schema.Field*): Schema =
+          Schema.Record(Schema.Name("CaseClassTwoFields", Some("vulcan.examples")), fields.toVector)
+
+        it("should error if schema is not record") {
+          assertDecodeError[CaseClassTwoFields](
+            unsafeEncode(CaseClassTwoFields("name", 123)),
+            unsafeSchema[String],
+            "Error decoding vulcan.examples.CaseClassTwoFields: Got unexpected schema type string, expected schema type record"
+          )
+        }
+
+        it("should error if value is not record") {
+          assertDecodeError[CaseClassTwoFields](
+            unsafeEncode(123),
+            unsafeSchema[CaseClassTwoFields],
+            "Error decoding vulcan.examples.CaseClassTwoFields: Invalid int value for record vulcan.examples.CaseClassTwoFields"
+          )
+        }
+
+        it("should error if the record does not have a value for every field") {
+          assertDecodeError[CaseClassTwoFields](
+            AvroValue.Record(Vector(AvroValue.String("name"))),
+            unsafeSchema[CaseClassTwoFields],
+            "Error decoding vulcan.examples.CaseClassTwoFields: Invalid record with 1 values for record vulcan.examples.CaseClassTwoFields with 2 fields"
+          )
+        }
+
+        it("should error if any field without default value is missing") {
+          assertDecodeError[CaseClassTwoFields](
+            AvroValue.Record(Vector(AvroValue.String("name"))),
+            writerSchema(nameField),
+            "Error decoding vulcan.examples.CaseClassTwoFields: Record writer schema is missing field 'age'"
+          )
+        }
+
+        it("should error if a field cannot be decoded") {
+          assertDecodeError[CaseClassTwoFields](
+            AvroValue.Record(Vector(AvroValue.String("name"), AvroValue.String("123"))),
+            writerSchema(nameField, Schema.Field("age", Schema.String)),
+            "Error decoding vulcan.examples.CaseClassTwoFields: Error decoding field age: Error decoding Int: Got unexpected schema type string, expected schema type int"
+          )
+        }
+
+        it("should decode if field with default value is missing") {
+          assertDecodeIs[CaseClassTwoFields](
+            AvroValue.Record(Vector(AvroValue.Int(123))),
+            Right(CaseClassTwoFields("default name", 123)),
+            Some(writerSchema(ageField))
+          )
+        }
+
+        it("should decode fields in a different order") {
+          assertDecodeIs[CaseClassTwoFields](
+            AvroValue.Record(Vector(AvroValue.Int(123), AvroValue.String("name"))),
+            Right(CaseClassTwoFields("name", 123)),
+            Some(writerSchema(ageField, nameField))
+          )
+        }
+
+        it("should ignore fields which are not part of the record") {
+          assertDecodeIs[CaseClassTwoFields](
+            AvroValue.Record(
+              Vector(AvroValue.String("name"), AvroValue.Double(1.0), AvroValue.Int(123))
+            ),
+            Right(CaseClassTwoFields("name", 123)),
+            Some(writerSchema(nameField, Schema.Field("other", Schema.Double), ageField))
+          )
+        }
+
+        it("should decode fields using the writer schema") {
+          case class Test(value: Long)
+
+          implicit val testCodec: Codec[Test] =
+            Codec.record("Test", "") { field =>
+              field("value", _.value).map(Test(_))
+            }
+
+          assertDecodeIs[Test](
+            AvroValue.Record(Vector(AvroValue.Int(1))),
+            Right(Test(1L)),
+            Some(Schema.Record(Schema.Name("Test"), Vector(Schema.Field("value", Schema.Int))))
+          )
+        }
+
+        it("should decode as case class") {
+          assertDecodeIs[CaseClassTwoFields](
+            unsafeEncode(CaseClassTwoFields("name", 123)),
+            Right(CaseClassTwoFields("name", 123))
+          )
+        }
+
+        it("should support None as default value") {
+          case class Test(value: Option[Int])
+
+          implicit val testCodec: Codec[Test] =
+            Codec.record("Test", "") { field =>
+              field("value", _.value, default = Some(None)).map(Test(_))
+            }
+
+          assertDecodeIs[Test](
+            unsafeEncode(Test(None)),
+            Right(Test(None))
+          )
+        }
+
+        it("should support Some as default value") {
+          case class Test(value: Option[Int])
+
+          implicit val testCodec: Codec[Test] =
+            Codec.record("Test", "") { field =>
+              field("value", _.value, default = Some(Some(0)))(
+                Codec.union(alt => alt[Some[Int]] ++ alt[None.type])
+              ).map(Test(_))
+            }
+
+          assertDecodeIs[Test](
+            unsafeEncode(Test(None)),
+            Right(Test(None))
+          )
+        }
+
+        it("should decode field with aliased name") {
+          case class Aliased(aliasedField: Int)
+
+          implicit val codec: Codec[Aliased] =
+            Codec.record("CaseClassField", "") { field =>
+              field("aliasedField", _.aliasedField, aliases = Seq("value")).map(Aliased(_))
+            }
+
+          assertDecodeIs[Aliased](
+            unsafeEncode(CaseClassField(3)),
+            Right(Aliased(3)),
+            Some(unsafeSchema[CaseClassField])
+          )
+        }
+
+        it("should decode references to named schemas in the writer schema") {
+          case class Leaf(value: Int)
+
+          implicit val leafCodec: Codec[Leaf] =
+            Codec.record("Leaf", "") { field =>
+              field("value", _.value).map(Leaf(_))
+            }
+
+          case class Node(value: Int, next: Option[Leaf])
+
+          implicit val nodeCodec: Codec[Node] =
+            Codec.record("Node", "") { field =>
+              (field("value", _.value), field("next", _.next)).mapN(Node(_, _))
+            }
+
+          val recursive =
+            Schema.Record(
+              Schema.Name("Node"),
+              Vector(
+                Schema.Field("value", Schema.Int),
+                Schema.Field(
+                  "next",
+                  Schema.Union(Vector(Schema.Null, Schema.Ref(Schema.Name("Node"))))
+                )
+              )
+            )
+
+          assertDecodeIs[Node](
+            AvroValue.Record(
+              Vector(
+                AvroValue.Int(1),
+                AvroValue.Union(
+                  1,
+                  AvroValue.Record(Vector(AvroValue.Int(2), AvroValue.Union(0, AvroValue.Null)))
+                )
+              )
+            ),
+            Right(Node(1, Some(Leaf(2)))),
+            Some(recursive)
+          )
+        }
+      }
+    }
+
     describe("seq") {
       describe("schema") {
         it("should be encoded as array") {
@@ -2513,6 +3115,12 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
         Schema.Enum(Schema.Name(name, Some(namespace)), Vector("A", "B"))
 
       describe("schema") {
+        it("should encode records as union") {
+          assertSchemaIs[SealedTraitCaseClass] {
+            """[{"type":"record","name":"FirstInSealedTraitCaseClass","namespace":"com.example","fields":[{"name":"value","type":"int"}]},{"type":"record","name":"SecondInSealedTraitCaseClass","namespace":"com.example","fields":[{"name":"value","type":"string"}]},{"type":"array","items":"int"}]"""
+          }
+        }
+
         it("should encode as union") {
           assertSchemaIs[Either[String, String]] {
             """[{"type":"enum","name":"Suit","namespace":"a","symbols":["A","B"]},{"type":"enum","name":"Suit","namespace":"b","symbols":["A","B"]}]"""
@@ -2634,6 +3242,87 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
             Schema.Fixed(Schema.Name("Suit", Some("b")), 1),
             "Missing alternative for fixed b.Suit in union"
           )(unionOf(enumCodec("Card", "a"), enumCodec("Suit", "b")))
+        }
+
+        it("should error if schema is not in union") {
+          assertDecodeError[SealedTraitCaseClass](
+            AvroValue.String("value"),
+            unsafeSchema[String],
+            "Missing alternative for string in union"
+          )
+        }
+
+        it("should decode if schema is part of union") {
+          assertDecodeIs[SealedTraitCaseClass](
+            unsafeEncode(FirstInSealedTraitCaseClass(0)),
+            Right(FirstInSealedTraitCaseClass(0)),
+            Some(unsafeSchema[FirstInSealedTraitCaseClass])
+          )
+        }
+
+        it("should decode if schema is union with records of the same name") {
+          assertDecodeIs[SealedTraitCaseClassSharedName](
+            unsafeEncode(Second.SharedNameSealedTraitCaseClass("hello")),
+            Right(Second.SharedNameSealedTraitCaseClass("hello")),
+            Some(unsafeSchema[Second.SharedNameSealedTraitCaseClass])
+          )
+        }
+
+        it("should error if value is not a union value") {
+          assertDecodeError[SealedTraitCaseClass](
+            AvroValue.Double(123d),
+            unsafeSchema[SealedTraitCaseClass],
+            "Invalid double value for union"
+          )
+        }
+
+        it("should error if value is null and not an alternative") {
+          assertDecodeError[SealedTraitCaseClass](
+            AvroValue.Null,
+            unsafeSchema[SealedTraitCaseClass],
+            "Invalid null value for union"
+          )
+        }
+
+        it("should error if no alternative with the name of the written type") {
+          assertDecodeError[SealedTraitCaseClass](
+            unsafeEncode(CaseClassInSealedTraitCaseClassSingle(0)),
+            unsafeSchema[CaseClassInSealedTraitCaseClassSingle],
+            "Missing alternative for record vulcan.examples.CaseClassInSealedTraitCaseClassSingle in union"
+          )
+        }
+
+        it("should decode using schema and decoder for alternative") {
+          assertDecodeIs[SealedTraitCaseClass](
+            unsafeEncode[SealedTraitCaseClass](FirstInSealedTraitCaseClass(0)),
+            Right(FirstInSealedTraitCaseClass(0))
+          )
+        }
+
+        it("should decode using schema with aliased name") {
+          implicit val secondCodec: Codec[SecondInSealedTraitCaseClass] =
+            Codec.record(
+              name = "AliasedInSealedTraitCaseClass",
+              namespace = "com.example",
+              aliases = Seq("SecondInSealedTraitCaseClass")
+            ) { field =>
+              field("value", _.value).map(SecondInSealedTraitCaseClass(_))
+            }
+
+          implicit val codec: Codec[SealedTraitCaseClass] =
+            Codec.union { alt =>
+              alt[FirstInSealedTraitCaseClass] ++
+                alt[SecondInSealedTraitCaseClass] ++
+                alt[ThirdInSealedTraitCaseClass]
+            }
+
+          assertDecodeIs[SealedTraitCaseClass](
+            unsafeEncode[SealedTraitCaseClass](SecondInSealedTraitCaseClass("foo"))(
+              SealedTraitCaseClass.sealedTraitCaseClassCodec
+            ),
+            Right(SecondInSealedTraitCaseClass("foo")),
+            Some(SealedTraitCaseClass.sealedTraitCaseClassCodec.schema.value)
+          )
         }
       }
     }

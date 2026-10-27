@@ -1,0 +1,39 @@
+/*
+ * Copyright 2019 OVO Energy Limited
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package vulcan.v2.examples
+
+import cats.syntax.all._
+import io.circe.{Json, JsonObject}
+import vulcan.v2.{Codec, Schema}
+
+final case class CaseClassTwoFields(name: String, age: Int)
+
+object CaseClassTwoFields {
+  implicit val codec: Codec[CaseClassTwoFields] =
+    Codec.record(
+      name = "CaseClassTwoFields",
+      namespace = "vulcan.examples",
+      doc = Some("some documentation for example"),
+      aliases = Seq("FirstAlias", "SecondAlias"),
+      props = JsonObject("custom" -> Json.arr(Json.fromInt(1), Json.fromInt(2), Json.fromInt(3)))
+    ) { field =>
+      assert(field.toString() == "FieldBuilder")
+
+      (
+        field(
+          name = "name",
+          access = _.name,
+          doc = Some("some doc"),
+          default = Some("default name"),
+          order = Some(Schema.Field.Order.Descending),
+          aliases = Seq("TheAlias"),
+          props = JsonObject("custom" -> Json.fromString("value"))
+        ),
+        field("age", _.age)
+      ).mapN(CaseClassTwoFields(_, _))
+    }
+}

@@ -6,13 +6,14 @@
 
 package vulcan.v2
 
+import cats.syntax.all._
 import java.io.EOFException
 import java.nio.ByteBuffer
 import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, ZoneOffset}
 import java.util.UUID
 import org.apache.avro.Conversions
 import org.apache.avro.data.TimeConversions
-import org.apache.avro.generic.GenericFixed
+import org.apache.avro.generic.{GenericFixed, GenericRecord}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalatest.Assertion
@@ -143,6 +144,43 @@ final class CodecJavaSpec extends BaseSpec {
           forAll(AvroValueGenerators.genValue(writerSchema)) { value =>
             assertSameAsJava(reader, writerSchema, value)
           }
+        }
+      }
+    }
+
+    it("should decode records the same as the Java Avro library resolves schemas") {
+      val reader =
+        Reader[(Int, String)](
+          Codec.record[(Int, String)]("Person", "") { field =>
+            (field("a", _._1), field("b", _._2, default = Some("x"), aliases = List("c"))).tupled
+          },
+          value => {
+            val record = value.asInstanceOf[GenericRecord]
+            (record.get("a").asInstanceOf[java.lang.Integer].intValue, record.get("b").toString)
+          }
+        )
+
+      def person(fields: (String, Schema)*): Schema =
+        Schema.Record(
+          Schema.Name("Person"),
+          fields.toVector.map { case (name, schema) => Schema.Field(name, schema) }
+        )
+
+      val writerSchemas =
+        List(
+          person("a" -> Schema.Int, "b" -> Schema.String),
+          person("b" -> Schema.String, "a" -> Schema.Int),
+          person("a" -> Schema.Int),
+          person("a" -> Schema.Int, "c" -> Schema.String),
+          person("a" -> Schema.Int, "b" -> Schema.String, "d" -> Schema.Double),
+          person("b" -> Schema.String),
+          person("a" -> Schema.Long, "b" -> Schema.String),
+          person("a" -> Schema.Int, "b" -> Schema.Bytes)
+        )
+
+      writerSchemas.foreach { writerSchema =>
+        forAll(AvroValueGenerators.genValue(writerSchema)) { value =>
+          assertSameAsJava(reader, writerSchema, value)
         }
       }
     }

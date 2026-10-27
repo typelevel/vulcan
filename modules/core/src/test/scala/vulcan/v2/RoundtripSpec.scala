@@ -240,6 +240,8 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
     it("roundtrip with the types of unions") { roundtrip[Option[Either[Int, String]]] }
   }
 
+  describe("Record") { it("roundtrip") { roundtrip[CaseClassField] } }
+
   describe("Seq") {
     it("roundtrip") {
       implicit def seqArbitrary[A](implicit
@@ -263,6 +265,8 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
   describe("Short") { it("roundtrip") { roundtrip[Short] } }
 
   describe("String") { it("roundtrip") { roundtrip[String] } }
+
+  describe("Union") { it("roundtrip") { roundtrip[SealedTraitCaseClass] } }
 
   describe("Unit") { it("roundtrip") { roundtrip[Unit] } }
 
