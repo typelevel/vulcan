@@ -196,30 +196,12 @@ private[v2] object SchemaValidator {
               Left(AvroError(s"Unions cannot directly contain other unions: $union"))
 
             case _ =>
-              val key = unionKey(schema)
+              val key = SchemaNames.unionKey(schema)
               if (keys.contains(key)) Left(AvroError(s"Duplicate $key in union $union"))
               else Right(keys + key)
           }
         }
         .void
-
-    /** The key for distinguishing types in unions, being the full name for named schemas. */
-    private def unionKey(schema: Schema): String =
-      schema match {
-        case named: Schema.Named => named.fullName
-        case ref: Schema.Ref     => ref.fullName
-        case _: Schema.Null      => "null"
-        case _: Schema.Boolean   => "boolean"
-        case _: Schema.Int       => "int"
-        case _: Schema.Long      => "long"
-        case _: Schema.Float     => "float"
-        case _: Schema.Double    => "double"
-        case _: Schema.Bytes     => "bytes"
-        case _: Schema.String    => "string"
-        case _: Schema.Array     => "array"
-        case _: Schema.Map       => "map"
-        case _: Schema.Union     => "union"
-      }
 
     /** Returns `true` if the default is valid, where union defaults can match any type. */
     private def isValidDefault(schema: Schema, default: Json): Boolean =
