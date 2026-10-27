@@ -38,6 +38,21 @@ sealed abstract class Codec[A] {
   final def decode(value: AvroValue, writerSchema: Schema): Either[AvroError, A] =
     decoder(writerSchema, new Definitions(writerSchema))(value)
 
+  /** Returns a function decoding Avro binary written using the writer schema, or an error if the
+    * writer schema is invalid.
+    *
+    * The function is compiled once for the writer schema, and can be reused for any number of
+    * values, also concurrently. Values are decoded from the start of the bytes, and any remaining
+    * bytes are ignored.
+    */
+  final def binaryDecoder(
+    writerSchema: Schema
+  ): Either[AvroError, ByteVector => Either[AvroError, A]] =
+    BinaryDecoder(writerSchema).map { binary =>
+      val decode = decoder(writerSchema, new Definitions(writerSchema))
+      (bytes: ByteVector) => binary.decode(bytes).flatMap(decode)
+    }
+
   /** Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
     * back-and-forth between types `A` and `B`.
     */
@@ -295,14 +310,13 @@ object Codec {
   /** Returns the result of decoding the specified Avro binary, written using the writer schema, to
     * the specified type.
     *
-    * The value is decoded from the start of the bytes, and any remaining bytes are ignored.
+    * The value is decoded from the start of the bytes, and any remaining bytes are ignored. To
+    * decode many values written using the same writer schema, use [[Codec#binaryDecoder]].
     *
     * @group Utilities
     */
   final def fromBinary[A: Codec](bytes: ByteVector, writerSchema: Schema): Either[AvroError, A] =
-    BinaryDecoder(writerSchema)
-      .flatMap(_.decode(bytes))
-      .flatMap(Codec[A].decode(_, writerSchema))
+    Codec[A].binaryDecoder(writerSchema).flatMap(_(bytes))
 
   /** Returns the result of decoding the specified Avro JSON, written using the writer schema, to
     * the specified type.

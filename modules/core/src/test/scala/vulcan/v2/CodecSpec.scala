@@ -23,6 +23,45 @@ import vulcan.v2.examples._
 
 final class CodecSpec extends BaseSpec with CodecSpecHelpers {
   describe("Codec") {
+    describe("binaryDecoder") {
+      it("should decode values using the writer schema") {
+        val decode = Codec[Long].binaryDecoder(unsafeSchema[Int]).value
+        assert(decode(hex"02") == Right(1L))
+        assert(decode(hex"04") == Right(2L))
+      }
+
+      it("should decode values of unions using the written type") {
+        val decode = Codec[Long].binaryDecoder(Schema.Union(Vector(Schema.Int, Schema.Long))).value
+        assert(decode(hex"0002") == Right(1L))
+        assert(decode(hex"0204") == Right(2L))
+      }
+
+      it("should ignore remaining bytes") {
+        val decode = Codec[Int].binaryDecoder(unsafeSchema[Int]).value
+        assert(decode(hex"0204") == Right(1))
+      }
+
+      it("should error if the writer schema is invalid") {
+        val result = Codec[Int].binaryDecoder(Schema.Union(Vector(Schema.Int, Schema.Int)))
+        assert(result.swap.value.message == """Duplicate int in union ["int","int"]""")
+      }
+
+      it("should error if the binary does not match the writer schema") {
+        val decode = Codec[Int].binaryDecoder(unsafeSchema[Int]).value
+        assert {
+          decode(ByteVector.empty).swap.value.message == "Unexpected end of input at position 0"
+        }
+      }
+
+      it("should error if the writer schema does not match the type") {
+        val decode = Codec[Int].binaryDecoder(unsafeSchema[Long]).value
+        assert {
+          decode(hex"02").swap.value.message ==
+            "Error decoding Int: Got unexpected schema type long, expected schema type int"
+        }
+      }
+    }
+
     describe("boolean") {
       describe("schema") {
         it("should be encoded as boolean") {
