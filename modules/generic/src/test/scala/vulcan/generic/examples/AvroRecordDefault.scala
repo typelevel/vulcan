@@ -7,8 +7,8 @@
 package vulcan.generic.examples
 
 import vulcan.AvroError
+import vulcan.Codec
 import vulcan.generic.*
-import vulcan.v2.Codec
 
 object AvroRecordDefault {
   sealed trait Enum extends Product {

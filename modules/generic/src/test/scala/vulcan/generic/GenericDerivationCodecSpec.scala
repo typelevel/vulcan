@@ -6,11 +6,11 @@
 
 package vulcan.generic
 
+import vulcan.AvroValue
 import vulcan.BaseSpec
+import vulcan.CodecSpecHelpers
+import vulcan.Schema
 import vulcan.generic.examples.*
-import vulcan.v2.AvroValue
-import vulcan.v2.CodecSpecHelpers
-import vulcan.v2.Schema
 
 final class GenericDerivationCodecSpec extends BaseSpec with CodecSpecHelpers {
   describe("Codec") {

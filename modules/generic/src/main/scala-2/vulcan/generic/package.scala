@@ -13,7 +13,6 @@ import io.circe.JsonObject
 import magnolia1.*
 import scodec.bits.ByteVector
 import vulcan.internal.Names
-import vulcan.v2.Codec
 
 package object generic {
   implicit final class MagnoliaCodec private[generic] (

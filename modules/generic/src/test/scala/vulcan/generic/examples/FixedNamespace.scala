@@ -10,8 +10,8 @@ import cats.Eq
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
 import scodec.bits.ByteVector
+import vulcan.Codec
 import vulcan.generic.*
-import vulcan.v2.Codec
 
 @AvroDoc("Some documentation")
 @AvroNamespace("vulcan.generic.examples.overridden")

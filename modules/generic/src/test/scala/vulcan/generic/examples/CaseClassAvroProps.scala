@@ -8,8 +8,8 @@ package vulcan.generic.examples
 
 import io.circe.Json
 import io.circe.JsonObject
+import vulcan.Codec
 import vulcan.generic.*
-import vulcan.v2.Codec
 
 @AvroName("CaseClassAvroProps")
 final case class CaseClassAvroProps(

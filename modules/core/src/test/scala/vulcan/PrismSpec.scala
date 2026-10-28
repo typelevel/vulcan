@@ -7,7 +7,7 @@
 package vulcan
 
 import org.scalatest.compatible.Assertion
-import vulcan.v2.examples.*
+import vulcan.examples.*
 
 final class PrismSpec extends BaseSpec {
   describe("Prism") {

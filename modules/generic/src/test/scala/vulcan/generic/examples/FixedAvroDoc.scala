@@ -7,8 +7,8 @@
 package vulcan.generic.examples
 
 import scodec.bits.ByteVector
+import vulcan.Codec
 import vulcan.generic.*
-import vulcan.v2.Codec
 
 @AvroDoc("Some documentation")
 final case class FixedAvroDoc(bytes: ByteVector)

@@ -6,8 +6,8 @@
 
 package enumeratum.values
 
+import vulcan.Codec
 import vulcan.internal.Names
-import vulcan.v2.Codec
 
 sealed trait VulcanValueEnum[ValueType, EntryType <: ValueEnumEntry[ValueType]] {
   this: ValueEnum[ValueType, EntryType] =>

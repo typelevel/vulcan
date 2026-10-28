@@ -6,8 +6,8 @@
 
 package enumeratum
 
+import vulcan.Codec
 import vulcan.internal.Names
-import vulcan.v2.Codec
 
 trait VulcanEnum[A <: EnumEntry] { this: Enum[A] =>
   implicit def vulcanCodec(implicit names: Names[A]): Codec[A] =

@@ -14,7 +14,6 @@ import magnolia1.*
 import scala.deriving.Mirror
 import scodec.bits.ByteVector
 import vulcan.internal.Names
-import vulcan.v2.Codec
 
 package object generic {
 

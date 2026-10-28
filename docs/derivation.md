@@ -1,6 +1,6 @@
 # Derivation
 
-The `@GENERIC_MODULE_NAME@` module provides generic derivation of @:api(vulcan.v2.Codec)s using [Magnolia](https://github.com/softwaremill/magnolia) for records and unions, and compile-time macros for enumerations and fixed types.
+The `@GENERIC_MODULE_NAME@` module provides generic derivation of @:api(vulcan.Codec)s using [Magnolia](https://github.com/softwaremill/magnolia) for records and unions, and compile-time macros for enumerations and fixed types.
 
 ## Getting Started
 
@@ -12,7 +12,7 @@ libraryDependencies += "@ORGANIZATION@" %% "@GENERIC_MODULE_NAME@" % "@VERSION@"
 
 ## Enumerations
 
-`deriveEnum` can be used to partly derive @:api(vulcan.v2.Codec)s for enumeration types. Annotations like `@AvroDoc` can be used to customize the derivation.
+`deriveEnum` can be used to partly derive @:api(vulcan.Codec)s for enumeration types. Annotations like `@AvroDoc` can be used to customize the derivation.
 
 ```scala mdoc:reset-object
 import vulcan.AvroError
@@ -43,7 +43,7 @@ deriveEnum[Fruit](
 
 ## Fixed
 
-`deriveFixed` can be used to partly derive @:api(vulcan.v2.Codec)s for fixed types. Annotations like `@AvroDoc` can be used to customize the derivation.
+`deriveFixed` can be used to partly derive @:api(vulcan.Codec)s for fixed types. Annotations like `@AvroDoc` can be used to customize the derivation.
 
 ```scala mdoc
 import scodec.bits.ByteVector
@@ -66,10 +66,10 @@ deriveFixed[Pence](
 
 ## Records
 
-To derive @:api(vulcan.v2.Codec)s for `case class`es or `sealed trait`s, we can use `Codec.derive`. Annotations like `@AvroDoc` and `@AvroNamespace` can be used to customize the documentation and namespace during derivation.
+To derive @:api(vulcan.Codec)s for `case class`es or `sealed trait`s, we can use `Codec.derive`. Annotations like `@AvroDoc` and `@AvroNamespace` can be used to customize the documentation and namespace during derivation.
 
 ```scala mdoc
-import vulcan.v2.Codec
+import vulcan.Codec
 import vulcan.generic._
 
 @AvroNamespace("com.example")

@@ -10,7 +10,7 @@ import enumeratum.EitherValues
 import org.scalacheck.Gen
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import vulcan.v2.Codec
+import vulcan.Codec
 
 final class VulcanValueEnumSpec extends AnyFunSpec with ScalaCheckPropertyChecks with EitherValues {
 

@@ -7,8 +7,8 @@
 package vulcan.generic
 
 import vulcan.BaseSpec
+import vulcan.Codec
 import vulcan.generic.examples.CaseClassAvroNullDefault
-import vulcan.v2.Codec
 
 final class AvroNullDefaultSpec extends BaseSpec {
   describe("AvroNullDefault") {

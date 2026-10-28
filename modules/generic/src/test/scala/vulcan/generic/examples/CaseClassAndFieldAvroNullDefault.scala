@@ -9,8 +9,8 @@ package vulcan.generic.examples
 import cats.Eq
 import java.time.LocalDate
 import org.scalacheck.Arbitrary
+import vulcan.Codec
 import vulcan.generic.*
-import vulcan.v2.Codec
 
 @AvroNullDefault(true)
 final case class CaseClassAndFieldAvroNullDefault(

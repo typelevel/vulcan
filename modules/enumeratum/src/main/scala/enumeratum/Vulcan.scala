@@ -7,9 +7,9 @@
 package enumeratum
 
 import vulcan.AvroError
+import vulcan.Codec
 import vulcan.generic.deriveEnum
 import vulcan.internal.Names
-import vulcan.v2.Codec
 
 object Vulcan {
   def enumCodec[A <: EnumEntry](

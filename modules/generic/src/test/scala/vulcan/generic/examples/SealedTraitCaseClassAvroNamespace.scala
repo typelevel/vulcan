@@ -10,8 +10,8 @@ import cats.Eq
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
+import vulcan.Codec
 import vulcan.generic.*
-import vulcan.v2.Codec
 
 sealed trait SealedTraitCaseClassAvroNamespace
 

@@ -8,10 +8,10 @@ package vulcan.generic
 
 import io.circe.Json
 import vulcan.BaseSpec
+import vulcan.Codec
+import vulcan.CodecSpecHelpers
+import vulcan.Schema
 import vulcan.generic.examples.AvroRecordDefault.*
-import vulcan.v2.Codec
-import vulcan.v2.CodecSpecHelpers
-import vulcan.v2.Schema
 
 final class AvroFieldDefaultSpec extends BaseSpec with CodecSpecHelpers {
   describe("AvroFieldDefault") {

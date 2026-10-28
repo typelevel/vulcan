@@ -7,8 +7,8 @@
 package vulcan.generic
 
 import vulcan.BaseSpec
+import vulcan.RoundtripHelpers
 import vulcan.generic.examples.*
-import vulcan.v2.RoundtripHelpers
 
 final class GenericDerivationRoundtripSpec extends BaseSpec with RoundtripHelpers {
 
