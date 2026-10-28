@@ -150,8 +150,9 @@ lazy val docs = project
     import org.typelevel.sbt.site.GenericSiteSettings
 
     Seq(
-      crossScalaVersions := Seq(scala213Version),
+      crossScalaVersions := Seq(scala3Version),
       scalacOptions ~= (_.filterNot(_.startsWith("-Wunused"))),
+      scalacOptions += "-Yretain-trees",
       Compile / packageDoc / mappings := (unidocs / Compile / packageDoc / mappings).value.map {
         case (file, path) => file -> path.replace('\\', '/')
       },
@@ -182,7 +183,7 @@ lazy val docs = project
         val gitHubUrl = "https://github.com/typelevel/vulcan"
 
         val projectLinks = List(
-          IconLink.internal(Root / "api" / "vulcan" / "index.html", HeliumIcon.api),
+          IconLink.internal(Root / "api" / "vulcan.html", HeliumIcon.api),
           IconLink.external(gitHubUrl, HeliumIcon.github),
           IconLink.external("https://discord.gg/Q8KBnyC776", HeliumIcon.chat)
         )
@@ -295,14 +296,14 @@ lazy val docs = project
 lazy val unidocs = project
   .enablePlugins(NoPublishPlugin, TypelevelUnidocPlugin)
   .settings(
-    crossScalaVersions := Seq(scala213Version),
+    crossScalaVersions := Seq(scala3Version),
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(core, enumeratum, generic, refined),
     ScalaUnidoc / unidoc / scalacOptions ++= {
       val docVersion = tlLatestVersion.value.getOrElse(version.value)
       // format: off
       Seq(
         "-doc-canonical-base-url", "https://typelevel.org/vulcan/api/",
-        "-doc-footer", "Licensed under Apache License, Version 2.0. Copyright © 2019 OVO Energy Limited.",
+        "-doc-footer", "Licensed under Apache License, Version 2.0.",
         "-doc-title", "Vulcan",
         "-doc-version", s"v$docVersion",
         "-groups"
