@@ -49,6 +49,7 @@ deriveEnum[Fruit](
 import scodec.bits.ByteVector
 import vulcan.AvroError
 
+@AvroNamespace("com.example")
 sealed abstract case class Pence(value: Byte)
 
 object Pence {

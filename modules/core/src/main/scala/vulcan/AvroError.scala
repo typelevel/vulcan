@@ -47,9 +47,9 @@ object AvroError {
     Eq.by(_.message)
 
   private[vulcan] def errorDecodingTo(decodingTypeName: String, cause: AvroError): AvroError =
-    ErrorDecodingType(decodingTypeName, cause)
+    new ErrorDecodingType(decodingTypeName, cause)
 
-  private[vulcan] final case class ErrorDecodingType(decodingTypeName: String, cause: AvroError)
+  private[vulcan] final class ErrorDecodingType(val decodingTypeName: String, val cause: AvroError)
     extends AvroError {
 
     def message = s"Error decoding $decodingTypeName: ${cause.message}"
@@ -108,9 +108,9 @@ object AvroError {
     }
 
   private[vulcan] def errorEncodingFrom(encodingTypeName: String, cause: AvroError): AvroError =
-    ErrorEncodingType(encodingTypeName, cause)
+    new ErrorEncodingType(encodingTypeName, cause)
 
-  private[vulcan] final case class ErrorEncodingType(encodingTypeName: String, cause: AvroError)
+  private[vulcan] final class ErrorEncodingType(val encodingTypeName: String, val cause: AvroError)
     extends AvroError {
 
     def message = s"Error encoding $encodingTypeName: ${cause.message}"

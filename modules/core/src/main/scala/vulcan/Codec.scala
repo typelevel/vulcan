@@ -92,7 +92,7 @@ sealed abstract class Codec[A] {
     * Similar to [[Codec#imap]], except the mappings in both directions might be unsuccessful.
     */
   final def imapErrors[B](f: A => Either[AvroError, B])(g: B => Either[AvroError, A]): Codec[B] =
-    Codec.ImapErrors(this, f, g)
+    new Codec.ImapErrors(this, f, g)
 
   /**
     * Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
@@ -129,10 +129,10 @@ sealed abstract class Codec[A] {
     }
 
   private[vulcan] final def withTypeName(typeName: String): Codec[A] =
-    Codec.WithTypeName(this, typeName)
+    new Codec.WithTypeName(this, typeName)
 
   private[vulcan] final def withLogicalType(logicalType: LogicalType): Codec[A] =
-    Codec.LogicalTypeCodec(this, logicalType)
+    new Codec.LogicalTypeCodec(this, logicalType)
 
   /** Encodes the value as JSON for defaults in schemas, where unions are without the type. */
   private[vulcan] final def encodeForSchema(a: A): Either[AvroError, Json] =
@@ -231,7 +231,7 @@ object Codec {
     * @group Cats
     */
   implicit final def chain[A](implicit codec: Codec[A]): Codec[Chain[A]] =
-    ArrayCodec[A, Chain[A]](codec, _.length.toInt, _.iterator, chainBuilder)
+    new ArrayCodec[A, Chain[A]](codec, _.length.toInt, _.iterator, chainBuilder)
       .withTypeName("Chain")
 
   /**
@@ -253,7 +253,7 @@ object Codec {
     * @group Create
     */
   final def decimal(precision: Int, scale: Int): Codec[BigDecimal] =
-    DecimalCodec(precision, scale).withTypeName("BigDecimal")
+    new DecimalCodec(precision, scale).withTypeName("BigDecimal")
 
   /**
     * Returns the result of decoding the specified value to the specified type, using the schema of
@@ -308,7 +308,7 @@ object Codec {
     props: JsonObject = JsonObject.empty
   ): Codec[A] = {
     val enumName = SchemaNames.resolve(name, Some(namespace))
-    EnumCodec(enumName, symbols.toVector, encode, decode, default, doc, aliases.toVector, props)
+    new EnumCodec(enumName, symbols.toVector, encode, decode, default, doc, aliases.toVector, props)
       .withTypeName(enumName.fullName)
   }
 
@@ -332,7 +332,7 @@ object Codec {
     props: JsonObject = JsonObject.empty
   ): Codec[A] = {
     val fixedName = SchemaNames.resolve(name, Some(namespace))
-    FixedCodec(fixedName, size, encode, decode, doc, aliases.toVector, props)
+    new FixedCodec(fixedName, size, encode, decode, doc, aliases.toVector, props)
       .withTypeName(fixedName.fullName)
   }
 
@@ -378,7 +378,7 @@ object Codec {
     encode: A => Either[AvroError, AvroValue],
     decode: (AvroValue, Schema) => Either[AvroError, A]
   ): Codec[A] =
-    Instance(schema, encode, decode)
+    new Instance(schema, encode, decode)
 
   /**
     * @group JavaTime
@@ -450,7 +450,7 @@ object Codec {
     * @group Collection
     */
   implicit final def list[A](implicit codec: Codec[A]): Codec[List[A]] =
-    ArrayCodec[A, List[A]](codec, _.length, _.iterator, _ => List.newBuilder)
+    new ArrayCodec[A, List[A]](codec, _.length, _.iterator, _ => List.newBuilder)
       .withTypeName("List")
 
   /**
@@ -513,20 +513,20 @@ object Codec {
     * @group Collection
     */
   implicit final def map[A](implicit codec: Codec[A]): Codec[Map[String, A]] =
-    MapCodec[A, Map[String, A]](codec, _.size, _.iterator, _ => Map.newBuilder)
+    new MapCodec[A, Map[String, A]](codec, _.size, _.iterator, _ => Map.newBuilder)
       .withTypeName("Map")
 
   /**
     * @group General
     */
   implicit lazy val none: Codec[None.type] =
-    NullCodec(None, "None")
+    new NullCodec(None, "None")
 
   /**
     * @group Cats
     */
   implicit final def nonEmptyChain[A](implicit codec: Codec[A]): Codec[NonEmptyChain[A]] =
-    ArrayCodec[A, Chain[A]](codec, _.length.toInt, _.iterator, chainBuilder)
+    new ArrayCodec[A, Chain[A]](codec, _.length.toInt, _.iterator, chainBuilder)
       .imapError(NonEmptyChain.fromChain(_).toRight(AvroError.decodeEmptyCollection))(_.toChain)
       .withTypeName("NonEmptyChain")
 
@@ -534,7 +534,7 @@ object Codec {
     * @group Cats
     */
   implicit final def nonEmptyList[A](implicit codec: Codec[A]): Codec[NonEmptyList[A]] =
-    ArrayCodec[A, List[A]](codec, _.length, _.iterator, _ => List.newBuilder)
+    new ArrayCodec[A, List[A]](codec, _.length, _.iterator, _ => List.newBuilder)
       .imapError(NonEmptyList.fromList(_).toRight(AvroError.decodeEmptyCollection))(_.toList)
       .withTypeName("NonEmptyList")
 
@@ -542,7 +542,7 @@ object Codec {
     * @group Cats
     */
   implicit final def nonEmptyMap[A](implicit codec: Codec[A]): Codec[NonEmptyMap[String, A]] =
-    MapCodec[A, SortedMap[String, A]](codec, _.size, _.iterator, _ => SortedMap.newBuilder)
+    new MapCodec[A, SortedMap[String, A]](codec, _.size, _.iterator, _ => SortedMap.newBuilder)
       .imapError(NonEmptyMap.fromMap(_).toRight(AvroError.decodeEmptyCollection))(_.toSortedMap)
       .withTypeName("NonEmptyMap")
 
@@ -553,7 +553,7 @@ object Codec {
     codec: Codec[A],
     ordering: Ordering[A]
   ): Codec[NonEmptySet[A]] =
-    ArrayCodec[A, SortedSet[A]](codec, _.size, _.iterator, _ => SortedSet.newBuilder)
+    new ArrayCodec[A, SortedSet[A]](codec, _.size, _.iterator, _ => SortedSet.newBuilder)
       .imapError(NonEmptySet.fromSet(_).toRight(AvroError.decodeEmptyCollection))(_.toSortedSet)
       .withTypeName("NonEmptySet")
 
@@ -561,7 +561,7 @@ object Codec {
     * @group Cats
     */
   implicit final def nonEmptyVector[A](implicit codec: Codec[A]): Codec[NonEmptyVector[A]] =
-    ArrayCodec[A, Vector[A]](codec, _.length, _.iterator, vectorBuilder)
+    new ArrayCodec[A, Vector[A]](codec, _.length, _.iterator, vectorBuilder)
       .imapError(NonEmptyVector.fromVector(_).toRight(AvroError.decodeEmptyCollection))(_.toVector)
       .withTypeName("NonEmptyVector")
 
@@ -573,7 +573,7 @@ object Codec {
     * @group General
     */
   implicit final def option[A](implicit codec: Codec[A]): Codec[Option[A]] =
-    OptionCodec(codec).withTypeName("Option")
+    new OptionCodec(codec).withTypeName("Option")
 
   /**
     * Returns a new record [[Codec]] for type `A`.
@@ -591,7 +591,7 @@ object Codec {
     props: JsonObject = JsonObject.empty
   )(f: FieldBuilder[A] => FreeApplicative[Field[A, *], A]): Codec[A] = {
     val recordName = SchemaNames.resolve(name, Some(namespace))
-    RecordCodec(recordName, doc, aliases.toVector, props, f(FieldBuilder.instance))
+    new RecordCodec(recordName, doc, aliases.toVector, props, f(FieldBuilder.instance))
       .withTypeName(recordName.fullName)
   }
 
@@ -605,14 +605,14 @@ object Codec {
     * @group Collection
     */
   implicit final def seq[A](implicit codec: Codec[A]): Codec[Seq[A]] =
-    ArrayCodec[A, Seq[A]](codec, _.length, _.iterator, _ => Seq.newBuilder)
+    new ArrayCodec[A, Seq[A]](codec, _.length, _.iterator, _ => Seq.newBuilder)
       .withTypeName("Seq")
 
   /**
     * @group Collection
     */
   implicit final def set[A](implicit codec: Codec[A]): Codec[Set[A]] =
-    ArrayCodec[A, Set[A]](codec, _.size, _.iterator, _ => Set.newBuilder)
+    new ArrayCodec[A, Set[A]](codec, _.size, _.iterator, _ => Set.newBuilder)
       .withTypeName("Set")
 
   /**
@@ -669,13 +669,13 @@ object Codec {
     * @group Create
     */
   final def union[A](f: AltBuilder[A] => Chain[Alt[A]]): Codec[A] =
-    UnionCodec(f(AltBuilder.instance))
+    new UnionCodec(f(AltBuilder.instance))
 
   /**
     * @group General
     */
   implicit lazy val unit: Codec[Unit] =
-    NullCodec((), "Unit")
+    new NullCodec((), "Unit")
 
   /**
     * @group JavaUtil
@@ -695,7 +695,7 @@ object Codec {
     * @group Collection
     */
   implicit final def vector[A](implicit codec: Codec[A]): Codec[Vector[A]] =
-    ArrayCodec[A, Vector[A]](codec, _.length, _.iterator, vectorBuilder)
+    new ArrayCodec[A, Vector[A]](codec, _.length, _.iterator, vectorBuilder)
       .withTypeName("Vector")
 
   /**
@@ -842,10 +842,10 @@ object Codec {
       Instance.asInstanceOf[FieldBuilder[A]]
   }
 
-  private[vulcan] final case class ImapErrors[A, B](
-    codec: Codec[A],
-    f: A => Either[AvroError, B],
-    g: B => Either[AvroError, A]
+  private[vulcan] final class ImapErrors[A, B](
+    val codec: Codec[A],
+    val f: A => Either[AvroError, B],
+    val g: B => Either[AvroError, A]
   ) extends Codec[B] {
     override def schema: Either[AvroError, Schema] =
       codec.schema
@@ -862,10 +862,10 @@ object Codec {
     }
   }
 
-  private[vulcan] final case class Instance[A](
-    instanceSchema: Either[AvroError, Schema],
-    instanceEncode: A => Either[AvroError, AvroValue],
-    instanceDecode: (AvroValue, Schema) => Either[AvroError, A]
+  private[vulcan] final class Instance[A](
+    val instanceSchema: Either[AvroError, Schema],
+    val instanceEncode: A => Either[AvroError, AvroValue],
+    val instanceDecode: (AvroValue, Schema) => Either[AvroError, A]
   ) extends Codec[A] {
     override lazy val schema: Either[AvroError, Schema] =
       instanceSchema.flatMap { schema =>
@@ -882,9 +882,9 @@ object Codec {
       instanceDecode(_, writerSchema)
   }
 
-  private[vulcan] final case class WithTypeName[A](
-    codec: Codec[A],
-    typeName: String
+  private[vulcan] final class WithTypeName[A](
+    val codec: Codec[A],
+    val typeName: String
   ) extends Codec[A] {
     override def schema: Either[AvroError, Schema] =
       codec.schema
@@ -902,11 +902,11 @@ object Codec {
   }
 
   /** Codec for collections encoded as arrays, with a builder for the number of items. */
-  private[vulcan] final case class ArrayCodec[A, C](
-    items: Codec[A],
-    size: C => Int,
-    iterator: C => Iterator[A],
-    newBuilder: Int => mutable.Builder[A, C]
+  private[vulcan] final class ArrayCodec[A, C](
+    val items: Codec[A],
+    val size: C => Int,
+    val iterator: C => Iterator[A],
+    val newBuilder: Int => mutable.Builder[A, C]
   ) extends Codec[C] {
     override lazy val schema: Either[AvroError, Schema] =
       items.schema.map(Schema.Array(_))
@@ -937,11 +937,11 @@ object Codec {
   }
 
   /** Codec for maps with string keys, with a builder for the number of entries. */
-  private[vulcan] final case class MapCodec[A, M](
-    values: Codec[A],
-    size: M => Int,
-    iterator: M => Iterator[(String, A)],
-    newBuilder: Int => mutable.Builder[(String, A), M]
+  private[vulcan] final class MapCodec[A, M](
+    val values: Codec[A],
+    val size: M => Int,
+    val iterator: M => Iterator[(String, A)],
+    val newBuilder: Int => mutable.Builder[(String, A), M]
   ) extends Codec[M] {
     override lazy val schema: Either[AvroError, Schema] =
       values.schema.map(Schema.Map(_))
@@ -975,7 +975,7 @@ object Codec {
   }
 
   /** Codec for options, as unions with `null` first, including the types of unions. */
-  private[vulcan] final case class OptionCodec[A](codec: Codec[A]) extends Codec[Option[A]] {
+  private[vulcan] final class OptionCodec[A](val codec: Codec[A]) extends Codec[Option[A]] {
     override lazy val schema: Either[AvroError, Schema] =
       codec.schema.flatMap { schema =>
         val types =
@@ -1032,7 +1032,7 @@ object Codec {
   }
 
   /** Codec for unions, which decodes using the alternative for the written type. */
-  private[vulcan] final case class UnionCodec[A](alternatives: Chain[Alt[A]]) extends Codec[A] {
+  private[vulcan] final class UnionCodec[A](val alternatives: Chain[Alt[A]]) extends Codec[A] {
     private val alts: Vector[Alt[A]] =
       alternatives.toVector
 
@@ -1084,12 +1084,12 @@ object Codec {
     * Codec for records, which decodes fields from the writer field with the same name or an alias
     * of the field, and otherwise uses the default of the field.
     */
-  private[vulcan] final case class RecordCodec[A](
-    name: Schema.Name,
-    doc: Option[String],
-    aliases: Vector[String],
-    props: JsonObject,
-    fields: FreeApplicative[Field[A, *], A]
+  private[vulcan] final class RecordCodec[A](
+    val name: Schema.Name,
+    val doc: Option[String],
+    val aliases: Vector[String],
+    val props: JsonObject,
+    val fields: FreeApplicative[Field[A, *], A]
   ) extends Codec[A] {
 
     /** The fields, in the order of the record. */
@@ -1181,15 +1181,15 @@ object Codec {
   }
 
   /** Codec for enums, where unknown symbols decode to the default, if there is one. */
-  private[vulcan] final case class EnumCodec[A](
-    name: Schema.Name,
-    symbols: Vector[String],
-    encodeSymbol: A => String,
-    decodeSymbol: String => Either[AvroError, A],
-    default: Option[A],
-    doc: Option[String],
-    aliases: Vector[String],
-    props: JsonObject
+  private[vulcan] final class EnumCodec[A](
+    val name: Schema.Name,
+    val symbols: Vector[String],
+    val encodeSymbol: A => String,
+    val decodeSymbol: String => Either[AvroError, A],
+    val default: Option[A],
+    val doc: Option[String],
+    val aliases: Vector[String],
+    val props: JsonObject
   ) extends Codec[A] {
     private val symbolSet: Set[String] =
       symbols.toSet
@@ -1238,14 +1238,14 @@ object Codec {
   }
 
   /** Codec for fixed, which pads bytes when encoding, and requires the same size when decoding. */
-  private[vulcan] final case class FixedCodec[A](
-    name: Schema.Name,
-    size: Int,
-    encodeBytes: A => ByteVector,
-    decodeBytes: ByteVector => Either[AvroError, A],
-    doc: Option[String],
-    aliases: Vector[String],
-    props: JsonObject
+  private[vulcan] final class FixedCodec[A](
+    val name: Schema.Name,
+    val size: Int,
+    val encodeBytes: A => ByteVector,
+    val decodeBytes: ByteVector => Either[AvroError, A],
+    val doc: Option[String],
+    val aliases: Vector[String],
+    val props: JsonObject
   ) extends Codec[A] {
     override lazy val schema: Either[AvroError, Schema] =
       validated(Schema.Fixed(name, size).withDoc(doc).withAliases(aliases).withProps(props))
@@ -1288,7 +1288,7 @@ object Codec {
   }
 
   /** Codec for decimals, which decodes using the precision and scale of the writer schema. */
-  private[vulcan] final case class DecimalCodec(precision: Int, scale: Int) extends Codec[BigDecimal] {
+  private[vulcan] final class DecimalCodec(val precision: Int, val scale: Int) extends Codec[BigDecimal] {
     override val schema: Either[AvroError, Schema] =
       if (precision <= 0)
         Left(AvroError(s"Invalid decimal precision $precision: must be positive"))
@@ -1339,9 +1339,9 @@ object Codec {
   }
 
   /** Codec for a logical type, which must be the logical type of writer schemas. */
-  private[vulcan] final case class LogicalTypeCodec[A](
-    codec: Codec[A],
-    logicalType: LogicalType
+  private[vulcan] final class LogicalTypeCodec[A](
+    val codec: Codec[A],
+    val logicalType: LogicalType
   ) extends Codec[A] {
     override lazy val schema: Either[AvroError, Schema] =
       codec.schema.flatMap(addLogicalType(_, logicalType))
@@ -1386,8 +1386,8 @@ object Codec {
       }
   }
 
-  private[vulcan] final case class NullCodec[A](
-    value: A,
+  private[vulcan] final class NullCodec[A](
+    val value: A,
     override val typeName: String
   ) extends PrimitiveCodec[A](typeName, Schema.Null) {
     private val encoded: Either[AvroError, AvroValue] =
@@ -1414,7 +1414,7 @@ object Codec {
       }
   }
 
-  private[vulcan] case object BooleanCodec extends PrimitiveCodec[Boolean]("Boolean", Schema.Boolean) {
+  private[vulcan] object BooleanCodec extends PrimitiveCodec[Boolean]("Boolean", Schema.Boolean) {
     override def encode(boolean: Boolean): Either[AvroError, AvroValue] =
       Right(AvroValue.Boolean(boolean))
 
@@ -1433,7 +1433,7 @@ object Codec {
       }
   }
 
-  private[vulcan] case object IntCodec extends PrimitiveCodec[Int]("Int", Schema.Int) {
+  private[vulcan] object IntCodec extends PrimitiveCodec[Int]("Int", Schema.Int) {
     override def encode(int: Int): Either[AvroError, AvroValue] =
       Right(AvroValue.Int(int))
 
@@ -1452,7 +1452,7 @@ object Codec {
       }
   }
 
-  private[vulcan] case object LongCodec extends PrimitiveCodec[Long]("Long", Schema.Long) {
+  private[vulcan] object LongCodec extends PrimitiveCodec[Long]("Long", Schema.Long) {
     override def encode(long: Long): Either[AvroError, AvroValue] =
       Right(AvroValue.Long(long))
 
@@ -1476,7 +1476,7 @@ object Codec {
       }
   }
 
-  private[vulcan] case object FloatCodec extends PrimitiveCodec[Float]("Float", Schema.Float) {
+  private[vulcan] object FloatCodec extends PrimitiveCodec[Float]("Float", Schema.Float) {
     override def encode(float: Float): Either[AvroError, AvroValue] =
       Right(AvroValue.Float(float))
 
@@ -1505,7 +1505,7 @@ object Codec {
       }
   }
 
-  private[vulcan] case object DoubleCodec extends PrimitiveCodec[Double]("Double", Schema.Double) {
+  private[vulcan] object DoubleCodec extends PrimitiveCodec[Double]("Double", Schema.Double) {
     override def encode(double: Double): Either[AvroError, AvroValue] =
       Right(AvroValue.Double(double))
 
@@ -1539,7 +1539,7 @@ object Codec {
       }
   }
 
-  private[vulcan] case object BytesCodec extends PrimitiveCodec[ByteVector]("ByteVector", Schema.Bytes) {
+  private[vulcan] object BytesCodec extends PrimitiveCodec[ByteVector]("ByteVector", Schema.Bytes) {
     override def encode(bytes: ByteVector): Either[AvroError, AvroValue] =
       Right(AvroValue.Bytes(bytes))
 
@@ -1565,7 +1565,7 @@ object Codec {
       }
   }
 
-  private[vulcan] case object StringCodec extends PrimitiveCodec[String]("String", Schema.String) {
+  private[vulcan] object StringCodec extends PrimitiveCodec[String]("String", Schema.String) {
     override def encode(string: String): Either[AvroError, AvroValue] =
       Right(AvroValue.String(string))
 
