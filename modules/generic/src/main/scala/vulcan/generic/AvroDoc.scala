@@ -8,7 +8,8 @@ package vulcan.generic
 
 import scala.annotation.StaticAnnotation
 
-/** Annotation which can be used to include documentation in derived schemas.
+/**
+  * Annotation which can be used to include documentation in derived schemas.
   *
   * The annotation can be used in the following situations.<br>
   *   - Annotate a type for enum documentation when using [[deriveEnum]].<br>

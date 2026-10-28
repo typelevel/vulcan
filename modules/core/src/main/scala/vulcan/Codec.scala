@@ -6,37 +6,53 @@
 
 package vulcan
 
-import cats.data.{Chain, NonEmptyChain, NonEmptyList, NonEmptyMap, NonEmptySet, NonEmptyVector}
+import cats.Invariant
+import cats.Show
+import cats.data.Chain
+import cats.data.NonEmptyChain
+import cats.data.NonEmptyList
+import cats.data.NonEmptyMap
+import cats.data.NonEmptySet
+import cats.data.NonEmptyVector
 import cats.free.FreeApplicative
-import cats.implicits._
-import cats.{Invariant, Show, ~>}
-import org.apache.avro.Schema.Type._
-import org.apache.avro.generic._
-import org.apache.avro.{Conversions, LogicalType, LogicalTypes, Schema, SchemaBuilder}
-import vulcan.Avro.Bytes
-import vulcan.internal.{Deserializer, Serializer}
-
+import cats.implicits.*
+import cats.~>
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import java.time._
+import java.time.*
+import java.util.Arrays
+import java.util.UUID
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeUnit._
-import java.util.{Arrays, UUID}
+import java.util.concurrent.TimeUnit.*
+import org.apache.avro.Conversions
+import org.apache.avro.LogicalType
+import org.apache.avro.LogicalTypes
+import org.apache.avro.Schema
+import org.apache.avro.Schema.Type.*
+import org.apache.avro.SchemaBuilder
+import org.apache.avro.generic.*
 import scala.annotation.implicitNotFound
-import scala.collection.immutable.{SortedMap, SortedSet}
-import vulcan.internal.converters.collection._
-import vulcan.internal.syntax._
-import vulcan.internal.schema.{adaptForSchema, prettyPrint}
+import scala.collection.immutable.SortedMap
+import scala.collection.immutable.SortedSet
 import scala.util.Try
+import vulcan.Avro.Bytes
+import vulcan.internal.Deserializer
+import vulcan.internal.Serializer
+import vulcan.internal.converters.collection.*
+import vulcan.internal.schema.adaptForSchema
+import vulcan.internal.schema.prettyPrint
+import vulcan.internal.syntax.*
 
-/** Provides a schema, along with encoding and decoding functions for a given type.
+/**
+  * Provides a schema, along with encoding and decoding functions for a given type.
   */
 @implicitNotFound(
   "could not find implicit Codec[${A}]; ensure no imports are missing or manually define an instance"
 )
 sealed abstract class Codec[A] {
 
-  /** The Java type that this codec will encode to. The resulting value will in turn be converted to
+  /**
+    * The Java type that this codec will encode to. The resulting value will in turn be converted to
     * a binary or JSON-based Avro format by the underlying Avro SDK.
     *
     * This type is of interest mainly because it determines what Avro type the data will ultimately
@@ -57,13 +73,15 @@ sealed abstract class Codec[A] {
   private[vulcan] def validate: Either[AvroError, Codec.WithValidSchema[AvroType, A]] =
     schema.map(Codec.Validated[AvroType, A](this, _))
 
-  /** Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
+  /**
+    * Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
     * back-and-forth between types `A` and `B`.
     */
   def imap[B](f: A => B)(g: B => A): Codec.Aux[AvroType, B] =
     imapErrors(f(_).asRight)(g(_).asRight)
 
-  /** Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
+  /**
+    * Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
     * back-and-forth between types `A` and `B`.
     *
     * Similar to [[Codec#imap]], except the mapping from `A` to `B` might be unsuccessful.
@@ -76,7 +94,8 @@ sealed abstract class Codec[A] {
   )(g: B => Either[AvroError, A]): Codec.Aux[AvroType, B] =
     validate.fold[Codec.Aux[AvroType, B]](Codec.Fail(_), Codec.ImapErrors(_, f, g))
 
-  /** Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
+  /**
+    * Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
     * back-and-forth between types `A` and `B`.
     *
     * Similar to [[Codec#imap]], except the mapping from `A` to `B` might be unsuccessful.
@@ -94,11 +113,12 @@ sealed abstract class Codec[A] {
   override final def toString: String =
     schema match {
       case Right(schema) => s"Codec(${prettyPrint(schema)})"
-      case Left(error)   => error.toString
+      case Left(error) => error.toString
     }
 }
 
-/** @groupname General General Codecs
+/**
+  * @groupname General General Codecs
   * @groupprio General 0
   * @groupdesc General
   *   Default codecs for standard library types.
@@ -218,25 +238,28 @@ object Codec {
       codec.decode(value, schema).leftMap(AvroError.errorDecodingTo(typeName, _))
   }
 
-  /** Returns the [[Codec]] for the specified type.
+  /**
+    * Returns the [[Codec]] for the specified type.
     *
     * @group Utilities
     */
   final def apply[A](implicit codec: Codec[A]): codec.type = codec
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit final val boolean: Codec.Aux[Avro.Boolean, Boolean] = BooleanCodec
   case object BooleanCodec
-      extends Codec.InstanceForTypes[Avro.Boolean, Boolean](
-        "Boolean",
-        SchemaBuilder.builder().booleanType(),
-        _.asRight,
-        { case (value: Boolean, _) => Right(value) },
-        Some("Boolean")
-      )
+    extends Codec.InstanceForTypes[Avro.Boolean, Boolean](
+      "Boolean",
+      SchemaBuilder.builder().booleanType(),
+      _.asRight,
+      { case (value: Boolean, _) => Right(value) },
+      Some("Boolean")
+    )
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit final lazy val byte: Codec.Aux[Avro.Int, Byte] = {
     Codec.int
@@ -247,7 +270,8 @@ object Codec {
       .withTypeName("Byte")
   }
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit final val bytes: Codec.Aux[Avro.Bytes, Array[Byte]] = BytesCodec
 
@@ -263,9 +287,9 @@ object Codec {
             case avroBytes: Avro.Bytes if avroBytes.limit() =!= avroBytes.capacity() =>
               val nonPadded = Arrays.copyOfRange(avroBytes.array, 0, avroBytes.limit())
               Right(nonPadded)
-            case avroBytes: Avro.Bytes   => Right(avroBytes.array)
+            case avroBytes: Avro.Bytes => Right(avroBytes.array)
             case avroString: Avro.String => Right(avroString.getBytes)
-            case string: String          => Right(string.getBytes(StandardCharsets.UTF_8))
+            case string: String => Right(string.getBytes(StandardCharsets.UTF_8))
             case other => Left(AvroError.decodeUnexpectedType(other, "ByteBuffer"))
           }
 
@@ -277,14 +301,16 @@ object Codec {
     }.leftMap(AvroError.errorDecodingTo("Array[Byte]", _))
   }
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def chain[A](implicit
     codec: Codec[A]
   ): Codec.Aux[Avro.Array[codec.AvroType], Chain[A]] =
     Codec.list[A].imap(Chain.fromSeq)(_.toList).withTypeName("Chain")
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val char: Codec.Aux[Avro.String, Char] =
     Codec.string
@@ -294,7 +320,8 @@ object Codec {
       )(_.toString)
       .withTypeName("Char")
 
-  /** Returns a new decimal [[Codec]] for type `BigDecimal`.
+  /**
+    * Returns a new decimal [[Codec]] for type `BigDecimal`.
     *
     * @group Create
     */
@@ -319,7 +346,7 @@ object Codec {
   ) extends Codec.WithValidSchema[Avro.Bytes, BigDecimal] {
     require(validSchema.getLogicalType match {
       case dec: LogicalTypes.Decimal => dec.getPrecision == precision && dec.getScale == scale
-      case _                         => false
+      case _ => false
     })
 
     private val conversion = new Conversions.DecimalConversion()
@@ -374,14 +401,16 @@ object Codec {
     }.leftMap(err => AvroError.errorDecodingTo("BigDecimal", err))
   }
 
-  /** Returns the result of decoding the specified value to the specified type.
+  /**
+    * Returns the result of decoding the specified value to the specified type.
     *
     * @group Utilities
     */
   final def decode[A](value: Any)(implicit codec: Codec[A]): Either[AvroError, A] =
     codec.schema.flatMap(codec.decode(value, _))
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val double: Codec.Aux[Avro.Double, Double] = DoubleCodec
 
@@ -395,10 +424,10 @@ object Codec {
         case DOUBLE | FLOAT | INT | LONG =>
           value match {
             case double: Avro.Double => Right(double)
-            case float: Avro.Float   => Right(float.toDouble)
-            case int: Avro.Int       => Right(int.toDouble)
-            case long: Avro.Long     => Right(long.toDouble)
-            case other               =>
+            case float: Avro.Float => Right(float.toDouble)
+            case int: Avro.Int => Right(int.toDouble)
+            case long: Avro.Long => Right(long.toDouble)
+            case other =>
               Left(
                 AvroError.decodeUnexpectedTypes(
                   other,
@@ -415,7 +444,8 @@ object Codec {
     }.leftMap(AvroError.errorDecodingTo("Double", _))
   }
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit final def either[A, B](implicit
     codecA: Codec[A],
@@ -425,14 +455,16 @@ object Codec {
       .union[Either[A, B]](alt => alt[Left[A, B]] |+| alt[Right[A, B]])
       .withTypeName("Either")
 
-  /** Returns the result of encoding the specified value.
+  /**
+    * Returns the result of encoding the specified value.
     *
     * @group Utilities
     */
   final def encode[A](a: A)(implicit codec: Codec[A]): Either[AvroError, codec.AvroType] =
     codec.encode(a)
 
-  /** Returns a new enum [[Codec]] for type `A`.
+  /**
+    * Returns a new enum [[Codec]] for type `A`.
     *
     * @group Create
     */
@@ -493,7 +525,8 @@ object Codec {
     )
   }
 
-  /** Returns a new fixed [[Codec]] for type `A`.
+  /**
+    * Returns a new fixed [[Codec]] for type `A`.
     *
     * When encoding, bytes are zero-padded to the specified size. Zero-padding is applied at the
     * end, and will remain in the input to `decode`. Encoding checks to ensure the size is not
@@ -561,7 +594,8 @@ object Codec {
     )
   }
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val float: Codec.Aux[Avro.Float, Float] = FloatCodec
 
@@ -575,9 +609,9 @@ object Codec {
         case FLOAT | INT | LONG =>
           value match {
             case float: Avro.Float => Right(float)
-            case int: Avro.Int     => Right(int.toFloat)
-            case long: Avro.Long   => Right(long.toFloat)
-            case other             => Left(AvroError.decodeUnexpectedType(other, "Float"))
+            case int: Avro.Int => Right(int.toFloat)
+            case long: Avro.Long => Right(long.toFloat)
+            case other => Left(AvroError.decodeUnexpectedType(other, "Float"))
           }
 
         case schemaType =>
@@ -589,21 +623,24 @@ object Codec {
     }.leftMap(AvroError.errorDecodingTo("Float", _))
   }
 
-  /** Returns the result of decoding the specified Avro binary to the specified type.
+  /**
+    * Returns the result of decoding the specified Avro binary to the specified type.
     *
     * @group Utilities
     */
   final def fromBinary[A: Codec](bytes: Array[Byte], writerSchema: Schema): Either[AvroError, A] =
     Deserializer.fromBinary[A](bytes, writerSchema)
 
-  /** Returns the result of decoding the specified Avro JSON to the specified type.
+  /**
+    * Returns the result of decoding the specified Avro JSON to the specified type.
     *
     * @group Utilities
     */
   final def fromJson[A: Codec](json: String, writerSchema: Schema): Either[AvroError, A] =
     Deserializer.fromJson[A](json, writerSchema)
 
-  /** Returns a new [[Codec]] instance using the specified `Schema`, and encode and decode
+  /**
+    * Returns a new [[Codec]] instance using the specified `Schema`, and encode and decode
     * functions.
     *
     * @group Create
@@ -676,7 +713,8 @@ object Codec {
     }.leftMap(err => decodingTypeName.fold(err)(AvroError.errorDecodingTo(_, err)))
   }
 
-  /** @group JavaTime
+  /**
+    * @group JavaTime
     */
   implicit lazy val instant: Codec.Aux[Avro.Long, Instant] =
     LongCodec
@@ -703,7 +741,8 @@ object Codec {
       "InstantMicros"
   }
 
-  /** @group JavaTime
+  /**
+    * @group JavaTime
     */
   implicit lazy val instantMicros: Codec.Aux[Avro.Long, InstantMicros] =
     LongCodec
@@ -711,30 +750,33 @@ object Codec {
       .withLogicalType(LogicalTypes.timestampMicros)
       .withTypeName("InstantMicros")
 
-  /** @group JavaTime
+  /**
+    * @group JavaTime
     */
   implicit lazy val localDateTime: Codec.Aux[Avro.Long, LocalDateTime] =
     LongCodec
-      .imap(epochMilli =>
-        LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMilli), ZoneOffset.UTC)
-      )(localDateTime => localDateTime.toInstant(ZoneOffset.UTC).toEpochMilli)
+      .imap(epochMilli => LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMilli), ZoneOffset.UTC))(
+        localDateTime => localDateTime.toInstant(ZoneOffset.UTC).toEpochMilli
+      )
       .withLogicalType(LogicalTypes.localTimestampMillis)
       .withTypeName("LocalDateTime")
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val int: Codec.Aux[Avro.Int, Int] = IntCodec
 
   private[vulcan] case object IntCodec
-      extends Codec.InstanceForTypes[Avro.Int, Int](
-        "Int",
-        SchemaBuilder.builder().intType(),
-        _.asRight,
-        { case (integer: Int, _) => Right(integer) },
-        Some("Int")
-      )
+    extends Codec.InstanceForTypes[Avro.Int, Int](
+      "Int",
+      SchemaBuilder.builder().intType(),
+      _.asRight,
+      { case (integer: Int, _) => Right(integer) },
+      Some("Int")
+    )
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit final def left[A, B](implicit codec: Codec[A]): Codec.Aux[codec.AvroType, Left[A, B]] =
     codec.imap(Left[A, B])(_.value)
@@ -777,7 +819,8 @@ object Codec {
         )
     )
 
-  /** @group Collection
+  /**
+    * @group Collection
     */
   implicit final def list[A](implicit
     codec: Codec[A]
@@ -787,7 +830,8 @@ object Codec {
       .imap(_.asScala.toList)(_.asJava)
       .withTypeName("List")
 
-  /** @group JavaTime
+  /**
+    * @group JavaTime
     */
   implicit lazy val localDate: Codec.Aux[Avro.Int, LocalDate] =
     Codec.int
@@ -801,7 +845,8 @@ object Codec {
       .withLogicalType(LogicalTypes.date)
       .withTypeName("LocalDate")
 
-  /** @group JavaTime
+  /**
+    * @group JavaTime
     */
   final val localTimeMillis: Codec.Aux[Avro.Int, LocalTime] =
     Codec.int
@@ -812,7 +857,8 @@ object Codec {
       .withLogicalType(LogicalTypes.timeMillis)
       .withTypeName("LocalTime")
 
-  /** @group JavaTime
+  /**
+    * @group JavaTime
     */
   final val localTimeMicros: Codec.Aux[Avro.Long, LocalTime] =
     Codec.long
@@ -823,7 +869,8 @@ object Codec {
       .withLogicalType(LogicalTypes.timeMicros)
       .withTypeName("LocalTime")
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val long: Codec.Aux[Avro.Long, Long] = LongCodec
   case object LongCodec extends Codec.WithValidSchema[Avro.Long, Long] {
@@ -851,7 +898,8 @@ object Codec {
     }.leftMap(AvroError.errorDecodingTo("Long", _))
   }
 
-  /** @group Collection
+  /**
+    * @group Collection
     */
   implicit final def map[A](implicit
     codec: Codec[A]
@@ -892,14 +940,16 @@ object Codec {
         { case (null, _) => Right(null) }
       )
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val none: Codec.Aux[Avro.Null, None.type] =
     `null`
       .imap(_ => None)(_ => null)
       .withTypeName("None")
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def nonEmptyChain[A](implicit
     codec: Codec[A]
@@ -911,7 +961,8 @@ object Codec {
       )(_.toChain)
       .withTypeName("NonEmptyChain")
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def nonEmptyList[A](implicit
     codec: Codec[A]
@@ -923,7 +974,8 @@ object Codec {
       )(_.toList)
       .withTypeName("NonEmptyList")
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def nonEmptySet[A](implicit
     codec: Codec[A],
@@ -938,7 +990,8 @@ object Codec {
       )(_.toList)
       .withTypeName("NonEmptySet")
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def nonEmptyVector[A](implicit
     codec: Codec[A]
@@ -950,7 +1003,8 @@ object Codec {
       )(_.toVector)
       .withTypeName("NonEmptyVector")
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def nonEmptyMap[A](implicit
     codec: Codec[A]
@@ -964,7 +1018,8 @@ object Codec {
       )(_.toSortedMap)
       .withTypeName("NonEmptyMap")
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit final def option[A](implicit codec: Codec[A]): Codec[Option[A]] =
     OptionCodec(codec)
@@ -974,7 +1029,7 @@ object Codec {
     override def encode(a: Option[A]): Either[AvroError, Any] = {
       a match {
         case Some(value) => codec.encode(value)
-        case None        => Codec.none.encode(None)
+        case None => Codec.none.encode(None)
       }
     }
 
@@ -996,7 +1051,8 @@ object Codec {
     }
   }
 
-  /** Returns a new record [[Codec]] for type `A`.
+  /**
+    * Returns a new record [[Codec]] for type `A`.
     *
     * @group Create
     */
@@ -1103,12 +1159,14 @@ object Codec {
     )
   }
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit final def right[A, B](implicit codec: Codec[B]): Codec.Aux[codec.AvroType, Right[A, B]] =
     codec.imap(Right[A, B](_))(_.value).withTypeName("Right")
 
-  /** @group Collection
+  /**
+    * @group Collection
     */
   implicit final def seq[A](implicit
     codec: Codec[A]
@@ -1118,7 +1176,8 @@ object Codec {
       .imap[Seq[A]](_.toSeq)(_.toList)
       .withTypeName("Seq")
 
-  /** @group Collection
+  /**
+    * @group Collection
     */
   implicit final def set[A](implicit
     codec: Codec[A]
@@ -1128,7 +1187,8 @@ object Codec {
       .imap(_.asScala.toSet)(_.asJava)
       .withTypeName("Set")
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val short: Codec.Aux[Avro.Int, Short] = {
     Codec.int
@@ -1139,12 +1199,14 @@ object Codec {
       .withTypeName("Short")
   }
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit final def some[A](implicit codec: Codec[A]): Codec.Aux[codec.AvroType, Some[A]] =
     codec.imap(Some(_))(_.value).withTypeName("Some")
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val string: Codec.Aux[Avro.String, String] = StringCodec
 
@@ -1157,9 +1219,9 @@ object Codec {
       schema.getType match {
         case STRING | BYTES =>
           value match {
-            case string: String          => Right(string)
+            case string: String => Right(string)
             case avroString: Avro.String => Right(avroString.toString)
-            case avroBytes: Avro.Bytes   =>
+            case avroBytes: Avro.Bytes =>
               AvroError.catchNonFatal(Right(StandardCharsets.UTF_8.decode(avroBytes).toString))
             case other =>
               Left {
@@ -1176,21 +1238,24 @@ object Codec {
     }.leftMap(AvroError.errorDecodingTo("String", _))
   }
 
-  /** Returns the result of encoding the specified value to Avro binary.
+  /**
+    * Returns the result of encoding the specified value to Avro binary.
     *
     * @group Utilities
     */
   final def toBinary[A: Codec](a: A): Either[AvroError, Array[Byte]] =
     Serializer.toBinary(a)
 
-  /** Returns the result of encoding the specified value to Avro JSON.
+  /**
+    * Returns the result of encoding the specified value to Avro JSON.
     *
     * @group Utilities
     */
   final def toJson[A: Codec](a: A): Either[AvroError, String] =
     Serializer.toJson(a)
 
-  /** Returns a new union [[Codec]] for type `A`.
+  /**
+    * Returns a new union [[Codec]] for type `A`.
     *
     * @group Create
     */
@@ -1213,7 +1278,7 @@ object Codec {
       val schemaTypes =
         schema.getType match {
           case UNION => schema.getTypes.asScala
-          case _     => Seq(schema)
+          case _ => Seq(schema)
         }
 
       def decodeNamedContainerType(container: GenericContainer) = {
@@ -1285,7 +1350,7 @@ object Codec {
         case container: GenericContainer =>
           container.getSchema.getType match {
             case RECORD | FIXED | ENUM => decodeNamedContainerType(container)
-            case _                     => decodeUnnamedType(container)
+            case _ => decodeUnnamedType(container)
           }
         case other => decodeUnnamedType(other)
       }
@@ -1298,14 +1363,16 @@ object Codec {
     }
   }
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val unit: Codec.Aux[Avro.Null, Unit] =
     `null`
       .imap(_ => ())(_ => null)
       .withTypeName("Unit")
 
-  /** @group JavaUtil
+  /**
+    * @group JavaUtil
     */
   implicit lazy val uuid: Codec.Aux[Avro.String, UUID] =
     Codec.string
@@ -1317,7 +1384,8 @@ object Codec {
       .withLogicalType(LogicalTypes.uuid)
       .withTypeName("UUID")
 
-  /** @group Collection
+  /**
+    * @group Collection
     */
   implicit final def vector[A](implicit
     codec: Codec[A]
@@ -1327,7 +1395,8 @@ object Codec {
       .imap(_.asScala.toVector)(_.asJava)
       .withTypeName("Vector")
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final val codecInvariant: Invariant[Codec] =
     new Invariant[Codec] {
@@ -1335,17 +1404,20 @@ object Codec {
         codec.imap(f)(g)
     }
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def codecShow[A]: Show[Codec[A]] =
     Show.fromToString
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def codecAuxShow[AvroType, A]: Show[Codec.Aux[AvroType, A]] =
     Show.fromToString
 
-  /** @group Create
+  /**
+    * @group Create
     */
   sealed abstract class Alt[A] {
     type B
@@ -1368,7 +1440,8 @@ object Codec {
     }
   }
 
-  /** @group Create
+  /**
+    * @group Create
     */
   sealed abstract class AltBuilder[A] {
     def apply[B](implicit
@@ -1394,7 +1467,8 @@ object Codec {
       Instance.asInstanceOf[AltBuilder[A]]
   }
 
-  /** @group Create
+  /**
+    * @group Create
     */
   sealed abstract class Field[A, B] {
     def name: String
@@ -1414,7 +1488,8 @@ object Codec {
     def props: Props
   }
 
-  /** @group Create
+  /**
+    * @group Create
     */
   sealed abstract class FieldBuilder[A] {
     def apply[B](

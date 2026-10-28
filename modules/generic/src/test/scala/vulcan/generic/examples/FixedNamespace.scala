@@ -7,9 +7,10 @@
 package vulcan.generic.examples
 
 import cats.Eq
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.Arbitrary
+import org.scalacheck.Gen
 import vulcan.Codec
-import vulcan.generic._
+import vulcan.generic.*
 
 @AvroDoc("Some documentation")
 @AvroNamespace("vulcan.generic.examples.overridden")

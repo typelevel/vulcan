@@ -6,11 +6,11 @@
 
 package vulcan.generic
 
+import org.apache.avro.Schema
 import org.scalatest.Assertion
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import vulcan._
-import org.apache.avro.Schema
+import vulcan.*
 
 class CodecBase extends AnyFunSpec with ScalaCheckPropertyChecks with EitherValues {
   def unsafeSchema[A](implicit codec: Codec[A]): Schema =

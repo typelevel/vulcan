@@ -7,9 +7,11 @@
 package vulcan.v2
 
 import io.circe.Json
-import scodec.bits._
+import scodec.bits.*
 import vulcan.BaseSpec
-import vulcan.v2.internal.{JsonDecoder, JsonEncoder, JsonPrinter}
+import vulcan.v2.internal.JsonDecoder
+import vulcan.v2.internal.JsonEncoder
+import vulcan.v2.internal.JsonPrinter
 
 final class JsonValueSpec extends BaseSpec {
   private def encode(schema: Schema, value: AvroValue): String =

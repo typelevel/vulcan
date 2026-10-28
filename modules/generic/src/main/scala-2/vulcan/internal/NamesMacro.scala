@@ -7,7 +7,10 @@
 package vulcan.internal
 
 import scala.reflect.macros.blackbox
-import vulcan.generic.{AvroAlias, AvroDoc, AvroName, AvroNamespace}
+import vulcan.generic.AvroAlias
+import vulcan.generic.AvroDoc
+import vulcan.generic.AvroName
+import vulcan.generic.AvroNamespace
 
 private[vulcan] final class NamesMacro(val c: blackbox.Context) {
   import c.universe._

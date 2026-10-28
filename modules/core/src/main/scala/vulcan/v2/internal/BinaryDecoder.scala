@@ -10,7 +10,8 @@ import scala.collection.immutable.ArraySeq
 import scala.collection.mutable
 import scodec.bits.ByteVector
 import vulcan.AvroError
-import vulcan.v2.{AvroValue, Schema}
+import vulcan.v2.AvroValue
+import vulcan.v2.Schema
 
 /** Decodes values in the Avro binary encoding of a writer schema, compiled once for the schema. */
 private[v2] final class BinaryDecoder private (root: BinaryDecoder.Node) {
@@ -69,14 +70,14 @@ private[v2] object BinaryDecoder {
 
     def compile(schema: Schema): Node =
       schema match {
-        case _: Schema.Null      => NullNode
-        case _: Schema.Boolean   => BooleanNode
-        case _: Schema.Int       => IntNode
-        case _: Schema.Long      => LongNode
-        case _: Schema.Float     => FloatNode
-        case _: Schema.Double    => DoubleNode
-        case _: Schema.Bytes     => BytesNode
-        case _: Schema.String    => StringNode
+        case _: Schema.Null => NullNode
+        case _: Schema.Boolean => BooleanNode
+        case _: Schema.Int => IntNode
+        case _: Schema.Long => LongNode
+        case _: Schema.Float => FloatNode
+        case _: Schema.Double => DoubleNode
+        case _: Schema.Bytes => BytesNode
+        case _: Schema.String => StringNode
         case array: Schema.Array =>
           new ArrayNode(compile(array.items), minSize(array.items, definitions, Set.empty))
         case map: Schema.Map =>
@@ -222,8 +223,7 @@ private[v2] object BinaryDecoder {
     }
   }
 
-  private final class ArrayNode(items: Node, minItemSize: Long)
-      extends BlocksNode[AvroValue](minItemSize) {
+  private final class ArrayNode(items: Node, minItemSize: Long) extends BlocksNode[AvroValue](minItemSize) {
     override protected def readItem(input: Input): AvroValue =
       items.read(input)
 
@@ -232,7 +232,7 @@ private[v2] object BinaryDecoder {
   }
 
   private final class MapNode(values: Node, minEntrySize: Long)
-      extends BlocksNode[(String, AvroValue)](minEntrySize) {
+    extends BlocksNode[(String, AvroValue)](minEntrySize) {
     override protected def readItem(input: Input): (String, AvroValue) = {
       val key = input.reader.readString()
       (key, values.read(input))
@@ -285,10 +285,10 @@ private[v2] object BinaryDecoder {
     enclosing: Set[String]
   ): Long =
     schema match {
-      case _: Schema.Null        => 0L
-      case _: Schema.Float       => 4L
-      case _: Schema.Double      => 8L
-      case fixed: Schema.Fixed   => fixed.size.toLong
+      case _: Schema.Null => 0L
+      case _: Schema.Float => 4L
+      case _: Schema.Double => 8L
+      case fixed: Schema.Fixed => fixed.size.toLong
       case record: Schema.Record =>
         if (enclosing.contains(record.fullName)) Unbounded
         else {

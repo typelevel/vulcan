@@ -18,7 +18,7 @@ object SealedTraitCaseClassNestedUnion {
 }
 
 final case class NestedUnionInSealedTraitCaseClassNestedUnion(value: Option[Int])
-    extends SealedTraitCaseClassNestedUnion
+  extends SealedTraitCaseClassNestedUnion
 
 object NestedUnionInSealedTraitCaseClassNestedUnion {
   implicit val codec: Codec[NestedUnionInSealedTraitCaseClassNestedUnion] =

@@ -30,13 +30,13 @@ private[v2] object JsonPrinter {
 
   private def escape(char: Char): String =
     char match {
-      case '"'             => "\\\""
-      case '\\'            => "\\\\"
-      case '\b'            => "\\b"
-      case '\t'            => "\\t"
-      case '\n'            => "\\n"
-      case '\f'            => "\\f"
-      case '\r'            => "\\r"
+      case '"' => "\\\""
+      case '\\' => "\\\\"
+      case '\b' => "\\b"
+      case '\t' => "\\t"
+      case '\n' => "\\n"
+      case '\f' => "\\f"
+      case '\r' => "\\r"
       case _ if char < ' ' =>
         s"\\u00${HexDigits.charAt(char >> 4)}${HexDigits.charAt(char & 0xf)}"
       case _ =>

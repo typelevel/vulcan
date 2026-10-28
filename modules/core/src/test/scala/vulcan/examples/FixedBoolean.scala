@@ -7,8 +7,11 @@
 package vulcan.examples
 
 import cats.Eq
-import org.scalacheck.{Arbitrary, Gen}
-import vulcan.{AvroError, Codec, Props}
+import org.scalacheck.Arbitrary
+import org.scalacheck.Gen
+import vulcan.AvroError
+import vulcan.Codec
+import vulcan.Props
 
 sealed trait FixedBoolean extends Product with Serializable
 
@@ -21,7 +24,7 @@ object FixedBoolean {
         size = 1,
         encode = {
           case FalseFixedBoolean => Array(0.toByte)
-          case TrueFixedBoolean  => Array(0.toByte, 1.toByte)
+          case TrueFixedBoolean => Array(0.toByte, 1.toByte)
         },
         decode = bytes => {
           val byte = bytes.head

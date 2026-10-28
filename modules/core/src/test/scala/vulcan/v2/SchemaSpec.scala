@@ -6,7 +6,8 @@
 
 package vulcan.v2
 
-import io.circe.{Json, JsonObject}
+import io.circe.Json
+import io.circe.JsonObject
 import vulcan.BaseSpec
 
 final class SchemaSpec extends BaseSpec {
@@ -93,7 +94,7 @@ final class SchemaSpec extends BaseSpec {
 
         assert(schema match {
           case _: Schema.String => true
-          case _                => false
+          case _ => false
         })
       }
     }

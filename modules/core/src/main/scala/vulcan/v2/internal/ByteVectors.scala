@@ -11,7 +11,8 @@ import scodec.bits.ByteVector
 
 private[v2] object ByteVectors {
 
-  /** Applies the function to the array, offset and length of the bytes, without copying them if
+  /**
+    * Applies the function to the array, offset and length of the bytes, without copying them if
     * they are backed by an array.
     */
   def withArray[A](bytes: ByteVector)(f: (Array[Byte], Int, Int) => A): A = {

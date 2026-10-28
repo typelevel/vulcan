@@ -26,7 +26,7 @@ final class AvroAliasSpec extends BaseSpec {
       forAll { (s1: String) =>
         assert(new AvroAlias(s1) match {
           case AvroAlias(`s1`) => true
-          case AvroAlias(s2)   => fail(s2)
+          case AvroAlias(s2) => fail(s2)
         })
       }
     }

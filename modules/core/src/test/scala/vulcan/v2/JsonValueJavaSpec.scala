@@ -8,7 +8,10 @@ package vulcan.v2
 
 import org.scalacheck.Gen
 import vulcan.BaseSpec
-import vulcan.v2.internal.{BinaryDecoder, JsonDecoder, JsonEncoder, JsonPrinter}
+import vulcan.v2.internal.BinaryDecoder
+import vulcan.v2.internal.JsonDecoder
+import vulcan.v2.internal.JsonEncoder
+import vulcan.v2.internal.JsonPrinter
 
 /** Checks the JSON encoding of values against the Java Avro library. */
 final class JsonValueJavaSpec extends BaseSpec {

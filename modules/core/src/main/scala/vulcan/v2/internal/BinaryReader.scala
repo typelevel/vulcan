@@ -109,7 +109,8 @@ private[v2] final class BinaryReader private (bytes: Array[Byte], start: Int, li
     string
   }
 
-  /** Reads the number of items in the next block of an array or map, being zero after the last
+  /**
+    * Reads the number of items in the next block of an array or map, being zero after the last
     * block. A negative number of items is followed by the size of the block in bytes, which is read
     * but not used.
     */

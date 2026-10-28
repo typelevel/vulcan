@@ -11,14 +11,13 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import vulcan.Codec
-import vulcan.generic._
+import vulcan.generic.*
 
 sealed trait SealedTraitCaseClassCustom
 
 final case class FirstInSealedTraitCaseClassCustom(value: Int) extends SealedTraitCaseClassCustom
 
-final case class SecondInSealedTraitCaseClassCustom(value: String)
-    extends SealedTraitCaseClassCustom
+final case class SecondInSealedTraitCaseClassCustom(value: String) extends SealedTraitCaseClassCustom
 
 object SecondInSealedTraitCaseClassCustom {
   implicit val codec: Codec[SecondInSealedTraitCaseClassCustom] =

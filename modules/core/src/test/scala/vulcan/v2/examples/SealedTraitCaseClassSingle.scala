@@ -17,8 +17,7 @@ object SealedTraitCaseClassSingle {
     }
 }
 
-final case class CaseClassInSealedTraitCaseClassSingle(value: Int)
-    extends SealedTraitCaseClassSingle
+final case class CaseClassInSealedTraitCaseClassSingle(value: Int) extends SealedTraitCaseClassSingle
 
 object CaseClassInSealedTraitCaseClassSingle {
   implicit val codec: Codec[CaseClassInSealedTraitCaseClassSingle] =

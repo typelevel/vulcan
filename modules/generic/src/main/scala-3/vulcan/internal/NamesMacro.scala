@@ -7,11 +7,11 @@
 package vulcan.internal
 
 import scala.quoted.*
-import vulcan.internal.Names
+import vulcan.generic.AvroAlias
 import vulcan.generic.AvroDoc
 import vulcan.generic.AvroName
 import vulcan.generic.AvroNamespace
-import vulcan.generic.AvroAlias
+import vulcan.internal.Names
 
 object NamesMacro {
   inline def names[A]: Names[A] = ${ namesImpl[A] }
@@ -26,7 +26,7 @@ object NamesMacro {
     def toExprOpt(e: Option[Expr[String]]): Expr[Option[String]] =
       e match {
         case Some(stringExp) => '{ Some($stringExp) }
-        case None            => '{ Option.empty[String] }
+        case None => '{ Option.empty[String] }
       }
 
     val typeName = getAnnotValue[AvroName].map(e => '{ $e.name }).getOrElse(Expr(symbol.name))

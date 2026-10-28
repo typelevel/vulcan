@@ -7,8 +7,10 @@
 package vulcan.v2.examples
 
 import cats.Eq
-import io.circe.{Json, JsonObject}
-import org.scalacheck.{Arbitrary, Gen}
+import io.circe.Json
+import io.circe.JsonObject
+import org.scalacheck.Arbitrary
+import org.scalacheck.Gen
 import vulcan.AvroError
 import vulcan.v2.Codec
 
@@ -30,13 +32,13 @@ object SealedTraitEnumNoDefault {
       doc = Some("documentation"),
       default = None,
       encode = {
-        case FirstInSealedTraitEnumNoDefault  => "first"
+        case FirstInSealedTraitEnumNoDefault => "first"
         case SecondInSealedTraitEnumNoDefault => "second"
       },
       decode = {
-        case "first"  => Right(FirstInSealedTraitEnumNoDefault)
+        case "first" => Right(FirstInSealedTraitEnumNoDefault)
         case "second" => Right(SecondInSealedTraitEnumNoDefault)
-        case other    => Left(AvroError(other))
+        case other => Left(AvroError(other))
       },
       props = JsonObject("custom1" -> Json.fromInt(10), "custom2" -> Json.fromString("value2"))
     )

@@ -6,9 +6,12 @@
 
 package vulcan.v2
 
-import io.circe.{Json, JsonObject}
+import io.circe.Json
+import io.circe.JsonObject
 import vulcan.AvroError
-import vulcan.v2.internal.{JsonPrinter, SchemaDecoder, SchemaEncoder}
+import vulcan.v2.internal.JsonPrinter
+import vulcan.v2.internal.SchemaDecoder
+import vulcan.v2.internal.SchemaEncoder
 
 /** Immutable Avro schema. Not validated, so not necessarily a valid Avro schema. */
 sealed abstract class Schema {
@@ -23,9 +26,9 @@ sealed abstract class Schema {
   /** Returns `true` for `null`, and for unions including `null`. */
   final def isNullable: Boolean =
     this match {
-      case _: Schema.Null      => true
+      case _: Schema.Null => true
       case union: Schema.Union => union.types.exists(_.isInstanceOf[Schema.Null])
-      case _                   => false
+      case _ => false
     }
 
   /** The schema as `Json`. Named schemas are referenced by name after their definition. */

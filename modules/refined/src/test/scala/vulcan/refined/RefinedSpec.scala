@@ -6,10 +6,11 @@
 
 package vulcan.refined
 
-import eu.timepit.refined.scalacheck.numeric._
-import eu.timepit.refined.types.numeric.{NonPosInt, PosInt}
+import eu.timepit.refined.scalacheck.numeric.*
+import eu.timepit.refined.types.numeric.NonPosInt
+import eu.timepit.refined.types.numeric.PosInt
 import munit.ScalaCheckSuite
-import org.scalacheck.Prop._
+import org.scalacheck.Prop.*
 import vulcan.Codec
 
 final class RefinedSpec extends ScalaCheckSuite with EitherValues {

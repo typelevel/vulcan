@@ -6,24 +6,28 @@
 
 package vulcan
 
-import cats.data.{Chain, NonEmptyChain}
-import cats.implicits._
 import cats.Show
+import cats.data.Chain
+import cats.data.NonEmptyChain
+import cats.implicits.*
 import vulcan.internal.schema.adaptForSchema
 
-/** Custom properties which can be included in a schema.
+/**
+  * Custom properties which can be included in a schema.
   *
   * Use [[Props.one]] to create an instance, and [[Props#add]] to add more properties.
   */
 sealed abstract class Props {
 
-  /** Returns a new [[Props]] instance including a property with the specified name and value.
+  /**
+    * Returns a new [[Props]] instance including a property with the specified name and value.
     *
     * The value is encoded using the [[Codec]].
     */
   def add[A](name: String, value: A)(implicit codec: Codec[A]): Props
 
-  /** Returns a `Chain` of name-value pairs, where the value has been encoded with a [[Codec]].
+  /**
+    * Returns a `Chain` of name-value pairs, where the value has been encoded with a [[Codec]].
     *
     * If encoding of any value resulted in error, instead returns the first such error.
     */
@@ -70,14 +74,16 @@ object Props {
   ): Either[AvroError, Any] =
     Codec.encode(a).map(adaptForSchema)
 
-  /** Returns a new [[Props]] instance including a property with the specified name and value.
+  /**
+    * Returns a new [[Props]] instance including a property with the specified name and value.
     *
     * The value is encoded using the [[Codec]].
     */
   final def one[A](name: String, value: A)(implicit codec: Codec[A]): Props =
     new NonEmptyProps(NonEmptyChain.one(name -> encodeForSchema(value)))
 
-  /** The [[Props]] instance without any properties.
+  /**
+    * The [[Props]] instance without any properties.
     */
   final val empty: Props =
     EmptyProps

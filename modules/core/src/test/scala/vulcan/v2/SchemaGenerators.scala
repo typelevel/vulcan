@@ -6,10 +6,12 @@
 
 package vulcan.v2
 
-import io.circe.{Json, JsonObject}
+import io.circe.Json
+import io.circe.JsonObject
 import org.scalacheck.Gen
 
-/** Generators for valid schemas.
+/**
+  * Generators for valid schemas.
   *
   * Names of named schemas include the path to the schema, so full names are unique.
   */
@@ -22,8 +24,8 @@ object SchemaGenerators {
 
   /** Characters which have to be, or might be, escaped in JSON. */
   private val SpecialChars: Seq[Char] =
-    Seq(' ', '"', '\\', '/', '\b', '\t', '\n', '\f', '\r', '\u0000', '\u0001', '\u001f', '\u007f',
-      '\u0080', '\u009f', '\u00e9', '\u20ac', '\u2028')
+    Seq(' ', '"', '\\', '/', '\b', '\t', '\n', '\f', '\r', '\u0000', '\u0001', '\u001f', '\u007f', '\u0080',
+      '\u009f', '\u00e9', '\u20ac', '\u2028')
 
   /** Reserved property names, together with `logicalType`. */
   private val ReservedNames: Set[String] =
@@ -87,9 +89,9 @@ object SchemaGenerators {
         record :: record.fields.toList.flatMap(field => namedSchemas(field.schema))
       case named: Schema.Named => List(named)
       case array: Schema.Array => namedSchemas(array.items)
-      case map: Schema.Map     => namedSchemas(map.values)
+      case map: Schema.Map => namedSchemas(map.values)
       case union: Schema.Union => union.types.toList.flatMap(namedSchemas)
-      case _                   => Nil
+      case _ => Nil
     }
 
   private def genSchema(depth: Int, namespace: Option[String], path: String): Gen[Schema] =
@@ -276,19 +278,19 @@ object SchemaGenerators {
         kinds.toList.zipWithIndex.map { case (kind, index) =>
           val typePath = s"${path}u$index"
           kind match {
-            case "null"    => genNull
+            case "null" => genNull
             case "boolean" => genBoolean
-            case "int"     => genInt
-            case "long"    => genLong
-            case "float"   => genFloat
-            case "double"  => genDouble
-            case "bytes"   => genBytes
-            case "string"  => genString
-            case "array"   => genArray(depth, namespace, typePath)
-            case "map"     => genMap(depth, namespace, typePath)
-            case "record"  => genRecord(depth - 1, namespace, typePath)
-            case "enum"    => genEnum(namespace, typePath)
-            case _         => genFixed(namespace, typePath)
+            case "int" => genInt
+            case "long" => genLong
+            case "float" => genFloat
+            case "double" => genDouble
+            case "bytes" => genBytes
+            case "string" => genString
+            case "array" => genArray(depth, namespace, typePath)
+            case "map" => genMap(depth, namespace, typePath)
+            case "record" => genRecord(depth - 1, namespace, typePath)
+            case "enum" => genEnum(namespace, typePath)
+            case _ => genFixed(namespace, typePath)
           }
         }
       }
@@ -297,9 +299,9 @@ object SchemaGenerators {
   /** A default which is valid for the schema, using the first type of unions. */
   private def genDefault(schema: Schema): Gen[Option[Json]] =
     schema match {
-      case _: Schema.Null    => Gen.const(Some(Json.Null))
+      case _: Schema.Null => Gen.const(Some(Json.Null))
       case _: Schema.Boolean => Gen.oneOf(Json.True, Json.False).map(Some(_))
-      case _: Schema.Int  => Gen.choose(Int.MinValue, Int.MaxValue).map(n => Some(Json.fromInt(n)))
+      case _: Schema.Int => Gen.choose(Int.MinValue, Int.MaxValue).map(n => Some(Json.fromInt(n)))
       case _: Schema.Long =>
         Gen.choose(Long.MinValue, Long.MaxValue).map(n => Some(Json.fromLong(n)))
       case _: Schema.Float | _: Schema.Double =>

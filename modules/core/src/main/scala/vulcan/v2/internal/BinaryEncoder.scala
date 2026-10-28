@@ -9,7 +9,8 @@ package vulcan.v2.internal
 import scala.collection.mutable
 import scodec.bits.ByteVector
 import vulcan.AvroError
-import vulcan.v2.{AvroValue, Schema}
+import vulcan.v2.AvroValue
+import vulcan.v2.Schema
 
 /** Encodes values in the Avro binary encoding of a schema, compiled once for the schema. */
 private[v2] final class BinaryEncoder private (root: BinaryEncoder.Node) {
@@ -46,14 +47,14 @@ private[v2] object BinaryEncoder {
 
     def compile(schema: Schema): Node =
       schema match {
-        case _: Schema.Null      => NullNode
-        case _: Schema.Boolean   => BooleanNode
-        case _: Schema.Int       => IntNode
-        case _: Schema.Long      => LongNode
-        case _: Schema.Float     => FloatNode
-        case _: Schema.Double    => DoubleNode
-        case _: Schema.Bytes     => BytesNode
-        case _: Schema.String    => StringNode
+        case _: Schema.Null => NullNode
+        case _: Schema.Boolean => BooleanNode
+        case _: Schema.Int => IntNode
+        case _: Schema.Long => LongNode
+        case _: Schema.Float => FloatNode
+        case _: Schema.Double => DoubleNode
+        case _: Schema.Bytes => BytesNode
+        case _: Schema.String => StringNode
         case array: Schema.Array =>
           new ArrayNode(compile(array.items))
         case map: Schema.Map =>
@@ -103,7 +104,7 @@ private[v2] object BinaryEncoder {
     override def write(value: AvroValue, writer: BinaryWriter): Unit =
       value match {
         case AvroValue.Null => ()
-        case _              => throw invalid(value, "null")
+        case _ => throw invalid(value, "null")
       }
   }
 
@@ -111,7 +112,7 @@ private[v2] object BinaryEncoder {
     override def write(value: AvroValue, writer: BinaryWriter): Unit =
       value match {
         case AvroValue.Boolean(boolean) => writer.writeBoolean(boolean)
-        case _                          => throw invalid(value, "boolean")
+        case _ => throw invalid(value, "boolean")
       }
   }
 
@@ -119,7 +120,7 @@ private[v2] object BinaryEncoder {
     override def write(value: AvroValue, writer: BinaryWriter): Unit =
       value match {
         case AvroValue.Int(int) => writer.writeInt(int)
-        case _                  => throw invalid(value, "int")
+        case _ => throw invalid(value, "int")
       }
   }
 
@@ -127,7 +128,7 @@ private[v2] object BinaryEncoder {
     override def write(value: AvroValue, writer: BinaryWriter): Unit =
       value match {
         case AvroValue.Long(long) => writer.writeLong(long)
-        case _                    => throw invalid(value, "long")
+        case _ => throw invalid(value, "long")
       }
   }
 
@@ -135,7 +136,7 @@ private[v2] object BinaryEncoder {
     override def write(value: AvroValue, writer: BinaryWriter): Unit =
       value match {
         case AvroValue.Float(float) => writer.writeFloat(float)
-        case _                      => throw invalid(value, "float")
+        case _ => throw invalid(value, "float")
       }
   }
 
@@ -143,7 +144,7 @@ private[v2] object BinaryEncoder {
     override def write(value: AvroValue, writer: BinaryWriter): Unit =
       value match {
         case AvroValue.Double(double) => writer.writeDouble(double)
-        case _                        => throw invalid(value, "double")
+        case _ => throw invalid(value, "double")
       }
   }
 
@@ -151,7 +152,7 @@ private[v2] object BinaryEncoder {
     override def write(value: AvroValue, writer: BinaryWriter): Unit =
       value match {
         case AvroValue.Bytes(bytes) => writer.writeBytes(bytes)
-        case _                      => throw invalid(value, "bytes")
+        case _ => throw invalid(value, "bytes")
       }
   }
 
@@ -159,7 +160,7 @@ private[v2] object BinaryEncoder {
     override def write(value: AvroValue, writer: BinaryWriter): Unit =
       value match {
         case AvroValue.String(string) => writer.writeString(string)
-        case _                        => throw invalid(value, "string")
+        case _ => throw invalid(value, "string")
       }
   }
 

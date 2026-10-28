@@ -6,7 +6,8 @@
 
 package vulcan.v2
 
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.Arbitrary
+import org.scalacheck.Gen
 import scodec.bits.ByteVector
 import vulcan.v2.internal.SchemaNames
 
@@ -29,18 +30,18 @@ object AvroValueGenerators {
     depth: Int
   ): Gen[AvroValue] =
     schema match {
-      case _: Schema.Null    => Gen.const(AvroValue.Null)
+      case _: Schema.Null => Gen.const(AvroValue.Null)
       case _: Schema.Boolean => Arbitrary.arbitrary[Boolean].map(AvroValue.Boolean(_))
-      case _: Schema.Int     => Arbitrary.arbitrary[Int].map(AvroValue.Int(_))
-      case _: Schema.Long    => Arbitrary.arbitrary[Long].map(AvroValue.Long(_))
-      case _: Schema.Float   =>
+      case _: Schema.Int => Arbitrary.arbitrary[Int].map(AvroValue.Int(_))
+      case _: Schema.Long => Arbitrary.arbitrary[Long].map(AvroValue.Long(_))
+      case _: Schema.Float =>
         Arbitrary.arbitrary[Int].map(bits => AvroValue.Float(java.lang.Float.intBitsToFloat(bits)))
       case _: Schema.Double =>
         Arbitrary.arbitrary[Long].map { bits =>
           AvroValue.Double(java.lang.Double.longBitsToDouble(bits))
         }
-      case _: Schema.Bytes       => genBytes(Gen.choose(0, 8)).map(AvroValue.Bytes(_))
-      case _: Schema.String      => genString.map(AvroValue.String(_))
+      case _: Schema.Bytes => genBytes(Gen.choose(0, 8)).map(AvroValue.Bytes(_))
+      case _: Schema.String => genString.map(AvroValue.String(_))
       case record: Schema.Record =>
         Gen
           .sequence[Vector[AvroValue], AvroValue] {
@@ -78,11 +79,11 @@ object AvroValueGenerators {
   /** Returns `true` if the schema contains a reference outside of unions. */
   private def containsReference(schema: Schema): Boolean =
     schema match {
-      case _: Schema.Ref         => true
+      case _: Schema.Ref => true
       case record: Schema.Record => record.fields.exists(field => containsReference(field.schema))
-      case array: Schema.Array   => containsReference(array.items)
-      case map: Schema.Map       => containsReference(map.values)
-      case _                     => false
+      case array: Schema.Array => containsReference(array.items)
+      case map: Schema.Map => containsReference(map.values)
+      case _ => false
     }
 
   private def genBytes(size: Gen[Int]): Gen[ByteVector] =

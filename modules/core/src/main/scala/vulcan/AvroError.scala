@@ -6,14 +6,17 @@
 
 package vulcan
 
-import cats.{Eq, Show}
+import cats.Eq
+import cats.Show
 import cats.data.NonEmptyList
-import cats.instances.string._
-import org.apache.avro.{Schema, LogicalType}
-import scala.util.control.NonFatal
+import cats.instances.string.*
 import java.time.LocalDate
+import org.apache.avro.LogicalType
+import org.apache.avro.Schema
+import scala.util.control.NonFatal
 
-/** Error which occurred while generating a schema, or while encoding or decoding.
+/**
+  * Error which occurred while generating a schema, or while encoding or decoding.
   *
   * Use [[AvroError.apply]] to create an instance, and [[AvroError#message]] to retrieve the
   * message.
@@ -61,7 +64,7 @@ object AvroError {
     ErrorDecodingType(decodingTypeName, cause)
 
   private[vulcan] final case class ErrorDecodingType(decodingTypeName: String, cause: AvroError)
-      extends AvroError {
+    extends AvroError {
 
     def message = s"Error decoding $decodingTypeName: ${cause.message}"
     def throwable: Throwable =
@@ -199,7 +202,7 @@ object AvroError {
     ErrorEncodingType(encodingTypeName, cause)
 
   private[vulcan] final case class ErrorEncodingType(encodingTypeName: String, cause: AvroError)
-      extends AvroError {
+    extends AvroError {
 
     def message = s"Error encoding $encodingTypeName: ${cause.message}"
     def throwable: Throwable =

@@ -6,7 +6,8 @@
 
 package enumeratum.values
 
-import vulcan.{Avro, Codec}
+import vulcan.Avro
+import vulcan.Codec
 import vulcan.internal.Names
 
 sealed trait VulcanValueEnum[ValueType, EntryType <: ValueEnumEntry[ValueType]] {

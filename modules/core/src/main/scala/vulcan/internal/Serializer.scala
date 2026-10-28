@@ -7,11 +7,10 @@
 package vulcan
 package internal
 
-import org.apache.avro.generic.GenericDatumWriter
-import org.apache.avro.io.EncoderFactory
-
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
+import org.apache.avro.generic.GenericDatumWriter
+import org.apache.avro.io.EncoderFactory
 
 private[vulcan] object Serializer {
   final def toBinary[A](a: A)(implicit codec: Codec[A]): Either[AvroError, Array[Byte]] =

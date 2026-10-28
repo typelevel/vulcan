@@ -7,9 +7,11 @@
 package vulcan.v2
 
 import org.scalacheck.Gen
-import scodec.bits._
+import scodec.bits.*
 import vulcan.BaseSpec
-import vulcan.v2.internal.{BinaryException, BinaryReader, BinaryWriter}
+import vulcan.v2.internal.BinaryException
+import vulcan.v2.internal.BinaryReader
+import vulcan.v2.internal.BinaryWriter
 
 final class BinarySpec extends BaseSpec {
   private def write(f: BinaryWriter => Unit): ByteVector = {
@@ -116,24 +118,23 @@ final class BinarySpec extends BaseSpec {
 
   describe("BinaryReader") {
     it("should read written values") {
-      forAll(minSuccessful(1000)) {
-        (boolean: Boolean, int: Int, long: Long, float: Float, double: Double) =>
-          val bytes =
-            write { writer =>
-              writer.writeBoolean(boolean)
-              writer.writeInt(int)
-              writer.writeLong(long)
-              writer.writeFloat(float)
-              writer.writeDouble(double)
-            }
-
-          read(bytes) { reader =>
-            assert(reader.readBoolean() == boolean)
-            assert(reader.readInt() == int)
-            assert(reader.readLong() == long)
-            assert(java.lang.Float.compare(reader.readFloat(), float) == 0)
-            assert(java.lang.Double.compare(reader.readDouble(), double) == 0)
+      forAll(minSuccessful(1000)) { (boolean: Boolean, int: Int, long: Long, float: Float, double: Double) =>
+        val bytes =
+          write { writer =>
+            writer.writeBoolean(boolean)
+            writer.writeInt(int)
+            writer.writeLong(long)
+            writer.writeFloat(float)
+            writer.writeDouble(double)
           }
+
+        read(bytes) { reader =>
+          assert(reader.readBoolean() == boolean)
+          assert(reader.readInt() == int)
+          assert(reader.readLong() == long)
+          assert(java.lang.Float.compare(reader.readFloat(), float) == 0)
+          assert(java.lang.Double.compare(reader.readDouble(), double) == 0)
+        }
       }
     }
 

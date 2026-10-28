@@ -6,7 +6,7 @@
 
 package vulcan
 
-import cats.syntax.show._
+import cats.syntax.show.*
 import scala.annotation.nowarn
 
 final class PropsSpec extends BaseSpec {

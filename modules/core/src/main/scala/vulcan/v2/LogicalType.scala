@@ -6,7 +6,8 @@
 
 package vulcan.v2
 
-import io.circe.{Json, JsonObject}
+import io.circe.Json
+import io.circe.JsonObject
 
 /** Logical type annotating an underlying Avro type. */
 sealed abstract class LogicalType {
@@ -95,42 +96,42 @@ object LogicalType {
       schema match {
         case _: Schema.Int =>
           name match {
-            case "date"        => Some(date)
+            case "date" => Some(date)
             case "time-millis" => Some(timeMillis)
-            case other         => unknown(other)
+            case other => unknown(other)
           }
 
         case _: Schema.Long =>
           name match {
-            case "time-micros"            => Some(timeMicros)
-            case "timestamp-millis"       => Some(timestampMillis)
-            case "timestamp-micros"       => Some(timestampMicros)
-            case "timestamp-nanos"        => Some(timestampNanos)
+            case "time-micros" => Some(timeMicros)
+            case "timestamp-millis" => Some(timestampMillis)
+            case "timestamp-micros" => Some(timestampMicros)
+            case "timestamp-nanos" => Some(timestampNanos)
             case "local-timestamp-millis" => Some(localTimestampMillis)
             case "local-timestamp-micros" => Some(localTimestampMicros)
-            case "local-timestamp-nanos"  => Some(localTimestampNanos)
-            case other                    => unknown(other)
+            case "local-timestamp-nanos" => Some(localTimestampNanos)
+            case other => unknown(other)
           }
 
         case _: Schema.Bytes =>
           name match {
-            case "decimal"     => decimalOf(schema.props, maxPrecision = Long.MaxValue)
+            case "decimal" => decimalOf(schema.props, maxPrecision = Long.MaxValue)
             case "big-decimal" => Some(bigDecimal)
-            case other         => unknown(other)
+            case other => unknown(other)
           }
 
         case _: Schema.String =>
           name match {
             case "uuid" => Some(uuid)
-            case other  => unknown(other)
+            case other => unknown(other)
           }
 
         case fixed: Schema.Fixed =>
           name match {
-            case "decimal"  => decimalOf(schema.props, maxPrecision(fixed.size))
-            case "uuid"     => if (fixed.size == 16) Some(uuid) else None
+            case "decimal" => decimalOf(schema.props, maxPrecision(fixed.size))
+            case "uuid" => if (fixed.size == 16) Some(uuid) else None
             case "duration" => if (fixed.size == 12) Some(duration) else None
-            case other      => unknown(other)
+            case other => unknown(other)
           }
 
         case _ =>

@@ -6,13 +6,15 @@
 
 package vulcan.v2.internal
 
-import io.circe.{Json, JsonObject}
+import io.circe.Json
+import io.circe.JsonObject
 import scala.collection.mutable
 import vulcan.v2.Schema
 
 private[v2] object SchemaEncoder {
 
-  /** Convert `Schema` to `Json`, matching the Java Avro library for compatibility.
+  /**
+    * Convert `Schema` to `Json`, matching the Java Avro library for compatibility.
     *
     * Named schemas are defined where they first occur, and are referenced by name afterwards. The
     * namespace of a named schema is only included when it differs from the enclosing namespace.
@@ -52,14 +54,14 @@ private[v2] object SchemaEncoder {
           ) ++ encodeProps(map.props, SchemaReserved)
         )
 
-      case _: Schema.Null    => primitive("null", schema.props)
+      case _: Schema.Null => primitive("null", schema.props)
       case _: Schema.Boolean => primitive("boolean", schema.props)
-      case _: Schema.Int     => primitive("int", schema.props)
-      case _: Schema.Long    => primitive("long", schema.props)
-      case _: Schema.Float   => primitive("float", schema.props)
-      case _: Schema.Double  => primitive("double", schema.props)
-      case _: Schema.Bytes   => primitive("bytes", schema.props)
-      case _: Schema.String  => primitive("string", schema.props)
+      case _: Schema.Int => primitive("int", schema.props)
+      case _: Schema.Long => primitive("long", schema.props)
+      case _: Schema.Float => primitive("float", schema.props)
+      case _: Schema.Double => primitive("double", schema.props)
+      case _: Schema.Bytes => primitive("bytes", schema.props)
+      case _: Schema.String => primitive("string", schema.props)
     }
 
   private def encodeNamed(
@@ -125,7 +127,7 @@ private[v2] object SchemaEncoder {
         case Some(space) if !namespace.contains(space) =>
           List("namespace" -> Json.fromString(space))
         case None if namespace.isDefined => List("namespace" -> Json.fromString(""))
-        case _                           => Nil
+        case _ => Nil
       }
     }
 
@@ -154,9 +156,9 @@ private[v2] object SchemaEncoder {
 
   private def order(order: Schema.Field.Order): List[(String, Json)] =
     order match {
-      case Schema.Field.Order.Ascending  => Nil
+      case Schema.Field.Order.Ascending => Nil
       case Schema.Field.Order.Descending => List("order" -> Json.fromString("descending"))
-      case Schema.Field.Order.Ignore     => List("order" -> Json.fromString("ignore"))
+      case Schema.Field.Order.Ignore => List("order" -> Json.fromString("ignore"))
     }
 
   private def primitive(typeName: String, props: JsonObject): Json =

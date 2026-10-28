@@ -6,23 +6,29 @@
 
 package vulcan.v2
 
-import cats.syntax.all._
+import cats.syntax.all.*
 import java.io.EOFException
 import java.nio.ByteBuffer
-import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, ZoneOffset}
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneOffset
 import java.util.UUID
 import org.apache.avro.Conversions
 import org.apache.avro.data.TimeConversions
-import org.apache.avro.generic.{GenericFixed, GenericRecord}
+import org.apache.avro.generic.GenericFixed
+import org.apache.avro.generic.GenericRecord
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalatest.Assertion
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 import scala.util.Try
 import scodec.bits.ByteVector
 import vulcan.BaseSpec
 import vulcan.v2.Codec.InstantMicros
-import vulcan.v2.CodecJavaSpec.{same, Reader}
+import vulcan.v2.CodecJavaSpec.Reader
+import vulcan.v2.CodecJavaSpec.same
 
 /** Checks codecs against schema resolution and logical types in the Java Avro library. */
 final class CodecJavaSpec extends BaseSpec {
@@ -120,7 +126,7 @@ final class CodecJavaSpec extends BaseSpec {
           Codec.either[Long, String],
           {
             case long: java.lang.Long => Left(long.longValue)
-            case string               => Right(string.toString)
+            case string => Right(string.toString)
           }
         )
 
@@ -373,8 +379,8 @@ final class CodecJavaSpec extends BaseSpec {
   ): Assertion =
     (codec.encode(value), Try(javaEncode(value)).toEither) match {
       case (Right(encoded), Right(javaEncoded)) => assert(encoded == javaEncoded)
-      case (Left(_), Left(_))                   => succeed
-      case (encoded, javaEncoded)               =>
+      case (Left(_), Left(_)) => succeed
+      case (encoded, javaEncoded) =>
         fail(s"Encoded $value as $encoded, Java Avro encoded $javaEncoded")
     }
 
@@ -384,8 +390,8 @@ final class CodecJavaSpec extends BaseSpec {
   ): Assertion =
     (codec.decode(value, codec.schema.value), Try(javaDecode(value)).toEither) match {
       case (Right(decoded), Right(javaDecoded)) => assert(decoded == javaDecoded)
-      case (Left(_), Left(_))                   => succeed
-      case (decoded, javaDecoded)               =>
+      case (Left(_), Left(_)) => succeed
+      case (decoded, javaDecoded) =>
         fail(s"Decoded $value as $decoded, Java Avro decoded $javaDecoded")
     }
 
@@ -407,7 +413,7 @@ final class CodecJavaSpec extends BaseSpec {
 
     (decoded, javaDecoded) match {
       case (Right(a), Right(javaA)) => assert(same(a, javaA))
-      case (Left(_), Left(_))       => succeed
+      case (Left(_), Left(_)) => succeed
       // The Java Avro library checks the remaining bytes using the minimum size of reader items,
       // so rejects collections of items promoted to larger types, for example from int to float
       case (Right(_), Left(error: EOFException)) if isReaderItemSizeCheck(error) => succeed

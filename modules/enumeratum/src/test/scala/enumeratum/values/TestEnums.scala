@@ -6,7 +6,8 @@
 
 package enumeratum.values
 
-import vulcan.generic.{AvroDoc, AvroNamespace}
+import vulcan.generic.AvroDoc
+import vulcan.generic.AvroNamespace
 
 sealed abstract class CustomByteEnum(val value: Byte) extends ByteEnumEntry
 
@@ -82,9 +83,7 @@ object CustomShortEnum extends ShortEnum[CustomShortEnum] with ShortVulcanEnum[C
 @AvroDoc("Custom enumeration")
 sealed abstract class CustomStringEnum(val value: String) extends StringEnumEntry
 
-object CustomStringEnum
-    extends StringEnum[CustomStringEnum]
-    with StringVulcanEnum[CustomStringEnum] {
+object CustomStringEnum extends StringEnum[CustomStringEnum] with StringVulcanEnum[CustomStringEnum] {
   case object First extends CustomStringEnum("first")
   case object Second extends CustomStringEnum("second")
   case object Third extends CustomStringEnum("third")

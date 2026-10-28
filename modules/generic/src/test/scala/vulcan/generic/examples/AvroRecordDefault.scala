@@ -6,8 +6,9 @@
 
 package vulcan.generic.examples
 
-import vulcan.{AvroError, Codec}
-import vulcan.generic._
+import vulcan.AvroError
+import vulcan.Codec
+import vulcan.generic.*
 
 object AvroRecordDefault {
   sealed trait Enum extends Product {
@@ -24,8 +25,8 @@ object AvroRecordDefault {
       symbols = List(A.value, B.value),
       encode = _.value,
       decode = {
-        case "A"   => Right(A)
-        case "B"   => Right(B)
+        case "A" => Right(A)
+        case "B" => Right(B)
         case other => Left(AvroError(s"Invalid S: $other"))
       }
     )

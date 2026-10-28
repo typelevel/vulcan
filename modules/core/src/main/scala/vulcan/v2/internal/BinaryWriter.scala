@@ -115,7 +115,8 @@ private[v2] final class BinaryWriter(initialCapacity: Int) {
     }
   }
 
-  /** The bytes written so far, copied only if most of the buffer is unused. The writer must not be
+  /**
+    * The bytes written so far, copied only if most of the buffer is unused. The writer must not be
     * used afterwards.
     */
   def toByteVector: ByteVector =

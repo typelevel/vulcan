@@ -7,11 +7,13 @@
 package vulcan.internal
 
 import java.nio.ByteBuffer
-import org.apache.avro.{Schema, SchemaFormatter}
-import org.apache.avro.generic.{GenericEnumSymbol, GenericFixed, IndexedRecord}
-import vulcan.internal.converters.collection._
-
-import java.{util => ju}
+import java.util as ju
+import org.apache.avro.Schema
+import org.apache.avro.SchemaFormatter
+import org.apache.avro.generic.GenericEnumSymbol
+import org.apache.avro.generic.GenericFixed
+import org.apache.avro.generic.IndexedRecord
+import vulcan.internal.converters.collection.*
 
 private[vulcan] object schema {
   private val jsonPrettyFormatter: SchemaFormatter =

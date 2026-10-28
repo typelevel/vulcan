@@ -6,8 +6,10 @@
 
 package vulcan.v2.internal
 
-import cats.syntax.all._
-import io.circe.{Json, JsonNumber, JsonObject}
+import cats.syntax.all.*
+import io.circe.Json
+import io.circe.JsonNumber
+import io.circe.JsonObject
 import scala.collection.mutable
 import vulcan.AvroError
 import vulcan.v2.Schema
@@ -18,7 +20,8 @@ private[v2] object SchemaValidator {
   def validate(schema: Schema, validateDefaults: Boolean): Either[AvroError, Unit] =
     new Validation(validateDefaults).validate(schema)
 
-  /** Returns `true` if the named schemas have the same definition, ignoring docs and aliases.
+  /**
+    * Returns `true` if the named schemas have the same definition, ignoring docs and aliases.
     *
     * Named schemas within the definitions are compared by name.
     */
@@ -59,9 +62,9 @@ private[v2] object SchemaValidator {
     schema match {
       case named: Schema.Named => Schema.Ref(named.name)
       case array: Schema.Array => array.withItems(references(array.items))
-      case map: Schema.Map     => map.withValues(references(map.values))
+      case map: Schema.Map => map.withValues(references(map.values))
       case union: Schema.Union => union.withTypes(union.types.map(references))
-      case _                   => schema
+      case _ => schema
     }
 
   private final class Validation(validateDefaults: Boolean) {
@@ -110,7 +113,7 @@ private[v2] object SchemaValidator {
             } >> {
               val reserved = named match {
                 case _: Schema.Enum => SchemaEncoder.EnumReserved
-                case _              => SchemaEncoder.SchemaReserved
+                case _ => SchemaEncoder.SchemaReserved
               }
 
               validateProps(named.props, reserved, SchemaNames.describe(named))
@@ -134,7 +137,7 @@ private[v2] object SchemaValidator {
     private def validateNested(named: Schema.Named): Either[AvroError, Unit] =
       named match {
         case record: Schema.Record => record.fields.traverse_(field => validate(field.schema))
-        case _                     => Right(())
+        case _ => Right(())
       }
 
     private def validateFullName(name: Schema.Name): Either[AvroError, Unit] =
@@ -231,10 +234,10 @@ private[v2] object SchemaValidator {
     /** Returns `true` if the default is valid, where union defaults can match any type. */
     private def isValidDefault(schema: Schema, default: Json): Boolean =
       schema match {
-        case _: Schema.Null                     => default.isNull
-        case _: Schema.Boolean                  => default.isBoolean
-        case _: Schema.Int                      => intValue(default).isDefined
-        case _: Schema.Long                     => longValue(default).isDefined
+        case _: Schema.Null => default.isNull
+        case _: Schema.Boolean => default.isBoolean
+        case _: Schema.Int => intValue(default).isDefined
+        case _: Schema.Long => longValue(default).isDefined
         case _: Schema.Float | _: Schema.Double =>
           default.isNumber || default.asString.exists(NonFiniteNumbers.contains)
         case _: Schema.Bytes | _: Schema.String | _: Schema.Enum | _: Schema.Fixed =>
@@ -258,7 +261,7 @@ private[v2] object SchemaValidator {
     private def validateName(name: String, description: => String): Either[AvroError, Unit] =
       SchemaNames.invalid(name) match {
         case Some(reason) => Left(AvroError(s"Invalid $description: $reason"))
-        case None         => Right(())
+        case None => Right(())
       }
   }
 

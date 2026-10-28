@@ -7,12 +7,11 @@
 package vulcan
 package internal
 
+import java.io.ByteArrayInputStream
+import java.nio.charset.StandardCharsets
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericDatumReader
 import org.apache.avro.io.DecoderFactory
-
-import java.io.ByteArrayInputStream
-import java.nio.charset.StandardCharsets
 
 private[vulcan] object Deserializer {
   def fromBinary[A](bytes: Array[Byte], writerSchema: Schema)(implicit

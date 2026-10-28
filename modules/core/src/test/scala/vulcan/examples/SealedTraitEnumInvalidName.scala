@@ -6,7 +6,8 @@
 
 package vulcan.examples
 
-import vulcan.{AvroError, Codec}
+import vulcan.AvroError
+import vulcan.Codec
 
 sealed trait `-SealedTraitEnumInvalidName`
 

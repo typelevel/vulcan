@@ -6,20 +6,25 @@
 
 package vulcan.v2
 
-import cats.data._
-import cats.syntax.all._
-import io.circe.{Json, JsonObject}
+import cats.data.*
+import cats.syntax.all.*
+import io.circe.Json
+import io.circe.JsonObject
 import java.nio.charset.StandardCharsets
-import java.time._
+import java.time.*
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import org.scalacheck.Gen
 import org.scalatest.Assertion
-import scala.util.{Failure, Success, Try}
-import scodec.bits._
-import vulcan.{AvroError, BaseSpec, Prism}
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
+import scodec.bits.*
+import vulcan.AvroError
+import vulcan.BaseSpec
+import vulcan.Prism
 import vulcan.v2.Codec.InstantMicros
-import vulcan.v2.examples._
+import vulcan.v2.examples.*
 
 final class CodecSpec extends BaseSpec with CodecSpecHelpers {
   describe("Codec") {
@@ -2282,13 +2287,13 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           name = "CustomEnum",
           symbols = List("first", "second"),
           encode = {
-            case First  => "first"
+            case First => "first"
             case Second => "second"
           },
           decode = {
-            case "first"  => Right(First)
+            case "first" => Right(First)
             case "second" => Right(Second)
-            case other    => Left(AvroError(other))
+            case other => Left(AvroError(other))
           },
           namespace = ""
         )

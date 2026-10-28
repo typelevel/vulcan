@@ -9,11 +9,13 @@ package vulcan
 import cats.Eq
 import cats.laws.discipline.InvariantTests
 import cats.tests.CatsSuite
-import java.nio.charset.{Charset, StandardCharsets}
+import java.nio.charset.Charset
+import java.nio.charset.StandardCharsets
 import org.apache.avro.Schema
-import org.scalacheck.{Arbitrary, Gen}
-import scala.util.Try
+import org.scalacheck.Arbitrary
+import org.scalacheck.Gen
 import scala.annotation.nowarn
+import scala.util.Try
 
 final class CodecInvariantSpec extends CatsSuite with EitherValues {
   val schemaGen: Gen[Either[AvroError, Schema]] =

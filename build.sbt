@@ -6,23 +6,24 @@ val enumeratumVersion = "1.9.8"
 val jacksonVersion = "2.22.4"
 val magnolia2Version = "1.1.14"
 val magnolia3Version = "1.3.24"
-val munitVersion = "1.3.6"
 val munitScalaCheckVersion = "1.3.1"
+val munitVersion = "1.3.6"
 val refinedVersion = "0.11.4"
+val scala213Version = "2.13.18"
+val scala3Version = "3.3.8"
 val scalacCompatVersion = "0.1.5"
 val scodecBitsVersion = "1.2.5"
 val slf4jNopVersion = "2.0.20"
 
-val scala213 = "2.13.18"
-val scala3 = "3.3.8"
-
 inThisBuild(
   Seq(
-    crossScalaVersions := Seq(scala213, scala3),
+    crossScalaVersions := Seq(scala213Version, scala3Version),
     developers := List(tlGitHubDev("vlovgr", "Viktor Rudebeck")),
     githubWorkflowJavaVersions := Seq(JavaSpec.temurin("21")),
     organization := "org.typelevel",
-    scalaVersion := scala213,
+    scalaVersion := scala3Version,
+    semanticdbEnabled := true,
+    semanticdbVersion := scalafixSemanticdb.revision,
     startYear := Some(2019),
     tlBaseVersion := "2.0",
     tlFatalWarnings := false,
@@ -149,7 +150,7 @@ lazy val docs = project
     import org.typelevel.sbt.site.GenericSiteSettings
 
     Seq(
-      crossScalaVersions := Seq(scala213),
+      crossScalaVersions := Seq(scala213Version),
       scalacOptions ~= (_.filterNot(_.startsWith("-Wunused"))),
       Compile / packageDoc / mappings := (unidocs / Compile / packageDoc / mappings).value.map {
         case (file, path) => file -> path.replace('\\', '/')
@@ -191,8 +192,7 @@ lazy val docs = project
           .site
           .metadata(
             title = Some("Vulcan · Functional Avro for Scala"),
-            description =
-              Some("Functional Avro encodings for Scala using the official Apache Avro library."),
+            description = Some("Functional Avro encodings for Scala using the official Apache Avro library."),
             authors = developers.value.map(_.name),
             language = Some("en"),
             version = Some(version.value)
@@ -295,7 +295,7 @@ lazy val docs = project
 lazy val unidocs = project
   .enablePlugins(NoPublishPlugin, TypelevelUnidocPlugin)
   .settings(
-    crossScalaVersions := Seq(scala213),
+    crossScalaVersions := Seq(scala213Version),
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(core, enumeratum, generic, refined),
     ScalaUnidoc / unidoc / scalacOptions ++= {
       val docVersion = tlLatestVersion.value.getOrElse(version.value)

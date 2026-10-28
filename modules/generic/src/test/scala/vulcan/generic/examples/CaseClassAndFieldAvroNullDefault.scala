@@ -7,11 +7,10 @@
 package vulcan.generic.examples
 
 import cats.Eq
+import java.time.LocalDate
 import org.scalacheck.Arbitrary
 import vulcan.Codec
-import vulcan.generic._
-
-import java.time.LocalDate
+import vulcan.generic.*
 
 @AvroNullDefault(true)
 final case class CaseClassAndFieldAvroNullDefault(

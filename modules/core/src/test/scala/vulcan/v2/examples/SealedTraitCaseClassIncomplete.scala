@@ -17,16 +17,14 @@ object SealedTraitCaseClassIncomplete {
     }
 }
 
-final case class FirstInSealedTraitCaseClassIncomplete(value: Int)
-    extends SealedTraitCaseClassIncomplete
+final case class FirstInSealedTraitCaseClassIncomplete(value: Int) extends SealedTraitCaseClassIncomplete
 
 object FirstInSealedTraitCaseClassIncomplete {
   implicit val codec: Codec[FirstInSealedTraitCaseClassIncomplete] =
     Codec[Int].imap(apply)(_.value)
 }
 
-final case class SecondInSealedTraitCaseClassIncomplete(value: Double)
-    extends SealedTraitCaseClassIncomplete
+final case class SecondInSealedTraitCaseClassIncomplete(value: Double) extends SealedTraitCaseClassIncomplete
 
 object SecondInSealedTraitCaseClassIncomplete {
   implicit val codec: Codec[SecondInSealedTraitCaseClassIncomplete] =

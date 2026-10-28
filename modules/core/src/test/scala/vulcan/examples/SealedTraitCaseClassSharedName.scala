@@ -7,9 +7,10 @@
 package vulcan.examples
 
 import cats.Eq
-import cats.implicits._
-import org.scalacheck.{Arbitrary, Gen}
+import cats.implicits.*
+import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 import vulcan.Codec
 
 sealed trait SealedTraitCaseClassSharedName
@@ -53,8 +54,7 @@ object First {
 }
 
 object Second {
-  final case class SharedNameSealedTraitCaseClass(value: String)
-      extends SealedTraitCaseClassSharedName
+  final case class SharedNameSealedTraitCaseClass(value: String) extends SealedTraitCaseClassSharedName
 
   object SharedNameSealedTraitCaseClass {
     implicit val codec: Codec[SharedNameSealedTraitCaseClass] =

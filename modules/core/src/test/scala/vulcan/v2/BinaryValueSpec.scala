@@ -6,9 +6,12 @@
 
 package vulcan.v2
 
-import scodec.bits._
+import scodec.bits.*
 import vulcan.BaseSpec
-import vulcan.v2.internal.{BinaryDecoder, BinaryEncoder, BinaryReader, BinaryWriter}
+import vulcan.v2.internal.BinaryDecoder
+import vulcan.v2.internal.BinaryEncoder
+import vulcan.v2.internal.BinaryReader
+import vulcan.v2.internal.BinaryWriter
 
 final class BinaryValueSpec extends BaseSpec {
   private def encode(schema: Schema, value: AvroValue): ByteVector =
