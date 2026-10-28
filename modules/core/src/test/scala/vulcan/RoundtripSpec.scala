@@ -6,16 +6,18 @@
 
 package vulcan
 
-import cats.data._
 import cats.Eq
-import cats.implicits._
-import java.time.{Instant, LocalDate}
-import org.scalacheck.{Arbitrary, Gen}
+import cats.data.*
+import cats.implicits.*
+import java.time.Instant
+import java.time.LocalDate
+import java.util.UUID
+import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 import org.scalatest.Assertion
 import scala.collection.immutable.SortedSet
-import vulcan.examples._
-import java.util.UUID
+import vulcan.examples.*
 final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
   describe("BigDecimal") {
     it("roundtrip") {

@@ -6,8 +6,8 @@
 
 package vulcan.generic
 
-import examples.AvroRecordDefault._
 import org.apache.avro.JsonProperties
+import vulcan.generic.examples.AvroRecordDefault.*
 
 final class AvroFieldDefaultSpec extends CodecBase {
   describe("AvroFieldDefault") {

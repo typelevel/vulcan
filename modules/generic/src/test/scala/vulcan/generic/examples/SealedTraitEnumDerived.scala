@@ -7,9 +7,11 @@
 package vulcan.generic.examples
 
 import cats.Eq
-import org.scalacheck.{Arbitrary, Gen}
-import vulcan.{AvroError, Codec}
-import vulcan.generic._
+import org.scalacheck.Arbitrary
+import org.scalacheck.Gen
+import vulcan.AvroError
+import vulcan.Codec
+import vulcan.generic.*
 
 @AvroNamespace("com.example")
 sealed trait SealedTraitEnumDerived
@@ -25,13 +27,13 @@ object SealedTraitEnumDerived {
     deriveEnum(
       symbols = List("first", "second"),
       encode = {
-        case FirstInSealedTraitEnumDerived  => "first"
+        case FirstInSealedTraitEnumDerived => "first"
         case SecondInSealedTraitEnumDerived => "second"
       },
       decode = {
-        case "first"  => Right(FirstInSealedTraitEnumDerived)
+        case "first" => Right(FirstInSealedTraitEnumDerived)
         case "second" => Right(SecondInSealedTraitEnumDerived)
-        case other    => Left(AvroError(other))
+        case other => Left(AvroError(other))
       }
     )
 }

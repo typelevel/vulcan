@@ -9,9 +9,13 @@ package vulcan.v2
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import org.apache.avro.{Schema => JavaSchema}
-import org.apache.avro.generic.{GenericData, GenericDatumReader, GenericDatumWriter}
-import org.apache.avro.io.{DecoderFactory, Encoder, EncoderFactory}
+import org.apache.avro.Schema as JavaSchema
+import org.apache.avro.generic.GenericData
+import org.apache.avro.generic.GenericDatumReader
+import org.apache.avro.generic.GenericDatumWriter
+import org.apache.avro.io.DecoderFactory
+import org.apache.avro.io.Encoder
+import org.apache.avro.io.EncoderFactory
 import scodec.bits.ByteVector
 import vulcan.v2.internal.SchemaNames
 
@@ -48,11 +52,11 @@ object JavaAvro {
   def sortMaps(value: AvroValue): AvroValue =
     value match {
       case AvroValue.Record(values) => AvroValue.Record(values.map(sortMaps))
-      case AvroValue.Array(items)   => AvroValue.Array(items.map(sortMaps))
-      case AvroValue.Map(entries)   =>
+      case AvroValue.Array(items) => AvroValue.Array(items.map(sortMaps))
+      case AvroValue.Map(entries) =>
         AvroValue.Map(entries.map { case (key, value) => (key, sortMaps(value)) }.sortBy(_._1))
       case AvroValue.Union(index, value) => AvroValue.Union(index, sortMaps(value))
-      case _                             => value
+      case _ => value
     }
 
   private def write(
@@ -76,16 +80,16 @@ object JavaAvro {
     (value, schema) match {
       case (_, ref: Schema.Ref) =>
         toJava(value, definitions(ref.fullName), javaSchema, definitions)
-      case (AvroValue.Null, _)             => null
+      case (AvroValue.Null, _) => null
       case (AvroValue.Boolean(boolean), _) => boolean
-      case (AvroValue.Int(int), _)         => int
-      case (AvroValue.Long(long), _)       => long
-      case (AvroValue.Float(float), _)     => float
-      case (AvroValue.Double(double), _)   => double
-      case (AvroValue.Bytes(bytes), _)     => ByteBuffer.wrap(bytes.toArray)
-      case (AvroValue.String(string), _)   => string
-      case (AvroValue.Enum(symbol), _)     => new GenericData.EnumSymbol(javaSchema, symbol)
-      case (AvroValue.Fixed(bytes), _)     => new GenericData.Fixed(javaSchema, bytes.toArray)
+      case (AvroValue.Int(int), _) => int
+      case (AvroValue.Long(long), _) => long
+      case (AvroValue.Float(float), _) => float
+      case (AvroValue.Double(double), _) => double
+      case (AvroValue.Bytes(bytes), _) => ByteBuffer.wrap(bytes.toArray)
+      case (AvroValue.String(string), _) => string
+      case (AvroValue.Enum(symbol), _) => new GenericData.EnumSymbol(javaSchema, symbol)
+      case (AvroValue.Fixed(bytes), _) => new GenericData.Fixed(javaSchema, bytes.toArray)
       case (AvroValue.Record(values), record: Schema.Record) =>
         val javaRecord = new GenericData.Record(javaSchema)
         values.zip(record.fields).zipWithIndex.foreach { case ((fieldValue, field), index) =>

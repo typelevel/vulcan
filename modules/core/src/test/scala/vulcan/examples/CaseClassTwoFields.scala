@@ -6,9 +6,10 @@
 
 package vulcan.examples
 
-import cats.implicits._
+import cats.implicits.*
 import org.apache.avro.Schema
-import vulcan.{Codec, Props}
+import vulcan.Codec
+import vulcan.Props
 
 final case class CaseClassTwoFields(name: String, age: Int)
 

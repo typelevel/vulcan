@@ -6,10 +6,10 @@
 
 package vulcan.generic.examples
 
-import org.scalacheck.Arbitrary.arbitrary
-import org.scalacheck.{Arbitrary, Gen}
-
 import java.time.LocalDate
+import org.scalacheck.Arbitrary
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 
 object CaseClassNullableFields {
   type FieldProduct = (

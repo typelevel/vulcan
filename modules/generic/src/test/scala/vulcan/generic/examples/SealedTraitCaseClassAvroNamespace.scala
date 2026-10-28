@@ -7,23 +7,23 @@
 package vulcan.generic.examples
 
 import cats.Eq
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 import vulcan.Codec
-import vulcan.generic._
+import vulcan.generic.*
 
 sealed trait SealedTraitCaseClassAvroNamespace
 
 // out of order to verify that ordering in derived schema is by name
 @AvroNamespace("com.example")
 final case class SecondInSealedTraitCaseClassAvroNamespace(value: String)
-    extends SealedTraitCaseClassAvroNamespace
+  extends SealedTraitCaseClassAvroNamespace
 final case class FirstInSealedTraitCaseClassAvroNamespace(value: Int)
-    extends SealedTraitCaseClassAvroNamespace
+  extends SealedTraitCaseClassAvroNamespace
 
 object SealedTraitCaseClassAvroNamespace {
-  implicit val sealedTraitCaseClassAvroNamespaceArbitrary
-    : Arbitrary[SealedTraitCaseClassAvroNamespace] =
+  implicit val sealedTraitCaseClassAvroNamespaceArbitrary: Arbitrary[SealedTraitCaseClassAvroNamespace] =
     Arbitrary(
       Gen.oneOf(
         arbitrary[Int].map(FirstInSealedTraitCaseClassAvroNamespace(_)),

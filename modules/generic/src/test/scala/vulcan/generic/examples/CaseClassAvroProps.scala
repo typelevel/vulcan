@@ -6,8 +6,9 @@
 
 package vulcan.generic.examples
 
-import vulcan.{Codec, Props}
-import vulcan.generic._
+import vulcan.Codec
+import vulcan.Props
+import vulcan.generic.*
 
 @AvroName("CaseClassAvroProps")
 final case class CaseClassAvroProps(

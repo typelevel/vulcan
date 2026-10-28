@@ -7,9 +7,10 @@
 package vulcan.v2
 
 import io.circe.Json
-import org.apache.avro.{Schema => JavaSchema}
+import org.apache.avro.Schema as JavaSchema
 import org.scalacheck.Gen
-import scala.util.{Random, Try}
+import scala.util.Random
+import scala.util.Try
 import vulcan.BaseSpec
 
 /** Checks schemas against the Java Avro library. */

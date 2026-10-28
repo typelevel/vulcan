@@ -7,17 +7,24 @@
 package vulcan.v2
 
 import cats.Eq
-import cats.data._
-import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, ZoneOffset}
+import cats.data.*
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneOffset
 import java.util.UUID
-import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 import org.scalatest.Assertion
-import scala.collection.immutable.{SortedMap, SortedSet}
+import scala.collection.immutable.SortedMap
+import scala.collection.immutable.SortedSet
 import scodec.bits.ByteVector
-import vulcan.{AvroError, BaseSpec}
+import vulcan.AvroError
+import vulcan.BaseSpec
 import vulcan.v2.Codec.InstantMicros
-import vulcan.v2.examples._
+import vulcan.v2.examples.*
 
 final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
   describe("BigDecimal") {

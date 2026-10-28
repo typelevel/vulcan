@@ -7,8 +7,11 @@
 package vulcan.examples
 
 import cats.Eq
-import org.scalacheck.{Arbitrary, Gen}
-import vulcan.{AvroError, Codec, Props}
+import org.scalacheck.Arbitrary
+import org.scalacheck.Gen
+import vulcan.AvroError
+import vulcan.Codec
+import vulcan.Props
 
 sealed trait SealedTraitEnumNoDefault
 
@@ -28,13 +31,13 @@ object SealedTraitEnumNoDefault {
       doc = Some("documentation"),
       default = None,
       encode = {
-        case FirstInSealedTraitEnumNoDefault  => "first"
+        case FirstInSealedTraitEnumNoDefault => "first"
         case SecondInSealedTraitEnumNoDefault => "second"
       },
       decode = {
-        case "first"  => Right(FirstInSealedTraitEnumNoDefault)
+        case "first" => Right(FirstInSealedTraitEnumNoDefault)
         case "second" => Right(SecondInSealedTraitEnumNoDefault)
-        case other    => Left(AvroError(other))
+        case other => Left(AvroError(other))
       },
       props = Props.one("custom1", 10).add("custom2", "value2")
     )

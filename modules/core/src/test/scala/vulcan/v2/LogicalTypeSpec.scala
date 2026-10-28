@@ -6,7 +6,8 @@
 
 package vulcan.v2
 
-import io.circe.{Json, JsonObject}
+import io.circe.Json
+import io.circe.JsonObject
 import vulcan.BaseSpec
 
 final class LogicalTypeSpec extends BaseSpec {
@@ -54,7 +55,7 @@ final class LogicalTypeSpec extends BaseSpec {
         val extracted =
           LogicalType.decimal(10, 2) match {
             case LogicalType.Decimal(precision, scale) => Some((precision, scale))
-            case _                                     => None
+            case _ => None
           }
 
         assert(extracted == Some((10, 2)))

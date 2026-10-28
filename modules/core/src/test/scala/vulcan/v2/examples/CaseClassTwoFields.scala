@@ -6,9 +6,11 @@
 
 package vulcan.v2.examples
 
-import cats.syntax.all._
-import io.circe.{Json, JsonObject}
-import vulcan.v2.{Codec, Schema}
+import cats.syntax.all.*
+import io.circe.Json
+import io.circe.JsonObject
+import vulcan.v2.Codec
+import vulcan.v2.Schema
 
 final case class CaseClassTwoFields(name: String, age: Int)
 

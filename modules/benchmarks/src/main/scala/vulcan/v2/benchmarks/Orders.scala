@@ -7,7 +7,9 @@
 package vulcan.v2.benchmarks
 
 import scodec.bits.ByteVector
-import vulcan.v2.{AvroValue, LogicalType, Schema}
+import vulcan.v2.AvroValue
+import vulcan.v2.LogicalType
+import vulcan.v2.Schema
 
 /** An order with nested records, an array, a map, an enum, unions, and logical types. */
 object Orders {

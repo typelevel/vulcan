@@ -6,21 +6,38 @@
 
 package vulcan.v2
 
-import cats.{~>, Invariant, Show}
-import cats.data.{Chain, NonEmptyChain, NonEmptyList, NonEmptyMap, NonEmptySet, NonEmptyVector}
+import cats.Invariant
+import cats.Show
+import cats.data.Chain
+import cats.data.NonEmptyChain
+import cats.data.NonEmptyList
+import cats.data.NonEmptyMap
+import cats.data.NonEmptySet
+import cats.data.NonEmptyVector
 import cats.free.FreeApplicative
-import io.circe.{Json, JsonObject}
+import cats.~>
+import io.circe.Json
+import io.circe.JsonObject
 import java.nio.charset.StandardCharsets
-import java.time.{Instant, LocalDate, LocalDateTime, LocalTime, ZoneOffset}
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneOffset
+import java.util.Arrays
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicReferenceArray
-import java.util.{Arrays, UUID}
-import scala.annotation.{implicitNotFound, tailrec}
-import scala.collection.immutable.{ArraySeq, SortedMap, SortedSet}
+import scala.annotation.implicitNotFound
+import scala.annotation.tailrec
+import scala.collection.immutable.ArraySeq
+import scala.collection.immutable.SortedMap
+import scala.collection.immutable.SortedSet
 import scala.collection.mutable
 import scala.util.Try
 import scodec.bits.ByteVector
-import vulcan.{AvroError, Prism}
-import vulcan.v2.internal._
+import vulcan.AvroError
+import vulcan.Prism
+import vulcan.v2.internal.*
 
 /** Provides a schema, along with encoding and decoding functions for a given type. */
 @implicitNotFound(
@@ -38,7 +55,8 @@ sealed abstract class Codec[A] {
   final def decode(value: AvroValue, writerSchema: Schema): Either[AvroError, A] =
     decoder(writerSchema, new Definitions(writerSchema))(value)
 
-  /** Returns a function decoding Avro binary written using the writer schema, or an error if the
+  /**
+    * Returns a function decoding Avro binary written using the writer schema, or an error if the
     * writer schema is invalid.
     *
     * The function is compiled once for the writer schema, and can be reused for any number of
@@ -53,13 +71,15 @@ sealed abstract class Codec[A] {
       (bytes: ByteVector) => binary.decode(bytes).flatMap(decode)
     }
 
-  /** Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
+  /**
+    * Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
     * back-and-forth between types `A` and `B`.
     */
   final def imap[B](f: A => B)(g: B => A): Codec[B] =
     imapErrors(a => Right(f(a)))(b => Right(g(b)))
 
-  /** Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
+  /**
+    * Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
     * back-and-forth between types `A` and `B`.
     *
     * Similar to [[Codec#imap]], except the mapping from `A` to `B` might be unsuccessful.
@@ -67,7 +87,8 @@ sealed abstract class Codec[A] {
   final def imapError[B](f: A => Either[AvroError, B])(g: B => A): Codec[B] =
     imapErrors(f)(b => Right(g(b)))
 
-  /** Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
+  /**
+    * Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
     * back-and-forth between types `A` and `B`.
     *
     * Similar to [[Codec#imap]], except the mappings in both directions might be unsuccessful.
@@ -75,7 +96,8 @@ sealed abstract class Codec[A] {
   final def imapErrors[B](f: A => Either[AvroError, B])(g: B => Either[AvroError, A]): Codec[B] =
     Codec.ImapErrors(this, f, g)
 
-  /** Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
+  /**
+    * Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
     * back-and-forth between types `A` and `B`.
     *
     * Similar to [[Codec#imap]], except the mapping from `A` to `B` might be unsuccessful.
@@ -101,7 +123,7 @@ sealed abstract class Codec[A] {
       case ref: Schema.Ref =>
         definitions.get(ref.fullName) match {
           case Some(named) => resolve(named, definitions)
-          case None        => Codec.failing(AvroError(s"Undefined name ${ref.fullName}"))
+          case None => Codec.failing(AvroError(s"Undefined name ${ref.fullName}"))
         }
 
       case _ =>
@@ -134,11 +156,12 @@ sealed abstract class Codec[A] {
   override final def toString: String =
     schema match {
       case Right(schema) => s"Codec(${schema.toJson.spaces2})"
-      case Left(error)   => error.toString
+      case Left(error) => error.toString
     }
 }
 
-/** @groupname General General Codecs
+/**
+  * @groupname General General Codecs
   * @groupprio General 0
   * @groupdesc General
   *   Default codecs for standard library types.
@@ -175,19 +198,22 @@ sealed abstract class Codec[A] {
   */
 object Codec {
 
-  /** Returns the [[Codec]] for the specified type.
+  /**
+    * Returns the [[Codec]] for the specified type.
     *
     * @group Utilities
     */
   final def apply[A](implicit codec: Codec[A]): Codec[A] =
     codec
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val boolean: Codec[Boolean] =
     BooleanCodec
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val byte: Codec[Byte] =
     Codec.int
@@ -197,18 +223,21 @@ object Codec {
       }(_.toInt)
       .withTypeName("Byte")
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val bytes: Codec[ByteVector] =
     BytesCodec
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def chain[A](implicit codec: Codec[A]): Codec[Chain[A]] =
     ArrayCodec[A, Chain[A]](codec, _.length.toInt, _.iterator, chainBuilder)
       .withTypeName("Chain")
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val char: Codec[Char] =
     Codec.string
@@ -218,7 +247,8 @@ object Codec {
       }(_.toString)
       .withTypeName("Char")
 
-  /** Returns a new decimal [[Codec]] for `BigDecimal`.
+  /**
+    * Returns a new decimal [[Codec]] for `BigDecimal`.
     *
     * Values are decoded using the precision and scale of the writer schema.
     *
@@ -227,7 +257,8 @@ object Codec {
   final def decimal(precision: Int, scale: Int): Codec[BigDecimal] =
     DecimalCodec(precision, scale).withTypeName("BigDecimal")
 
-  /** Returns the result of decoding the specified value to the specified type, using the schema of
+  /**
+    * Returns the result of decoding the specified value to the specified type, using the schema of
     * the codec as the writer schema.
     *
     * @group Utilities
@@ -235,12 +266,14 @@ object Codec {
   final def decode[A](value: AvroValue)(implicit codec: Codec[A]): Either[AvroError, A] =
     codec.schema.flatMap(codec.decode(value, _))
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val double: Codec[Double] =
     DoubleCodec
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit final def either[A, B](implicit
     codecA: Codec[A],
@@ -250,14 +283,16 @@ object Codec {
       .union[Either[A, B]](alt => alt[Left[A, B]] ++ alt[Right[A, B]])
       .withTypeName("Either")
 
-  /** Returns the result of encoding the specified value.
+  /**
+    * Returns the result of encoding the specified value.
     *
     * @group Utilities
     */
   final def encode[A](a: A)(implicit codec: Codec[A]): Either[AvroError, AvroValue] =
     codec.encode(a)
 
-  /** Returns a new enum [[Codec]] for type `A`.
+  /**
+    * Returns a new enum [[Codec]] for type `A`.
     *
     * Symbols which are not part of the enum decode to the default, if there is one.
     *
@@ -279,7 +314,8 @@ object Codec {
       .withTypeName(enumName.fullName)
   }
 
-  /** Returns a new fixed [[Codec]] for type `A`.
+  /**
+    * Returns a new fixed [[Codec]] for type `A`.
     *
     * When encoding, bytes are zero-padded to the specified size. Zero-padding is applied at the
     * end, and will remain in the input to `decode`. Encoding checks to ensure the size is not
@@ -302,12 +338,14 @@ object Codec {
       .withTypeName(fixedName.fullName)
   }
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val float: Codec[Float] =
     FloatCodec
 
-  /** Returns the result of decoding the specified Avro binary, written using the writer schema, to
+  /**
+    * Returns the result of decoding the specified Avro binary, written using the writer schema, to
     * the specified type.
     *
     * The value is decoded from the start of the bytes, and any remaining bytes are ignored. To
@@ -318,7 +356,8 @@ object Codec {
   final def fromBinary[A: Codec](bytes: ByteVector, writerSchema: Schema): Either[AvroError, A] =
     Codec[A].binaryDecoder(writerSchema).flatMap(_(bytes))
 
-  /** Returns the result of decoding the specified Avro JSON, written using the writer schema, to
+  /**
+    * Returns the result of decoding the specified Avro JSON, written using the writer schema, to
     * the specified type.
     *
     * @group Utilities
@@ -328,7 +367,8 @@ object Codec {
       .flatMap(_.decode(json))
       .flatMap(Codec[A].decode(_, writerSchema))
 
-  /** Returns a new [[Codec]] instance using the specified schema, and encode and decode functions.
+  /**
+    * Returns a new [[Codec]] instance using the specified schema, and encode and decode functions.
     *
     * The decode function is called with values of the writer schema, which is neither a union nor a
     * reference. Values of unions are decoded using the schema of the written type.
@@ -342,7 +382,8 @@ object Codec {
   ): Codec[A] =
     Instance(schema, encode, decode)
 
-  /** @group JavaTime
+  /**
+    * @group JavaTime
     */
   implicit lazy val instant: Codec[Instant] =
     Codec.long
@@ -352,7 +393,8 @@ object Codec {
       .withLogicalType(LogicalType.timestampMillis)
       .withTypeName("Instant")
 
-  /** `Instant` with microsecond precision, encoded with logical type `timestamp-micros`.
+  /**
+    * `Instant` with microsecond precision, encoded with logical type `timestamp-micros`.
     *
     * @group JavaTime
     */
@@ -383,7 +425,8 @@ object Codec {
       "InstantMicros"
   }
 
-  /** @group JavaTime
+  /**
+    * @group JavaTime
     */
   implicit lazy val instantMicros: Codec[InstantMicros] =
     Codec.long
@@ -393,23 +436,27 @@ object Codec {
       .withLogicalType(LogicalType.timestampMicros)
       .withTypeName("InstantMicros")
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val int: Codec[Int] =
     IntCodec
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit final def left[A, B](implicit codec: Codec[A]): Codec[Left[A, B]] =
     codec.imap(Left[A, B](_))(_.value)
 
-  /** @group Collection
+  /**
+    * @group Collection
     */
   implicit final def list[A](implicit codec: Codec[A]): Codec[List[A]] =
     ArrayCodec[A, List[A]](codec, _.length, _.iterator, _ => List.newBuilder)
       .withTypeName("List")
 
-  /** @group JavaTime
+  /**
+    * @group JavaTime
     */
   implicit lazy val localDate: Codec[LocalDate] =
     Codec.int
@@ -421,7 +468,8 @@ object Codec {
       .withLogicalType(LogicalType.date)
       .withTypeName("LocalDate")
 
-  /** @group JavaTime
+  /**
+    * @group JavaTime
     */
   implicit lazy val localDateTime: Codec[LocalDateTime] =
     Codec.long
@@ -433,7 +481,8 @@ object Codec {
       .withLogicalType(LogicalType.localTimestampMillis)
       .withTypeName("LocalDateTime")
 
-  /** @group JavaTime
+  /**
+    * @group JavaTime
     */
   final lazy val localTimeMicros: Codec[LocalTime] =
     Codec.long
@@ -444,7 +493,8 @@ object Codec {
       .withLogicalType(LogicalType.timeMicros)
       .withTypeName("LocalTime")
 
-  /** @group JavaTime
+  /**
+    * @group JavaTime
     */
   final lazy val localTimeMillis: Codec[LocalTime] =
     Codec.int
@@ -455,44 +505,51 @@ object Codec {
       .withLogicalType(LogicalType.timeMillis)
       .withTypeName("LocalTime")
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val long: Codec[Long] =
     LongCodec
 
-  /** @group Collection
+  /**
+    * @group Collection
     */
   implicit final def map[A](implicit codec: Codec[A]): Codec[Map[String, A]] =
     MapCodec[A, Map[String, A]](codec, _.size, _.iterator, _ => Map.newBuilder)
       .withTypeName("Map")
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val none: Codec[None.type] =
     NullCodec(None, "None")
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def nonEmptyChain[A](implicit codec: Codec[A]): Codec[NonEmptyChain[A]] =
     ArrayCodec[A, Chain[A]](codec, _.length.toInt, _.iterator, chainBuilder)
       .imapError(NonEmptyChain.fromChain(_).toRight(AvroError.decodeEmptyCollection))(_.toChain)
       .withTypeName("NonEmptyChain")
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def nonEmptyList[A](implicit codec: Codec[A]): Codec[NonEmptyList[A]] =
     ArrayCodec[A, List[A]](codec, _.length, _.iterator, _ => List.newBuilder)
       .imapError(NonEmptyList.fromList(_).toRight(AvroError.decodeEmptyCollection))(_.toList)
       .withTypeName("NonEmptyList")
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def nonEmptyMap[A](implicit codec: Codec[A]): Codec[NonEmptyMap[String, A]] =
     MapCodec[A, SortedMap[String, A]](codec, _.size, _.iterator, _ => SortedMap.newBuilder)
       .imapError(NonEmptyMap.fromMap(_).toRight(AvroError.decodeEmptyCollection))(_.toSortedMap)
       .withTypeName("NonEmptyMap")
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def nonEmptySet[A](implicit
     codec: Codec[A],
@@ -502,14 +559,16 @@ object Codec {
       .imapError(NonEmptySet.fromSet(_).toRight(AvroError.decodeEmptyCollection))(_.toSortedSet)
       .withTypeName("NonEmptySet")
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def nonEmptyVector[A](implicit codec: Codec[A]): Codec[NonEmptyVector[A]] =
     ArrayCodec[A, Vector[A]](codec, _.length, _.iterator, vectorBuilder)
       .imapError(NonEmptyVector.fromVector(_).toRight(AvroError.decodeEmptyCollection))(_.toVector)
       .withTypeName("NonEmptyVector")
 
-  /** Returns a [[Codec]] for options, encoded as a union with `null` first.
+  /**
+    * Returns a [[Codec]] for options, encoded as a union with `null` first.
     *
     * If the underlying codec is for a union, the types of that union are included in the union.
     *
@@ -518,7 +577,8 @@ object Codec {
   implicit final def option[A](implicit codec: Codec[A]): Codec[Option[A]] =
     OptionCodec(codec).withTypeName("Option")
 
-  /** Returns a new record [[Codec]] for type `A`.
+  /**
+    * Returns a new record [[Codec]] for type `A`.
     *
     * Fields are decoded from the writer field with the same name or the name of an alias of the
     * field, and otherwise using the default of the field. Other writer fields are ignored.
@@ -537,24 +597,28 @@ object Codec {
       .withTypeName(recordName.fullName)
   }
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit final def right[A, B](implicit codec: Codec[B]): Codec[Right[A, B]] =
     codec.imap(Right[A, B](_))(_.value)
 
-  /** @group Collection
+  /**
+    * @group Collection
     */
   implicit final def seq[A](implicit codec: Codec[A]): Codec[Seq[A]] =
     ArrayCodec[A, Seq[A]](codec, _.length, _.iterator, _ => Seq.newBuilder)
       .withTypeName("Seq")
 
-  /** @group Collection
+  /**
+    * @group Collection
     */
   implicit final def set[A](implicit codec: Codec[A]): Codec[Set[A]] =
     ArrayCodec[A, Set[A]](codec, _.size, _.iterator, _ => Set.newBuilder)
       .withTypeName("Set")
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val short: Codec[Short] =
     Codec.int
@@ -564,17 +628,20 @@ object Codec {
       }(_.toInt)
       .withTypeName("Short")
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit final def some[A](implicit codec: Codec[A]): Codec[Some[A]] =
     codec.imap(Some(_))(_.value)
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val string: Codec[String] =
     StringCodec
 
-  /** Returns the result of encoding the specified value to Avro binary.
+  /**
+    * Returns the result of encoding the specified value to Avro binary.
     *
     * @group Utilities
     */
@@ -583,7 +650,8 @@ object Codec {
     codec.binaryEncoder.flatMap(encoder => codec.encode(a).flatMap(encoder.encode))
   }
 
-  /** Returns the result of encoding the specified value to Avro JSON.
+  /**
+    * Returns the result of encoding the specified value to Avro JSON.
     *
     * @group Utilities
     */
@@ -592,7 +660,8 @@ object Codec {
     codec.jsonEncoder.flatMap(encoder => codec.encode(a).flatMap(encoder.encode))
   }
 
-  /** Returns a new union [[Codec]] for type `A`.
+  /**
+    * Returns a new union [[Codec]] for type `A`.
     *
     * Values are encoded with the first alternative which includes the value. Values are decoded
     * with the alternative for the written type: the same type, or a named type with the same full
@@ -604,12 +673,14 @@ object Codec {
   final def union[A](f: AltBuilder[A] => Chain[Alt[A]]): Codec[A] =
     UnionCodec(f(AltBuilder.instance))
 
-  /** @group General
+  /**
+    * @group General
     */
   implicit lazy val unit: Codec[Unit] =
     NullCodec((), "Unit")
 
-  /** @group JavaUtil
+  /**
+    * @group JavaUtil
     */
   implicit lazy val uuid: Codec[UUID] =
     Codec.string
@@ -622,13 +693,15 @@ object Codec {
       .withLogicalType(LogicalType.uuid)
       .withTypeName("UUID")
 
-  /** @group Collection
+  /**
+    * @group Collection
     */
   implicit final def vector[A](implicit codec: Codec[A]): Codec[Vector[A]] =
     ArrayCodec[A, Vector[A]](codec, _.length, _.iterator, vectorBuilder)
       .withTypeName("Vector")
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final val codecInvariant: Invariant[Codec] =
     new Invariant[Codec] {
@@ -636,12 +709,14 @@ object Codec {
         codec.imap(f)(g)
     }
 
-  /** @group Cats
+  /**
+    * @group Cats
     */
   implicit final def codecShow[A]: Show[Codec[A]] =
     Show.fromToString
 
-  /** @group Create
+  /**
+    * @group Create
     */
   sealed abstract class Alt[A] {
     type B
@@ -666,7 +741,8 @@ object Codec {
       }
   }
 
-  /** @group Create
+  /**
+    * @group Create
     */
   sealed abstract class AltBuilder[A] {
     def apply[B](implicit codec: Codec[B], prism: Prism[A, B]): Chain[Alt[A]]
@@ -689,7 +765,8 @@ object Codec {
       Instance.asInstanceOf[AltBuilder[A]]
   }
 
-  /** @group Create
+  /**
+    * @group Create
     */
   sealed abstract class Field[A, B] {
     def name: String
@@ -709,7 +786,8 @@ object Codec {
     def props: JsonObject
   }
 
-  /** @group Create
+  /**
+    * @group Create
     */
   sealed abstract class FieldBuilder[A] {
     def apply[B](
@@ -905,7 +983,7 @@ object Codec {
         val types =
           schema match {
             case union: Schema.Union => union.types
-            case _                   => Vector(schema)
+            case _ => Vector(schema)
           }
 
         validated(Schema.Union(Schema.Null +: types))
@@ -946,7 +1024,7 @@ object Codec {
 
         case (Right(_), _: Schema.Null) => {
           case AvroValue.Null => DecodedNone
-          case value          => Left(invalidValue(value, writerSchema))
+          case value => Left(invalidValue(value, writerSchema))
         }
 
         case (Right(_), _) =>
@@ -968,7 +1046,7 @@ object Codec {
 
     override def encode(a: A): Either[AvroError, AvroValue] =
       schema match {
-        case Right(_)    => encodeWith(a, 0)
+        case Right(_) => encodeWith(a, 0)
         case Left(error) => Left(error)
       }
 
@@ -977,7 +1055,7 @@ object Codec {
         val alt = alts(index)
         alt.prism.getOption(a) match {
           case Some(value) => alt.codec.encode(value).map(AvroValue.Union(index, _))
-          case None        => encodeWith(a, index + 1)
+          case None => encodeWith(a, index + 1)
         }
       } else Left(AvroError("Exhausted alternatives for union"))
 
@@ -1004,7 +1082,8 @@ object Codec {
       }
   }
 
-  /** Codec for records, which decodes fields from the writer field with the same name or an alias
+  /**
+    * Codec for records, which decodes fields from the writer field with the same name or an alias
     * of the field, and otherwise uses the default of the field.
     */
   private[v2] final case class RecordCodec[A](
@@ -1249,7 +1328,7 @@ object Codec {
           writerSchema.logicalType match {
             case Some(LogicalType.Decimal(writerPrecision, writerScale)) => {
               case AvroValue.Bytes(bytes) => decodeDecimal(bytes, writerPrecision, writerScale)
-              case value                  => Left(invalidValue(value, writerSchema))
+              case value => Left(invalidValue(value, writerSchema))
             }
 
             case writerLogicalType =>
@@ -1329,7 +1408,7 @@ object Codec {
       writerSchema match {
         case _: Schema.Null => {
           case AvroValue.Null => decoded
-          case value          => invalid(value, writerSchema)
+          case value => invalid(value, writerSchema)
         }
 
         case _ =>
@@ -1348,7 +1427,7 @@ object Codec {
       writerSchema match {
         case _: Schema.Boolean => {
           case AvroValue.Boolean(boolean) => Right(boolean)
-          case value                      => invalid(value, writerSchema)
+          case value => invalid(value, writerSchema)
         }
 
         case _ =>
@@ -1367,7 +1446,7 @@ object Codec {
       writerSchema match {
         case _: Schema.Int => {
           case AvroValue.Int(int) => Right(int)
-          case value              => invalid(value, writerSchema)
+          case value => invalid(value, writerSchema)
         }
 
         case _ =>
@@ -1386,12 +1465,12 @@ object Codec {
       writerSchema match {
         case _: Schema.Long => {
           case AvroValue.Long(long) => Right(long)
-          case value                => invalid(value, writerSchema)
+          case value => invalid(value, writerSchema)
         }
 
         case _: Schema.Int => {
           case AvroValue.Int(int) => Right(int.toLong)
-          case value              => invalid(value, writerSchema)
+          case value => invalid(value, writerSchema)
         }
 
         case _ =>
@@ -1410,17 +1489,17 @@ object Codec {
       writerSchema match {
         case _: Schema.Float => {
           case AvroValue.Float(float) => Right(float)
-          case value                  => invalid(value, writerSchema)
+          case value => invalid(value, writerSchema)
         }
 
         case _: Schema.Int => {
           case AvroValue.Int(int) => Right(int.toFloat)
-          case value              => invalid(value, writerSchema)
+          case value => invalid(value, writerSchema)
         }
 
         case _: Schema.Long => {
           case AvroValue.Long(long) => Right(long.toFloat)
-          case value                => invalid(value, writerSchema)
+          case value => invalid(value, writerSchema)
         }
 
         case _ =>
@@ -1439,22 +1518,22 @@ object Codec {
       writerSchema match {
         case _: Schema.Double => {
           case AvroValue.Double(double) => Right(double)
-          case value                    => invalid(value, writerSchema)
+          case value => invalid(value, writerSchema)
         }
 
         case _: Schema.Float => {
           case AvroValue.Float(float) => Right(float.toDouble)
-          case value                  => invalid(value, writerSchema)
+          case value => invalid(value, writerSchema)
         }
 
         case _: Schema.Int => {
           case AvroValue.Int(int) => Right(int.toDouble)
-          case value              => invalid(value, writerSchema)
+          case value => invalid(value, writerSchema)
         }
 
         case _: Schema.Long => {
           case AvroValue.Long(long) => Right(long.toDouble)
-          case value                => invalid(value, writerSchema)
+          case value => invalid(value, writerSchema)
         }
 
         case _ =>
@@ -1462,8 +1541,7 @@ object Codec {
       }
   }
 
-  private[v2] case object BytesCodec
-      extends PrimitiveCodec[ByteVector]("ByteVector", Schema.Bytes) {
+  private[v2] case object BytesCodec extends PrimitiveCodec[ByteVector]("ByteVector", Schema.Bytes) {
     override def encode(bytes: ByteVector): Either[AvroError, AvroValue] =
       Right(AvroValue.Bytes(bytes))
 
@@ -1474,7 +1552,7 @@ object Codec {
       writerSchema match {
         case _: Schema.Bytes => {
           case AvroValue.Bytes(bytes) => Right(bytes)
-          case value                  => invalid(value, writerSchema)
+          case value => invalid(value, writerSchema)
         }
 
         case _: Schema.String => {
@@ -1500,7 +1578,7 @@ object Codec {
       writerSchema match {
         case _: Schema.String => {
           case AvroValue.String(string) => Right(string)
-          case value                    => invalid(value, writerSchema)
+          case value => invalid(value, writerSchema)
         }
 
         case _: Schema.Bytes => {
@@ -1604,12 +1682,12 @@ object Codec {
 
   private def addLogicalType(schema: Schema, logicalType: LogicalType): Either[AvroError, Schema] =
     schema match {
-      case int: Schema.Int       => Right(int.withLogicalType(logicalType))
-      case long: Schema.Long     => Right(long.withLogicalType(logicalType))
-      case bytes: Schema.Bytes   => Right(bytes.withLogicalType(logicalType))
+      case int: Schema.Int => Right(int.withLogicalType(logicalType))
+      case long: Schema.Long => Right(long.withLogicalType(logicalType))
+      case bytes: Schema.Bytes => Right(bytes.withLogicalType(logicalType))
       case string: Schema.String => Right(string.withLogicalType(logicalType))
-      case fixed: Schema.Fixed   => Right(fixed.withLogicalType(logicalType))
-      case _                     =>
+      case fixed: Schema.Fixed => Right(fixed.withLogicalType(logicalType))
+      case _ =>
         Left {
           AvroError(
             s"Unable to add logical type ${logicalType.name} to ${SchemaNames.describe(schema)}"
@@ -1649,7 +1727,7 @@ object Codec {
   private[v2] def unexpectedLogicalType(logicalType: Option[LogicalType]): AvroError =
     logicalType match {
       case Some(logicalType) => AvroError(s"Got unexpected logical type ${logicalType.name}")
-      case None              => AvroError("Got unexpected missing logical type")
+      case None => AvroError("Got unexpected missing logical type")
     }
 
   /** The schema of the field, including the default encoded as JSON. */
@@ -1682,7 +1760,8 @@ object Codec {
         .left
         .map(AvroError.errorEncodingFrom(s"field ${field.name}", _))
 
-  /** Decodes the value of the writer field with the same name or an alias of the field, or uses the
+  /**
+    * Decodes the value of the writer field with the same name or an alias of the field, or uses the
     * default of the field if there is no such writer field.
     */
   private def fieldDecoder[A, B](
@@ -1698,8 +1777,7 @@ object Codec {
     writerIndex match {
       case Some(index) =>
         val decode = field.codec.decoder(record.fields(index).schema, definitions)
-        values =>
-          decode(values(index)).left.map(AvroError.errorDecodingTo(s"field ${field.name}", _))
+        values => decode(values(index)).left.map(AvroError.errorDecodingTo(s"field ${field.name}", _))
 
       case None =>
         val result = field.default.toRight(AvroError.decodeMissingRecordField(field.name))
@@ -1713,7 +1791,8 @@ object Codec {
   private val DecodedNone: Either[AvroError, Option[Nothing]] =
     Right(None)
 
-  /** The index of the union type to decode values of the writer schema with: the same type, or a
+  /**
+    * The index of the union type to decode values of the writer schema with: the same type, or a
     * named type with the same full name or alias, then the same name, then a promoted type.
     */
   private def unionType(writerSchema: Schema, types: Vector[Schema]): Option[Int] = {
@@ -1731,15 +1810,15 @@ object Codec {
     }
   }
 
-  /** Returns `true` if the schema is the same kind of named schema, with the name of the writer
+  /**
+    * Returns `true` if the schema is the same kind of named schema, with the name of the writer
     * schema as its name or as an alias, comparing names using the function.
     */
   private def sameNamedType(writerSchema: Schema.Named, schema: Schema)(
     name: Schema.Name => String
   ): Boolean =
     schema match {
-      case named: Schema.Named
-          if SchemaNames.typeName(named) == SchemaNames.typeName(writerSchema) =>
+      case named: Schema.Named if SchemaNames.typeName(named) == SchemaNames.typeName(writerSchema) =>
         val aliases = named.aliases.map(SchemaNames.resolve(_, named.name.namespace))
         (named.name +: aliases).exists(name(_) == name(writerSchema.name))
 
@@ -1751,11 +1830,11 @@ object Codec {
   private def isPromotion(writerSchema: Schema, schema: Schema): Boolean =
     (writerSchema, schema) match {
       case (_: Schema.Int, _: Schema.Long | _: Schema.Float | _: Schema.Double) => true
-      case (_: Schema.Long, _: Schema.Float | _: Schema.Double)                 => true
-      case (_: Schema.Float, _: Schema.Double)                                  => true
-      case (_: Schema.String, _: Schema.Bytes)                                  => true
-      case (_: Schema.Bytes, _: Schema.String)                                  => true
-      case _                                                                    => false
+      case (_: Schema.Long, _: Schema.Float | _: Schema.Double) => true
+      case (_: Schema.Float, _: Schema.Double) => true
+      case (_: Schema.String, _: Schema.Bytes) => true
+      case (_: Schema.Bytes, _: Schema.String) => true
+      case _ => false
     }
 
   /** The schema, if it is valid, including defaults. */

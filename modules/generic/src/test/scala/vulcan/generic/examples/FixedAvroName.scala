@@ -7,7 +7,7 @@
 package vulcan.generic.examples
 
 import vulcan.Codec
-import vulcan.generic._
+import vulcan.generic.*
 
 @AvroName("FixedOtherName")
 final case class FixedAvroName(bytes: Array[Byte])

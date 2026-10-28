@@ -7,7 +7,7 @@
 package vulcan.generic.examples
 
 import vulcan.Codec
-import vulcan.generic._
+import vulcan.generic.*
 
 case class CaseClassOptionOfSumType(field1: Option[SealedTraitCaseClassCustom])
 

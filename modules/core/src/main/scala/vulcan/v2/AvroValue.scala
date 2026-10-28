@@ -25,7 +25,7 @@ object AvroValue {
     override def equals(that: Any): scala.Boolean =
       that match {
         case Float(other) => java.lang.Float.compare(value, other) == 0
-        case _            => false
+        case _ => false
       }
 
     override def hashCode: scala.Int =
@@ -37,7 +37,7 @@ object AvroValue {
     override def equals(that: Any): scala.Boolean =
       that match {
         case Double(other) => java.lang.Double.compare(value, other) == 0
-        case _             => false
+        case _ => false
       }
 
     override def hashCode: scala.Int = {

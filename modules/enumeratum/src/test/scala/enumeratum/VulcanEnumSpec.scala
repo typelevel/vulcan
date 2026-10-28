@@ -12,7 +12,8 @@ import org.scalacheck.Gen
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import vulcan.Codec
-import vulcan.generic.{AvroDoc, AvroNamespace}
+import vulcan.generic.AvroDoc
+import vulcan.generic.AvroNamespace
 
 final class VulcanEnumSpec extends AnyFunSpec with ScalaCheckPropertyChecks with EitherValues {
   describe("VulcanEnum") {

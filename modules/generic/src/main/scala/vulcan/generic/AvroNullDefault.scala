@@ -8,7 +8,8 @@ package vulcan.generic
 
 import scala.annotation.StaticAnnotation
 
-/** Annotation which can be used to enable/disable explicit default null values for nullable fields
+/**
+  * Annotation which can be used to enable/disable explicit default null values for nullable fields
   * in derived schemas.
   *
   * The annotation can be used in the following situations.<br>

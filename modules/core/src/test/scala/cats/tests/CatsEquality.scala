@@ -9,9 +9,9 @@
 package cats
 package tests
 
-import org.scalactic._
-import TripleEqualsSupport.AToBEquivalenceConstraint
-import TripleEqualsSupport.BToAEquivalenceConstraint
+import org.scalactic.*
+import org.scalactic.TripleEqualsSupport.AToBEquivalenceConstraint
+import org.scalactic.TripleEqualsSupport.BToAEquivalenceConstraint
 
 // The code in this file was taken and only slightly modified from
 // https://github.com/bvenners/equality-integration-demo

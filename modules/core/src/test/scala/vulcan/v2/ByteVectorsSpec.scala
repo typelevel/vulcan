@@ -8,7 +8,7 @@ package vulcan.v2
 
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import scodec.bits._
+import scodec.bits.*
 import vulcan.BaseSpec
 import vulcan.v2.internal.ByteVectors
 

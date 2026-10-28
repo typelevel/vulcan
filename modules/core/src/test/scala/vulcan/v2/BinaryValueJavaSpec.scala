@@ -7,7 +7,8 @@
 package vulcan.v2
 
 import vulcan.BaseSpec
-import vulcan.v2.internal.{BinaryDecoder, BinaryEncoder}
+import vulcan.v2.internal.BinaryDecoder
+import vulcan.v2.internal.BinaryEncoder
 
 /** Checks the binary encoding of values against the Java Avro library. */
 final class BinaryValueJavaSpec extends BaseSpec {

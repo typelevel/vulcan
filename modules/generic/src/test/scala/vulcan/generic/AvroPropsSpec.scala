@@ -6,7 +6,8 @@
 
 package vulcan.generic
 
-import vulcan.{BaseSpec, Props}
+import vulcan.BaseSpec
+import vulcan.Props
 final class AvroPropsSpec extends BaseSpec {
   describe("AvroProps") {
     it("should provide props via props") {

@@ -6,7 +6,8 @@
 
 package vulcan.v2
 
-import io.circe.{Json, JsonObject}
+import io.circe.Json
+import io.circe.JsonObject
 import vulcan.BaseSpec
 
 final class SchemaParseSpec extends BaseSpec {
@@ -15,7 +16,7 @@ final class SchemaParseSpec extends BaseSpec {
 
   private def parseError(json: String): String =
     Schema.parse(json) match {
-      case Left(error)   => error.message
+      case Left(error) => error.message
       case Right(schema) => fail(s"Expected an error, but parsed $schema")
     }
 
@@ -237,7 +238,7 @@ final class SchemaParseSpec extends BaseSpec {
         val defaults =
           parse(json) match {
             case record: Schema.Record => record.fields.map(_.default)
-            case schema                => fail(s"Expected a record, but parsed $schema")
+            case schema => fail(s"Expected a record, but parsed $schema")
           }
 
         assert {

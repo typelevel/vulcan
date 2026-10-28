@@ -6,7 +6,8 @@
 
 package vulcan.v2
 
-import io.circe.{Json, JsonObject}
+import io.circe.Json
+import io.circe.JsonObject
 import vulcan.BaseSpec
 
 final class SchemaToStringSpec extends BaseSpec {

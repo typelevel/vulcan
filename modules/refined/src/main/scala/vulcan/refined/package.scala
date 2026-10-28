@@ -6,8 +6,9 @@
 
 package vulcan
 
-import cats.syntax.either._
-import eu.timepit.refined.api.{RefType, Validate}
+import cats.syntax.either.*
+import eu.timepit.refined.api.RefType
+import eu.timepit.refined.api.Validate
 
 package object refined {
   implicit def refinedCodec[F[_, _], T, P](implicit

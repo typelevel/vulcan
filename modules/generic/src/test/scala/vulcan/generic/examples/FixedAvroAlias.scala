@@ -7,7 +7,7 @@
 package vulcan.generic.examples
 
 import vulcan.Codec
-import vulcan.generic._
+import vulcan.generic.*
 
 @AvroAlias("FixedOtherAlias")
 final case class FixedAvroAlias(bytes: Array[Byte])

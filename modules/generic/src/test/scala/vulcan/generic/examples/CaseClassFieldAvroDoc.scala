@@ -7,7 +7,7 @@
 package vulcan.generic.examples
 
 import vulcan.Codec
-import vulcan.generic._
+import vulcan.generic.*
 
 final case class CaseClassFieldAvroDoc(@AvroDoc("documentation") name: String)
 

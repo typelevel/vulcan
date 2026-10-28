@@ -6,8 +6,9 @@
 
 package vulcan.v2.internal
 
-import cats.syntax.all._
-import io.circe.{Json, JsonObject}
+import cats.syntax.all.*
+import io.circe.Json
+import io.circe.JsonObject
 import scala.collection.mutable
 import scala.util.Try
 import vulcan.AvroError
@@ -15,7 +16,8 @@ import vulcan.v2.Schema
 
 private[v2] object SchemaDecoder {
 
-  /** Decode `Schema` from `Json`, matching the Java Avro library for compatibility.
+  /**
+    * Decode `Schema` from `Json`, matching the Java Avro library for compatibility.
     *
     * Names are resolved in document order, the same way as the Java Avro library, and named schemas
     * can be referenced before they are defined. Named schemas are then defined where they first
@@ -120,14 +122,15 @@ private[v2] object SchemaDecoder {
         case Some(name) =>
           primitive(name, props(obj, SchemaEncoder.SchemaReserved)) match {
             case Some(schema) => Right(schema)
-            case None         => decodeReference(name, namespace)
+            case None => decodeReference(name, namespace)
           }
 
         case None =>
           Left(AvroError(s"Missing type in schema ${print(obj)}"))
       }
 
-    /** Resolves the name the same way as the Java Avro library: relative to the namespace, then in
+    /**
+      * Resolves the name the same way as the Java Avro library: relative to the namespace, then in
       * the null namespace, preferring named schemas defined before the reference.
       */
     private def decodeReference(
@@ -248,7 +251,8 @@ private[v2] object SchemaDecoder {
       }
   }
 
-  /** Defines named schemas where they first occur, with the same definition for later occurrences,
+  /**
+    * Defines named schemas where they first occur, with the same definition for later occurrences,
     * except for references to enclosing named schemas.
     */
   private final class Resolution(definitions: collection.Map[String, Schema.Named]) {
@@ -307,15 +311,15 @@ private[v2] object SchemaDecoder {
 
   private def primitive(name: String, props: JsonObject): Option[Schema] =
     name match {
-      case "null"    => Some(Schema.Null.withProps(props))
+      case "null" => Some(Schema.Null.withProps(props))
       case "boolean" => Some(Schema.Boolean.withProps(props))
-      case "int"     => Some(Schema.Int.withProps(props))
-      case "long"    => Some(Schema.Long.withProps(props))
-      case "float"   => Some(Schema.Float.withProps(props))
-      case "double"  => Some(Schema.Double.withProps(props))
-      case "bytes"   => Some(Schema.Bytes.withProps(props))
-      case "string"  => Some(Schema.String.withProps(props))
-      case _         => None
+      case "int" => Some(Schema.Int.withProps(props))
+      case "long" => Some(Schema.Long.withProps(props))
+      case "float" => Some(Schema.Float.withProps(props))
+      case "double" => Some(Schema.Double.withProps(props))
+      case "bytes" => Some(Schema.Bytes.withProps(props))
+      case "string" => Some(Schema.String.withProps(props))
+      case _ => None
     }
 
   private def decodeOrder(obj: JsonObject): Either[AvroError, Schema.Field.Order] =
@@ -357,7 +361,7 @@ private[v2] object SchemaDecoder {
       case _: Schema.Float | _: Schema.Double =>
         default.asString.flatMap(text => Try(java.lang.Double.parseDouble(text)).toOption) match {
           case Some(double) => Json.fromDouble(double).getOrElse(Json.fromString(double.toString))
-          case None         => default
+          case None => default
         }
 
       case _ =>

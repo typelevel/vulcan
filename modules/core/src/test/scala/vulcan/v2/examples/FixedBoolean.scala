@@ -7,9 +7,11 @@
 package vulcan.v2.examples
 
 import cats.Eq
-import io.circe.{Json, JsonObject}
-import org.scalacheck.{Arbitrary, Gen}
-import scodec.bits._
+import io.circe.Json
+import io.circe.JsonObject
+import org.scalacheck.Arbitrary
+import org.scalacheck.Gen
+import scodec.bits.*
 import vulcan.AvroError
 import vulcan.v2.Codec
 
@@ -24,7 +26,7 @@ object FixedBoolean {
         size = 1,
         encode = {
           case FalseFixedBoolean => hex"00"
-          case TrueFixedBoolean  => hex"01"
+          case TrueFixedBoolean => hex"01"
         },
         decode = bytes => {
           val byte = bytes.head

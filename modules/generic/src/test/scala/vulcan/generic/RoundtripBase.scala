@@ -7,13 +7,17 @@
 package vulcan.generic
 
 import cats.Eq
-import cats.implicits._
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
-import org.apache.avro.generic.{GenericData, GenericDatumReader, GenericDatumWriter}
-import org.apache.avro.io.{DecoderFactory, EncoderFactory}
+import cats.implicits.*
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import org.apache.avro.generic.GenericData
+import org.apache.avro.generic.GenericDatumReader
+import org.apache.avro.generic.GenericDatumWriter
+import org.apache.avro.io.DecoderFactory
+import org.apache.avro.io.EncoderFactory
 import org.scalacheck.Arbitrary
 import org.scalatest.Assertion
-import vulcan._
+import vulcan.*
 
 class RoundtripBase extends BaseSpec {
 

@@ -6,7 +6,8 @@
 
 package vulcan.generic
 
-import vulcan.{BaseSpec, Codec}
+import vulcan.BaseSpec
+import vulcan.Codec
 import vulcan.generic.examples.CaseClassAvroNullDefault
 
 final class AvroNullDefaultSpec extends BaseSpec {
@@ -27,7 +28,7 @@ final class AvroNullDefaultSpec extends BaseSpec {
       forAll { (b1: Boolean) =>
         assert(new AvroNullDefault(b1) match {
           case AvroNullDefault(`b1`) => true
-          case AvroNullDefault(b2)   => fail(b2.toString)
+          case AvroNullDefault(b2) => fail(b2.toString)
         })
       }
     }

@@ -7,9 +7,10 @@
 package vulcan.examples
 
 import cats.Eq
-import cats.implicits._
-import org.scalacheck.{Arbitrary, Gen}
+import cats.implicits.*
+import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 import vulcan.Codec
 
 sealed trait SealedTraitCaseClass

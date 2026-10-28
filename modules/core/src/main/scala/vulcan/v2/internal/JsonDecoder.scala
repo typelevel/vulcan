@@ -6,13 +6,14 @@
 
 package vulcan.v2.internal
 
-import cats.syntax.all._
+import cats.syntax.all.*
 import io.circe.Json
 import java.nio.charset.StandardCharsets
 import scala.collection.mutable
 import scodec.bits.ByteVector
 import vulcan.AvroError
-import vulcan.v2.{AvroValue, Schema}
+import vulcan.v2.AvroValue
+import vulcan.v2.Schema
 
 /** Decodes values in the Avro JSON encoding of a writer schema, compiled once for the schema. */
 private[v2] final class JsonDecoder private (root: JsonDecoder.Node) {
@@ -39,16 +40,16 @@ private[v2] object JsonDecoder {
 
     def compile(schema: Schema): Node =
       schema match {
-        case _: Schema.Null      => NullNode
-        case _: Schema.Boolean   => BooleanNode
-        case _: Schema.Int       => IntNode
-        case _: Schema.Long      => LongNode
-        case _: Schema.Float     => FloatNode
-        case _: Schema.Double    => DoubleNode
-        case _: Schema.Bytes     => BytesNode
-        case _: Schema.String    => StringNode
+        case _: Schema.Null => NullNode
+        case _: Schema.Boolean => BooleanNode
+        case _: Schema.Int => IntNode
+        case _: Schema.Long => LongNode
+        case _: Schema.Float => FloatNode
+        case _: Schema.Double => DoubleNode
+        case _: Schema.Bytes => BytesNode
+        case _: Schema.String => StringNode
         case array: Schema.Array => new ArrayNode(compile(array.items))
-        case map: Schema.Map     => new MapNode(compile(map.values))
+        case map: Schema.Map => new MapNode(compile(map.values))
         case union: Schema.Union =>
           new UnionNode(union.types.map(schema => (SchemaNames.unionKey(schema), compile(schema))))
         case named: Schema.Named =>
@@ -202,7 +203,7 @@ private[v2] object JsonDecoder {
     override def decode(json: Json): Either[AvroError, AvroValue] =
       json.asArray match {
         case Some(values) => values.traverse(items.decode).map(AvroValue.Array(_))
-        case None         => invalid(json, "array")
+        case None => invalid(json, "array")
       }
   }
 
@@ -227,7 +228,7 @@ private[v2] object JsonDecoder {
           obj.toList match {
             case (key, value) :: Nil =>
               types.indexWhere(_._1 == key) match {
-                case -1    => Left(AvroError(s"Unknown type $key for union"))
+                case -1 => Left(AvroError(s"Unknown type $key for union"))
                 case index => types(index)._2.decode(value).map(AvroValue.Union(index, _))
               }
 
@@ -237,7 +238,7 @@ private[v2] object JsonDecoder {
 
         case None if json.isNull =>
           types.indexWhere(_._1 == "null") match {
-            case -1    => invalid(json, "union")
+            case -1 => invalid(json, "union")
             case index => Right(AvroValue.Union(index, AvroValue.Null))
           }
 
@@ -253,10 +254,10 @@ private[v2] object JsonDecoder {
   /** Strings for non-finite numbers, same as the Java Avro library. */
   private def nonFinite(string: String): Option[Double] =
     string match {
-      case "NaN"                => Some(Double.NaN)
-      case "Infinity" | "INF"   => Some(Double.PositiveInfinity)
+      case "NaN" => Some(Double.NaN)
+      case "Infinity" | "INF" => Some(Double.PositiveInfinity)
       case "-Infinity" | "-INF" => Some(Double.NegativeInfinity)
-      case _                    => None
+      case _ => None
     }
 
   private def invalid(json: Json, schema: String): Either[AvroError, AvroValue] =

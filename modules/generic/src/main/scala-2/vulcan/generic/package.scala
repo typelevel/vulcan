@@ -6,11 +6,11 @@
 
 package vulcan
 
-import cats.implicits._
-import magnolia1._
-import vulcan.internal.Names
 import cats.data.Chain
 import cats.free.FreeApplicative
+import cats.implicits.*
+import magnolia1.*
+import vulcan.internal.Names
 
 package object generic {
   implicit final class MagnoliaCodec private[generic] (
@@ -85,7 +85,8 @@ package object generic {
           }
       }
 
-    /** Returns a `Codec` instance for the specified type, deriving details from the type, as long
+    /**
+      * Returns a `Codec` instance for the specified type, deriving details from the type, as long
       * as the type is a `case class` or `sealed trait`.
       */
     final def derive[A]: Codec[A] =
@@ -105,7 +106,8 @@ package object generic {
     final type Typeclass[A] = Codec[A]
   }
 
-  /** Returns an enum `Codec` for type `A`, deriving details like the name, namespace, and
+  /**
+    * Returns an enum `Codec` for type `A`, deriving details like the name, namespace, and
     * [[AvroDoc]] documentation from the type `A` at compile time.
     *
     * @group Derive
@@ -125,7 +127,8 @@ package object generic {
       aliases = names.aliasOf.toSeq
     )
 
-  /** Returns a fixed `Codec` for type `A`, deriving details like the name, namespace, and
+  /**
+    * Returns a fixed `Codec` for type `A`, deriving details like the name, namespace, and
     * [[AvroDoc]] documentation from the type `A` at compile time.
     *
     * @group Derive

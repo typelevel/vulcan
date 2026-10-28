@@ -74,11 +74,11 @@ jobs:
 
       - name: Make target directories
         if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
-        run: mkdir -p modules/refined/target modules/enumeratum/target modules/generic/target modules/core/target project/target
+        run: mkdir -p modules/refined/target unidocs/target modules/enumeratum/target modules/generic/target modules/core/target project/target
 
       - name: Compress target directories
         if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
-        run: tar cf targets.tar modules/refined/target modules/enumeratum/target modules/generic/target modules/core/target project/target
+        run: tar cf targets.tar modules/refined/target unidocs/target modules/enumeratum/target modules/generic/target modules/core/target project/target
 
       - name: Upload target directories
         if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
@@ -195,7 +195,7 @@ jobs:
       - name: Submit Dependencies
         uses: scalacenter/sbt-dependency-submission@v2
         with:
-          modules-ignore: vulcan-benchmarks_2.13 vulcan-benchmarks_3 root_2.13 root_3 unidocs_2.13 docs_2.13
+          modules-ignore: vulcan-benchmarks_2.13 vulcan-benchmarks_3 root_2.13 root_3 docs_3
           configs-ignore: test scala-tool scala-doc-tool test-internal
 
   site:

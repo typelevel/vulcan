@@ -15,14 +15,13 @@ libraryDependencies += "@ORGANIZATION@" %% "@REFINED_MODULE_NAME@" % "@VERSION@"
 Refinement types are encoded using their base type (e.g. `Int` for `PosInt`). When decoding, @:api(vulcan.Codec)s check to ensure values conform to the predicate of the refinement type (e.g. `Positive` for `PosInt`), and raise an error for values which do not conform.
 
 ```scala mdoc:reset-object
-import eu.timepit.refined.auto._
 import eu.timepit.refined.types.numeric.PosInt
 import vulcan.Codec
 import vulcan.refined._
 
 Codec[PosInt]
 
-Codec.encode[PosInt](1)
+Codec.encode(PosInt.MinValue)
 
 Codec.decode[PosInt](0)
 ```

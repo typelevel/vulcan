@@ -25,7 +25,7 @@ final class AvroDocSpec extends BaseSpec {
       forAll { (s1: String) =>
         assert(new AvroDoc(s1) match {
           case AvroDoc(`s1`) => true
-          case AvroDoc(s2)   => fail(s2)
+          case AvroDoc(s2) => fail(s2)
         })
       }
     }

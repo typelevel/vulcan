@@ -6,10 +6,11 @@
 
 package vulcan.generic
 
-import vulcan.Props
 import scala.annotation.StaticAnnotation
+import vulcan.Props
 
-/** Annotation which can be used to alter props in derived schemas.
+/**
+  * Annotation which can be used to alter props in derived schemas.
   *
   * The annotation can be used in the following situations.<br>
   *   - Annotate a type for enum props when using [[deriveEnum]].<br>

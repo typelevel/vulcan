@@ -6,10 +6,10 @@
 
 package vulcan.generic
 
-import org.apache.avro.{Schema}
+import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
-import vulcan.generic.examples._
-import vulcan.internal.converters.collection._
+import vulcan.generic.examples.*
+import vulcan.internal.converters.collection.*
 
 final class GenericDerivationCodecSpec extends CodecBase {
   describe("Codec") {

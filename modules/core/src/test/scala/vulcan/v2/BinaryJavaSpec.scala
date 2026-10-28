@@ -7,17 +7,16 @@
 package vulcan.v2
 
 import java.io.ByteArrayOutputStream
-import org.apache.avro.io.{
-  BinaryDecoder => JavaDecoder,
-  BinaryEncoder => JavaEncoder,
-  DecoderFactory,
-  EncoderFactory
-}
+import org.apache.avro.io.BinaryDecoder as JavaDecoder
+import org.apache.avro.io.BinaryEncoder as JavaEncoder
+import org.apache.avro.io.DecoderFactory
+import org.apache.avro.io.EncoderFactory
 import org.scalacheck.Gen
 import scala.util.Try
 import scodec.bits.ByteVector
 import vulcan.BaseSpec
-import vulcan.v2.internal.{BinaryReader, BinaryWriter}
+import vulcan.v2.internal.BinaryReader
+import vulcan.v2.internal.BinaryWriter
 
 /** Checks the binary encoding against the Java Avro library. */
 final class BinaryJavaSpec extends BaseSpec {

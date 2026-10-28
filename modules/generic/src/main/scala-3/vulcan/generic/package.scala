@@ -6,11 +6,11 @@
 
 package vulcan
 
-import scala.deriving.Mirror
 import cats.data.Chain
-import cats.implicits._
 import cats.free.FreeApplicative
-import magnolia1._
+import cats.implicits.*
+import magnolia1.*
+import scala.deriving.Mirror
 import vulcan.internal.Names
 
 package object generic {
@@ -20,6 +20,9 @@ package object generic {
   ) extends Derivation[Codec] {
     inline def derive[A](using Mirror.Of[A]): Codec[A] = derived[A]
 
+    /**
+      * Returns a record `Codec` for the specified `case class`, using the `Codec`s of its fields.
+      */
     final def join[A](caseClass: CaseClass[Codec, A]): Codec[A] =
       Codec
         .record[A](
@@ -83,6 +86,9 @@ package object generic {
             .map(caseClass.rawConstruct(_))
         }
 
+    /**
+      * Returns a union `Codec` for the specified `sealed trait`, using the `Codec`s of its subtypes.
+      */
     final def split[A](sealedTrait: SealedTrait[Codec, A]): Codec.Aux[Any, A] = {
       Codec
         .union[A](alt =>
@@ -98,7 +104,8 @@ package object generic {
     final type Typeclass[A] = Codec[A]
   }
 
-  /** Returns an enum `Codec` for type `A`, deriving details like the name, namespace, and
+  /**
+    * Returns an enum `Codec` for type `A`, deriving details like the name, namespace, and
     * [[AvroDoc]] documentation from the type `A` at compile time.
     *
     * @group Derive
@@ -118,7 +125,8 @@ package object generic {
       aliases = names.aliasOf.toSeq
     )
 
-  /** Returns a fixed `Codec` for type `A`, deriving details like the name, namespace, and
+  /**
+    * Returns a fixed `Codec` for type `A`, deriving details like the name, namespace, and
     * [[AvroDoc]] documentation from the type `A` at compile time.
     *
     * @group Derive

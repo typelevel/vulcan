@@ -25,7 +25,7 @@ final class AvroNameSpec extends BaseSpec {
       forAll { (s1: String) =>
         assert(new AvroName(s1) match {
           case AvroName(`s1`) => true
-          case AvroName(s2)   => fail(s2)
+          case AvroName(s2) => fail(s2)
         })
       }
     }

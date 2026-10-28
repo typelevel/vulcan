@@ -7,7 +7,7 @@
 package vulcan.generic.examples
 
 import vulcan.Codec
-import vulcan.generic._
+import vulcan.generic.*
 
 @AvroDoc("Some documentation")
 final case class FixedAvroDoc(bytes: Array[Byte])

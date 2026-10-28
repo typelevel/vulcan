@@ -6,23 +6,27 @@
 
 package vulcan
 
-import cats.data._
-import cats.implicits._
-import org.apache.avro.generic.GenericData
-import org.apache.avro.{Conversions, LogicalTypes, Schema, SchemaBuilder}
-import org.scalacheck.Gen
-import org.scalatest.Assertion
-import vulcan.Codec.InstantMicros
-import vulcan.examples._
-import vulcan.internal.converters.collection._
-
+import cats.data.*
+import cats.implicits.*
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+import java.time.*
 import java.time.temporal.ChronoUnit
-import java.time._
 import java.util.UUID
-import java.util.concurrent.TimeUnit._
-import scala.util.{Failure, Success, Try}
+import java.util.concurrent.TimeUnit.*
+import org.apache.avro.Conversions
+import org.apache.avro.LogicalTypes
+import org.apache.avro.Schema
+import org.apache.avro.SchemaBuilder
+import org.apache.avro.generic.GenericData
+import org.scalacheck.Gen
+import org.scalatest.Assertion
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
+import vulcan.Codec.InstantMicros
+import vulcan.examples.*
+import vulcan.internal.converters.collection.*
 
 final class CodecSpec extends BaseSpec with CodecSpecHelpers {
   describe("Codec") {
@@ -2122,13 +2126,13 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
                 name = "CustomEnum",
                 symbols = List("first", "second"),
                 encode = {
-                  case First  => "first"
+                  case First => "first"
                   case Second => "second"
                 },
                 decode = {
-                  case "first"  => Right(First)
+                  case "first" => Right(First)
                   case "second" => Right(Second)
-                  case other    => Left(AvroError(other))
+                  case other => Left(AvroError(other))
                 },
                 namespace = ""
               )
@@ -2165,13 +2169,13 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
                 name = "CustomEnum",
                 symbols = List("first", "second"),
                 encode = {
-                  case First  => "first"
+                  case First => "first"
                   case Second => "second"
                 },
                 decode = {
-                  case "first"  => Right(First)
+                  case "first" => Right(First)
                   case "second" => Right(Second)
-                  case other    => Left(AvroError(other))
+                  case other => Left(AvroError(other))
                 },
                 namespace = ""
               )
@@ -2411,13 +2415,13 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
                 name = "CustomEnum",
                 symbols = List("first", "second"),
                 encode = {
-                  case First  => "first"
+                  case First => "first"
                   case Second => "second"
                 },
                 decode = {
-                  case "first"  => Right(First)
+                  case "first" => Right(First)
                   case "second" => Right(Second)
-                  case other    => Left(AvroError(other))
+                  case other => Left(AvroError(other))
                 },
                 namespace = ""
               )

@@ -8,16 +8,21 @@ package vulcan.v2.benchmarks
 
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
-import org.apache.avro.{Schema => JavaSchema}
-import org.apache.avro.generic.{GenericDatumReader, GenericDatumWriter, GenericRecord}
-import org.apache.avro.io.{DecoderFactory, EncoderFactory}
-import org.openjdk.jmh.annotations._
+import org.apache.avro.Schema as JavaSchema
+import org.apache.avro.generic.GenericDatumReader
+import org.apache.avro.generic.GenericDatumWriter
+import org.apache.avro.generic.GenericRecord
+import org.apache.avro.io.DecoderFactory
+import org.apache.avro.io.EncoderFactory
+import org.openjdk.jmh.annotations.*
 import scodec.bits.ByteVector
 import vulcan.AvroError
 import vulcan.v2.AvroValue
-import vulcan.v2.internal.{BinaryDecoder, BinaryEncoder}
+import vulcan.v2.internal.BinaryDecoder
+import vulcan.v2.internal.BinaryEncoder
 
-/** Compares the binary encoding of values with the generic records of the Java Avro library.
+/**
+  * Compares the binary encoding of values with the generic records of the Java Avro library.
   *
   * Run using `sbt "benchmarks/Jmh/run -prof gc"` to include allocations.
   */

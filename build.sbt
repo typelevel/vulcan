@@ -6,23 +6,24 @@ val enumeratumVersion = "1.9.8"
 val jacksonVersion = "2.22.4"
 val magnolia2Version = "1.1.14"
 val magnolia3Version = "1.3.24"
-val munitVersion = "1.3.6"
 val munitScalaCheckVersion = "1.3.1"
+val munitVersion = "1.3.6"
 val refinedVersion = "0.11.4"
+val scala213Version = "2.13.18"
+val scala3Version = "3.3.8"
 val scalacCompatVersion = "0.1.5"
 val scodecBitsVersion = "1.2.5"
 val slf4jNopVersion = "2.0.20"
 
-val scala213 = "2.13.18"
-val scala3 = "3.3.8"
-
 inThisBuild(
   Seq(
-    crossScalaVersions := Seq(scala213, scala3),
+    crossScalaVersions := Seq(scala213Version, scala3Version),
     developers := List(tlGitHubDev("vlovgr", "Viktor Rudebeck")),
     githubWorkflowJavaVersions := Seq(JavaSpec.temurin("21")),
     organization := "org.typelevel",
-    scalaVersion := scala213,
+    scalaVersion := scala3Version,
+    semanticdbEnabled := true,
+    semanticdbVersion := scalafixSemanticdb.revision,
     startYear := Some(2019),
     tlBaseVersion := "2.0",
     tlFatalWarnings := false,
@@ -36,7 +37,7 @@ inThisBuild(
 lazy val root = project
   .in(file("."))
   .enablePlugins(NoPublishPlugin)
-  .aggregate(benchmarks, core, enumeratum, generic, refined)
+  .aggregate(benchmarks, core, enumeratum, generic, refined, unidocs)
 
 lazy val benchmarks = project
   .in(file("modules/benchmarks"))
@@ -149,8 +150,9 @@ lazy val docs = project
     import org.typelevel.sbt.site.GenericSiteSettings
 
     Seq(
-      crossScalaVersions := Seq(scala213),
+      crossScalaVersions := Seq(scala3Version),
       scalacOptions ~= (_.filterNot(_.startsWith("-Wunused"))),
+      scalacOptions += "-Yretain-trees",
       Compile / packageDoc / mappings := (unidocs / Compile / packageDoc / mappings).value.map {
         case (file, path) => file -> path.replace('\\', '/')
       },
@@ -181,7 +183,7 @@ lazy val docs = project
         val gitHubUrl = "https://github.com/typelevel/vulcan"
 
         val projectLinks = List(
-          IconLink.internal(Root / "api" / "vulcan" / "index.html", HeliumIcon.api),
+          IconLink.internal(Root / "api" / "vulcan.html", HeliumIcon.api),
           IconLink.external(gitHubUrl, HeliumIcon.github),
           IconLink.external("https://discord.gg/Q8KBnyC776", HeliumIcon.chat)
         )
@@ -191,8 +193,7 @@ lazy val docs = project
           .site
           .metadata(
             title = Some("Vulcan · Functional Avro for Scala"),
-            description =
-              Some("Functional Avro encodings for Scala using the official Apache Avro library."),
+            description = Some("Functional Avro encodings for Scala using the official Apache Avro library."),
             authors = developers.value.map(_.name),
             language = Some("en"),
             version = Some(version.value)
@@ -293,21 +294,37 @@ lazy val docs = project
   }
 
 lazy val unidocs = project
-  .enablePlugins(NoPublishPlugin, TypelevelUnidocPlugin)
+  .enablePlugins(TypelevelUnidocPlugin)
   .settings(
-    crossScalaVersions := Seq(scala213),
+    name := "vulcan-docs",
+    headerSettings,
+    crossScalaVersions := Seq(scala3Version),
+    semanticdbEnabled := false,
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(core, enumeratum, generic, refined),
-    ScalaUnidoc / unidoc / scalacOptions ++= {
+    ScalaUnidoc / unidoc / apiMappings := {
+      val docsApiUrl = apiURL.value.map(_.toString)
+      (ScalaUnidoc / unidoc / apiMappings).value.filterNot { case (_, url) =>
+        docsApiUrl.contains(url.toString)
+      }
+    },
+    ScalaUnidoc / unidoc / scalacOptions := {
       val docVersion = tlLatestVersion.value.getOrElse(version.value)
-      // format: off
-      Seq(
-        "-doc-canonical-base-url", "https://typelevel.org/vulcan/api/",
-        "-doc-footer", "Licensed under Apache License, Version 2.0. Copyright © 2019 OVO Energy Limited.",
-        "-doc-title", "Vulcan",
-        "-doc-version", s"v$docVersion",
-        "-groups"
+      val logo = (LocalRootProject / baseDirectory).value / "docs" / "img" / "logo.svg"
+      val options = (ScalaUnidoc / unidoc / scalacOptions).value.filter {
+        case "-Werror" | "-Wvalue-discard" => false
+        case option if option.startsWith("-Ykind-projector") => false
+        case _ => true
+      }
+      val projectOptions = withOption(options, "-project", "Vulcan")
+      withOption(projectOptions, "-project-version", s"v$docVersion") ++ Seq(
+        "-comment-syntax:wiki",
+        "-doc-canonical-base-url:https://typelevel.org/vulcan/api/",
+        "-groups",
+        "-project-footer:Licensed under Apache License, Version 2.0.",
+        s"-project-logo:${logo.getAbsolutePath}",
+        "-social-links:github::https://github.com/typelevel/vulcan",
+        "-social-links:discord::https://discord.gg/Q8KBnyC776"
       )
-      // format: on
     }
   )
 
@@ -336,6 +353,12 @@ def scalaReflect(scalaVersion: String): Seq[ModuleID] =
 
 def majorVersion(version: String): String =
   version.split('.').head
+
+def withOption(options: Seq[String], name: String, value: String): Seq[String] =
+  options.indexOf(name) match {
+    case -1 => options ++ Seq(name, value)
+    case index => options.updated(index + 1, value)
+  }
 
 def scalaVersionOf(version: String): String = {
   if (version.contains("-")) version
