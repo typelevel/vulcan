@@ -20,6 +20,9 @@ package object generic {
   ) extends Derivation[Codec] {
     inline def derive[A](using Mirror.Of[A]): Codec[A] = derived[A]
 
+    /**
+      * Returns a record `Codec` for the specified `case class`, using the `Codec`s of its fields.
+      */
     final def join[A](caseClass: CaseClass[Codec, A]): Codec[A] =
       Codec
         .record[A](
@@ -83,6 +86,9 @@ package object generic {
             .map(caseClass.rawConstruct(_))
         }
 
+    /**
+      * Returns a union `Codec` for the specified `sealed trait`, using the `Codec`s of its subtypes.
+      */
     final def split[A](sealedTrait: SealedTrait[Codec, A]): Codec.Aux[Any, A] = {
       Codec
         .union[A](alt =>

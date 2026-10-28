@@ -37,7 +37,7 @@ inThisBuild(
 lazy val root = project
   .in(file("."))
   .enablePlugins(NoPublishPlugin)
-  .aggregate(benchmarks, core, enumeratum, generic, refined)
+  .aggregate(benchmarks, core, enumeratum, generic, refined, unidocs)
 
 lazy val benchmarks = project
   .in(file("modules/benchmarks"))
@@ -294,21 +294,37 @@ lazy val docs = project
   }
 
 lazy val unidocs = project
-  .enablePlugins(NoPublishPlugin, TypelevelUnidocPlugin)
+  .enablePlugins(TypelevelUnidocPlugin)
   .settings(
+    name := "vulcan-docs",
+    headerSettings,
     crossScalaVersions := Seq(scala3Version),
+    semanticdbEnabled := false,
     ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(core, enumeratum, generic, refined),
-    ScalaUnidoc / unidoc / scalacOptions ++= {
+    ScalaUnidoc / unidoc / apiMappings := {
+      val docsApiUrl = apiURL.value.map(_.toString)
+      (ScalaUnidoc / unidoc / apiMappings).value.filterNot { case (_, url) =>
+        docsApiUrl.contains(url.toString)
+      }
+    },
+    ScalaUnidoc / unidoc / scalacOptions := {
       val docVersion = tlLatestVersion.value.getOrElse(version.value)
-      // format: off
-      Seq(
-        "-doc-canonical-base-url", "https://typelevel.org/vulcan/api/",
-        "-doc-footer", "Licensed under Apache License, Version 2.0.",
-        "-doc-title", "Vulcan",
-        "-doc-version", s"v$docVersion",
-        "-groups"
+      val logo = (LocalRootProject / baseDirectory).value / "docs" / "img" / "logo.svg"
+      val options = (ScalaUnidoc / unidoc / scalacOptions).value.filter {
+        case "-Werror" | "-Wvalue-discard" => false
+        case option if option.startsWith("-Ykind-projector") => false
+        case _ => true
+      }
+      val projectOptions = withOption(options, "-project", "Vulcan")
+      withOption(projectOptions, "-project-version", s"v$docVersion") ++ Seq(
+        "-comment-syntax:wiki",
+        "-doc-canonical-base-url:https://typelevel.org/vulcan/api/",
+        "-groups",
+        "-project-footer:Licensed under Apache License, Version 2.0.",
+        s"-project-logo:${logo.getAbsolutePath}",
+        "-social-links:github::https://github.com/typelevel/vulcan",
+        "-social-links:discord::https://discord.gg/Q8KBnyC776"
       )
-      // format: on
     }
   )
 
@@ -337,6 +353,12 @@ def scalaReflect(scalaVersion: String): Seq[ModuleID] =
 
 def majorVersion(version: String): String =
   version.split('.').head
+
+def withOption(options: Seq[String], name: String, value: String): Seq[String] =
+  options.indexOf(name) match {
+    case -1 => options ++ Seq(name, value)
+    case index => options.updated(index + 1, value)
+  }
 
 def scalaVersionOf(version: String): String = {
   if (version.contains("-")) version
