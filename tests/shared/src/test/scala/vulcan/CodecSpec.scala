@@ -1445,7 +1445,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
       describe("encode") {
         it("should encode as int") {
-          val value = LocalDate.now()
+          val value = LocalDate.now(ZoneOffset.UTC)
           assertEncodeIs[LocalDate](
             value,
             Right(AvroValue.Int(value.toEpochDay.toInt))
@@ -1464,14 +1464,14 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       describe("decode") {
         it("should error if logical type is not date") {
           assertDecodeError[LocalDate](
-            unsafeEncode(LocalDate.now()),
+            unsafeEncode(LocalDate.now(ZoneOffset.UTC)),
             unsafeSchema[Int],
             "Error decoding LocalDate: Got unexpected missing logical type"
           )
         }
 
         it("should decode int as local date") {
-          val value = LocalDate.now()
+          val value = LocalDate.now(ZoneOffset.UTC)
           assertDecodeIs[LocalDate](
             unsafeEncode(value),
             Right(value)
@@ -1509,7 +1509,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       describe("decode") {
         it("should error if logical type is missing") {
           assertDecodeError[LocalDateTime](
-            unsafeEncode(LocalDateTime.now()),
+            unsafeEncode(LocalDateTime.now(ZoneOffset.UTC)),
             unsafeSchema[Long],
             "Error decoding LocalDateTime: Got unexpected missing logical type"
           )
@@ -1517,7 +1517,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
         it("should error if logical type is not local-timestamp-millis") {
           assertDecodeError[LocalDateTime](
-            unsafeEncode(LocalDateTime.now()),
+            unsafeEncode(LocalDateTime.now(ZoneOffset.UTC)),
             Schema.Long.withLogicalType(LogicalType.timestampMillis),
             "Error decoding LocalDateTime: Got unexpected logical type timestamp-millis"
           )
@@ -1546,7 +1546,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
       describe("encode") {
         it("should encode as long") {
-          val value = LocalTime.now()
+          val value = LocalTime.now(ZoneOffset.UTC)
           assertEncodeIs[LocalTime](
             value,
             Right(AvroValue.Long(value.toNanoOfDay / 1000L))
@@ -1557,7 +1557,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       describe("decode") {
         it("should error if logical type is not time-micros") {
           assertDecodeError[LocalTime](
-            unsafeEncode(LocalTime.now()),
+            unsafeEncode(LocalTime.now(ZoneOffset.UTC)),
             unsafeSchema[Long],
             "Error decoding LocalTime: Got unexpected missing logical type"
           )
@@ -1574,7 +1574,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
         }
 
         it("should decode long as local time-micros") {
-          val value = LocalTime.now()
+          val value = LocalTime.now(ZoneOffset.UTC)
           assertDecodeIs[LocalTime](
             unsafeEncode(value),
             Right(value.truncatedTo(ChronoUnit.MICROS))
@@ -1596,7 +1596,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
       describe("encode") {
         it("should encode as int") {
-          val value = LocalTime.now()
+          val value = LocalTime.now(ZoneOffset.UTC)
           assertEncodeIs[LocalTime](
             value,
             Right(AvroValue.Int((value.toNanoOfDay / 1000000L).toInt))
@@ -1607,7 +1607,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       describe("decode") {
         it("should error if logical type is not time-millis") {
           assertDecodeError[LocalTime](
-            unsafeEncode(LocalTime.now()),
+            unsafeEncode(LocalTime.now(ZoneOffset.UTC)),
             unsafeSchema[Int],
             "Error decoding LocalTime: Got unexpected missing logical type"
           )
@@ -1624,7 +1624,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
         }
 
         it("should decode int as local time-millis") {
-          val value = LocalTime.now()
+          val value = LocalTime.now(ZoneOffset.UTC)
           assertDecodeIs[LocalTime](
             unsafeEncode(value),
             Right(value.truncatedTo(ChronoUnit.MILLIS))
@@ -2611,7 +2611,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
                   _.value,
                   props = JsonObject(
                     "boolean" -> Json.True,
-                    "number" -> Json.fromDoubleOrNull(123.0),
+                    "number" -> Json.fromBigDecimal(BigDecimal("123.0")),
                     "array" -> Json.arr(Json.fromInt(123), Json.fromInt(456))
                   )
                 ).map(Test(_))
@@ -3414,6 +3414,8 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
     }
 
     describe("uuid") {
+      val uuid = UUID.fromString("123e4567-e89b-12d3-a456-426614174000")
+
       describe("schema") {
         it("should be encoded as string with logical type uuid") {
           assertSchemaIs[UUID] {
@@ -3424,7 +3426,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
       describe("encode") {
         it("should encode as string") {
-          val value = UUID.randomUUID()
+          val value = uuid
           assertEncodeIs[UUID](
             value,
             Right(AvroValue.String(value.toString))
@@ -3435,7 +3437,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       describe("decode") {
         it("should error if logical type is not uuid") {
           assertDecodeError[UUID](
-            unsafeEncode(UUID.randomUUID()),
+            unsafeEncode(uuid),
             unsafeSchema[String],
             "Error decoding UUID: Got unexpected missing logical type"
           )
@@ -3450,7 +3452,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
         }
 
         it("should decode uuid") {
-          val value = UUID.randomUUID()
+          val value = uuid
           assertDecodeIs[UUID](
             unsafeEncode(value),
             Right(value)

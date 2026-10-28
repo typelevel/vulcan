@@ -146,7 +146,7 @@ private[vulcan] object JsonEncoder {
   private object FloatNode extends Node {
     override def encode(value: AvroValue): Either[AvroError, Json] =
       value match {
-        case AvroValue.Float(float) => Right(Json.fromFloatOrString(float))
+        case AvroValue.Float(float) => Right(JsonNumbers.float(float))
         case _ => invalid(value, "float")
       }
   }
@@ -154,7 +154,7 @@ private[vulcan] object JsonEncoder {
   private object DoubleNode extends Node {
     override def encode(value: AvroValue): Either[AvroError, Json] =
       value match {
-        case AvroValue.Double(double) => Right(Json.fromDoubleOrString(double))
+        case AvroValue.Double(double) => Right(JsonNumbers.double(double))
         case _ => invalid(value, "double")
       }
   }

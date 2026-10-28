@@ -10,6 +10,7 @@ val munitVersion = "1.3.6"
 val refinedVersion = "0.11.4"
 val scala213Version = "2.13.18"
 val scala3Version = "3.3.8"
+val scalaJavaTimeVersion = "2.7.0"
 val scodecBitsVersion = "1.2.5"
 val slf4jNopVersion = "2.0.20"
 
@@ -50,7 +51,7 @@ lazy val benchmarks = project
     headerSettings
   )
 
-lazy val core = crossProject(JVMPlatform)
+lazy val core = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Full)
   .in(file("modules/core"))
   .settings(
@@ -64,7 +65,7 @@ lazy val core = crossProject(JVMPlatform)
     headerSettings
   )
 
-lazy val enumeratum = crossProject(JVMPlatform)
+lazy val enumeratum = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
   .in(file("modules/enumeratum"))
   .dependsOn(core, generic)
@@ -76,7 +77,7 @@ lazy val enumeratum = crossProject(JVMPlatform)
     headerSettings
   )
 
-lazy val generic = crossProject(JVMPlatform)
+lazy val generic = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
   .in(file("modules/generic"))
   .dependsOn(core)
@@ -94,7 +95,7 @@ lazy val generic = crossProject(JVMPlatform)
     headerSettings
   )
 
-lazy val refined = crossProject(JVMPlatform)
+lazy val refined = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
   .in(file("modules/refined"))
   .dependsOn(core)
@@ -277,7 +278,7 @@ lazy val docs = project
     )
   }
 
-lazy val tests = crossProject(JVMPlatform)
+lazy val tests = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Full)
   .in(file("tests"))
   .enablePlugins(NoPublishPlugin)
@@ -294,6 +295,9 @@ lazy val tests = crossProject(JVMPlatform)
     ),
     headerSettings,
     Test / scalacOptions ++= (if (tlIsScala3.value) Seq("-Yretain-trees") else Seq())
+  )
+  .jsSettings(
+    libraryDependencies += "io.github.cquiroz" %%% "scala-java-time" % scalaJavaTimeVersion % Test
   )
   .jvmSettings(
     libraryDependencies ++= Seq(
