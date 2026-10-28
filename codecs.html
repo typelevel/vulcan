@@ -152,12 +152,12 @@
 //             codec = Validated(
 //               codec = ImapErrors(
 //                 codec = Codec(&quot;long&quot;),
-//                 f = vulcan.Codec$WithValidSchema$$Lambda/0x00007f9f05e89d90@4865c774,
-//                 g = vulcan.Codec$WithValidSchema$$Lambda/0x00007f9f05e8a160@40bd894b
+//                 f = vulcan.Codec$WithValidSchema$$Lambda/0x00007f6d51f74670@487d628f,
+//                 g = vulcan.Codec$WithValidSchema$$Lambda/0x00007f6d51f74a40@361bd7ea
 //               ),
 //               validSchema = &quot;long&quot;
 //             ),
-//             logicalType = org.apache.avro.LogicalTypes$TimestampMillis@7e1aa11d
+//             logicalType = org.apache.avro.LogicalTypes$TimestampMillis@360f341d
 //           ),
 //           validSchema = {&quot;type&quot;:&quot;long&quot;,&quot;logicalType&quot;:&quot;timestamp-millis&quot;}
 //         ),
@@ -195,19 +195,19 @@
 //         codec = Validated(
 //           codec = ImapErrors(
 //             codec = Codec(&quot;long&quot;),
-//             f = vulcan.Codec$WithValidSchema$$Lambda/0x00007f9f05e89d90@4865c774,
-//             g = vulcan.Codec$WithValidSchema$$Lambda/0x00007f9f05e8a160@40bd894b
+//             f = vulcan.Codec$WithValidSchema$$Lambda/0x00007f6d51f74670@487d628f,
+//             g = vulcan.Codec$WithValidSchema$$Lambda/0x00007f6d51f74a40@361bd7ea
 //           ),
 //           validSchema = &quot;long&quot;
 //         ),
-//         logicalType = org.apache.avro.LogicalTypes$TimestampMillis@7e1aa11d
+//         logicalType = org.apache.avro.LogicalTypes$TimestampMillis@360f341d
 //       ),
 //       validSchema = {&quot;type&quot;:&quot;long&quot;,&quot;logicalType&quot;:&quot;timestamp-millis&quot;}
 //     ),
 //     typeName = &quot;Instant&quot;
 //   ),
-//   f = vulcan.Codec$WithValidSchema$$Lambda/0x00007f9f05e89d90@7249eece,
-//   g = vulcan.Codec$WithValidSchema$$Lambda/0x00007f9f05e8a160@1bd69b13
+//   f = vulcan.Codec$WithValidSchema$$Lambda/0x00007f6d51f74670@eec6719,
+//   g = vulcan.Codec$WithValidSchema$$Lambda/0x00007f6d51f74a40@a913358
 // )</span></code></pre>
         <p>When we have a newtype where we ensure values are valid, we can use <code>imapError</code> instead.</p>
         <pre><code class="nohighlight"><span class="keyword">import</span><span> </span><span class="identifier">vulcan</span><span>.</span><span class="type-name">AvroError</span><span>
@@ -225,7 +225,7 @@
 </span><span class="comment">// res5: Codec.Aux[Codec.string.AvroType, SerialNumber] = ImapErrors(
 //   codec = Codec(&quot;string&quot;),
 //   f = &lt;function1&gt;,
-//   g = vulcan.Codec$$Lambda/0x00007f9f05f357a0@41971411
+//   g = vulcan.Codec$$Lambda/0x00007f6d52024000@671914f2
 // )</span></code></pre>
         
         <h2 id="decimals" class="section"><a class="anchor-link left" href="#decimals"><i class="icofont-laika link">&#xef71;</i></a>Decimals</h2>
@@ -385,8 +385,8 @@
 //   codec = Validated(
 //     codec = UnionCodec(
 //       alts = Append(
-//         leftNE = Singleton(a = vulcan.Codec$Alt$$anon$6@6e9a9217),
-//         rightNE = Singleton(a = vulcan.Codec$Alt$$anon$6@31c6a1be)
+//         leftNE = Singleton(a = vulcan.Codec$Alt$$anon$6@5d7bd227),
+//         rightNE = Singleton(a = vulcan.Codec$Alt$$anon$6@c9aa077)
 //       )
 //     ),
 //     validSchema = [&quot;int&quot;,&quot;string&quot;]
