@@ -11,9 +11,9 @@ import enumeratum.VulcanEnumSpec.Suit
 import org.scalacheck.Gen
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import vulcan.Codec
 import vulcan.generic.AvroDoc
 import vulcan.generic.AvroNamespace
+import vulcan.v2.Codec
 
 final class VulcanEnumSpec extends AnyFunSpec with ScalaCheckPropertyChecks with EitherValues {
   describe("VulcanEnum") {

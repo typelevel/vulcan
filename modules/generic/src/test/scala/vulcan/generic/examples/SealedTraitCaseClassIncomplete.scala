@@ -6,7 +6,7 @@
 
 package vulcan.generic.examples
 
-import vulcan.Codec
+import vulcan.v2.Codec
 
 sealed trait SealedTraitCaseClassIncomplete
 

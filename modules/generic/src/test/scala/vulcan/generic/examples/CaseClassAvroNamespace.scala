@@ -9,8 +9,8 @@ package vulcan.generic.examples
 import cats.Eq
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
-import vulcan.Codec
 import vulcan.generic.*
+import vulcan.v2.Codec
 
 @AvroNamespace("com.example")
 final case class CaseClassAvroNamespace(value: Option[String])

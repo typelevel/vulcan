@@ -7,9 +7,9 @@
 package vulcan.generic
 
 import vulcan.BaseSpec
-import vulcan.CodecSpecHelpers
-import vulcan.RoundtripHelpers
 import vulcan.generic.examples.*
+import vulcan.v2.CodecSpecHelpers
+import vulcan.v2.RoundtripHelpers
 
 final class DerivationSpec extends BaseSpec with RoundtripHelpers with CodecSpecHelpers {
   describe("Codec") {
@@ -24,6 +24,12 @@ final class DerivationSpec extends BaseSpec with RoundtripHelpers with CodecSpec
         it("should use namespace annotation") {
           assertSchemaIs[SealedTraitEnumDerived] {
             """{"type":"enum","name":"SealedTraitEnumDerived","namespace":"com.example","symbols":["first","second"]}"""
+          }
+        }
+
+        it("should use enclosing objects as namespace") {
+          assertSchemaIs[AvroRecordDefault.Enum] {
+            """{"type":"enum","name":"Enum","namespace":"vulcan.generic.examples.AvroRecordDefault","symbols":["A","B"]}"""
           }
         }
       }

@@ -9,12 +9,13 @@ package vulcan.generic.examples
 import cats.Eq
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
-import vulcan.Codec
+import scodec.bits.ByteVector
 import vulcan.generic.*
+import vulcan.v2.Codec
 
 @AvroDoc("Some documentation")
 @AvroNamespace("vulcan.generic.examples.overridden")
-final case class FixedNamespace(bytes: Array[Byte])
+final case class FixedNamespace(bytes: ByteVector)
 object FixedNamespace {
   implicit val codec: Codec[FixedNamespace] =
     deriveFixed(
@@ -24,19 +25,12 @@ object FixedNamespace {
     )
 
   implicit val fixedNamespaceEq: Eq[FixedNamespace] =
-    Eq.instance { (f1, f2) =>
-      val b1 = f1.bytes
-      val b2 = f2.bytes
-
-      b1.length == b2.length && b1.zip(b2).forall { case (a, b) =>
-        a == b
-      }
-    }
+    Eq.fromUniversalEquals
 
   implicit val fixedNamespaceArbitrary: Arbitrary[FixedNamespace] =
     Arbitrary {
       Gen
         .choose(Byte.MinValue, Byte.MaxValue)
-        .map(byte => FixedNamespace(Array[Byte](byte)))
+        .map(byte => FixedNamespace(ByteVector(byte)))
     }
 }

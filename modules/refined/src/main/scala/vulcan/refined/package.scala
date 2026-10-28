@@ -9,6 +9,7 @@ package vulcan
 import cats.syntax.either.*
 import eu.timepit.refined.api.RefType
 import eu.timepit.refined.api.Validate
+import vulcan.v2.Codec
 
 package object refined {
   implicit def refinedCodec[F[_, _], T, P](implicit

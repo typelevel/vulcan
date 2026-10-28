@@ -6,21 +6,11 @@
 
 package vulcan.generic
 
-import cats.Eq
-import cats.implicits.*
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import org.apache.avro.generic.GenericData
-import org.apache.avro.generic.GenericDatumReader
-import org.apache.avro.generic.GenericDatumWriter
-import org.apache.avro.io.DecoderFactory
-import org.apache.avro.io.EncoderFactory
-import org.scalacheck.Arbitrary
-import org.scalatest.Assertion
-import vulcan.*
+import vulcan.BaseSpec
 import vulcan.generic.examples.*
+import vulcan.v2.RoundtripHelpers
 
-final class GenericDerivationRoundtripSpec extends BaseSpec {
+final class GenericDerivationRoundtripSpec extends BaseSpec with RoundtripHelpers {
 
   describe("derive") {
     it("CaseClassAvroNamespace") { roundtrip[CaseClassAvroNamespace] }
@@ -31,70 +21,4 @@ final class GenericDerivationRoundtripSpec extends BaseSpec {
     it("CaseClassFieldAvroNullDefault") { roundtrip[CaseClassFieldAvroNullDefault] }
     it("CaseClassAndFieldAvroNullDefault") { roundtrip[CaseClassAndFieldAvroNullDefault] }
   }
-
-  def roundtrip[A](implicit
-    codec: Codec[A],
-    arbitrary: Arbitrary[A],
-    eq: Eq[A]
-  ): Assertion = {
-    forAll { (a: A) =>
-      roundtrip(a)
-      binaryRoundtrip(a)
-    }
-  }
-
-  def roundtrip[A](a: A)(implicit
-    codec: Codec[A],
-    eq: Eq[A]
-  ): Assertion = {
-    val avroSchema = codec.schema
-    assert(avroSchema.isRight)
-
-    val encoded = codec.encode(a)
-    assert(encoded.isRight)
-
-    val decoded = codec.decode(encoded.value, avroSchema.value)
-    assert(decoded === Right(a))
-  }
-
-  def binaryRoundtrip[A](a: A)(implicit
-    codec: Codec[A],
-    eq: Eq[A]
-  ): Assertion = {
-    val binary = toBinary(a)
-    assert(binary.isRight)
-
-    val decoded = fromBinary[A](binary.value)
-    assert(decoded === Right(a))
-  }
-
-  def toBinary[A](a: A)(implicit
-    codec: Codec[A]
-  ): Either[AvroError, Array[Byte]] =
-    codec.schema.flatMap { schema =>
-      codec.encode(a).map { encoded =>
-        val baos = new ByteArrayOutputStream()
-        val serializer = EncoderFactory.get().binaryEncoder(baos, null)
-        new GenericDatumWriter[Any](schema)
-          .write(encoded, serializer)
-        serializer.flush()
-        baos.toByteArray()
-      }
-    }
-
-  def fromBinary[A](bytes: Array[Byte])(implicit
-    codec: Codec[A]
-  ): Either[AvroError, A] =
-    codec.schema.flatMap { schema =>
-      val bais = new ByteArrayInputStream(bytes)
-      val deserializer = DecoderFactory.get().binaryDecoder(bais, null)
-      val read =
-        new GenericDatumReader[Any](
-          schema,
-          schema,
-          new GenericData
-        ).read(null, deserializer)
-
-      codec.decode(read, schema)
-    }
 }

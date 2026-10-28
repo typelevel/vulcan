@@ -1,6 +1,6 @@
 # enumeratum
 
-The `@ENUMERATUM_MODULE_NAME@` module provides @:api(vulcan.Codec)s for [Enumeratum](https://github.com/lloydmeta/enumeratum) enumerations.
+The `@ENUMERATUM_MODULE_NAME@` module provides @:api(vulcan.v2.Codec)s for [Enumeratum](https://github.com/lloydmeta/enumeratum) enumerations.
 
 ## Getting Started
 
@@ -12,12 +12,12 @@ libraryDependencies += "@ORGANIZATION@" %% "@ENUMERATUM_MODULE_NAME@" % "@VERSIO
 
 ## Usage
 
-For regular `Enum`s, also mix in `VulcanEnum` to derive a @:api(vulcan.Codec) instance.
+For regular `Enum`s, also mix in `VulcanEnum` to derive a @:api(vulcan.v2.Codec) instance.
 
 ```scala mdoc:reset-object
 import enumeratum.{Enum, EnumEntry, VulcanEnum}
 import enumeratum.EnumEntry.Lowercase
-import vulcan.Codec
+import vulcan.v2.Codec
 import vulcan.generic.{AvroDoc, AvroNamespace}
 
 @AvroNamespace("com.example")
@@ -38,7 +38,7 @@ Codec[Suit]
 
 Annotations like `@AvroDoc` can be used to customize the derivation.
 
-For `ValueEnum`s, also mix in the matching `VulcanValueEnum` to derive a @:api(vulcan.Codec) instance.
+For `ValueEnum`s, also mix in the matching `VulcanValueEnum` to derive a @:api(vulcan.v2.Codec) instance.
 
 ```scala mdoc
 import enumeratum.values.{StringEnum, StringEnumEntry, StringVulcanEnum}

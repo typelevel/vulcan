@@ -6,16 +6,15 @@
 
 package enumeratum
 
-import vulcan.Avro
 import vulcan.AvroError
-import vulcan.Codec
 import vulcan.generic.deriveEnum
 import vulcan.internal.Names
+import vulcan.v2.Codec
 
 object Vulcan {
   def enumCodec[A <: EnumEntry](
     `enum`: Enum[A]
-  )(implicit names: Names[A]): Codec.Aux[Avro.EnumSymbol, A] = {
+  )(implicit names: Names[A]): Codec[A] = {
     lazy val entries = `enum`.values.map(_.entryName).mkString(", ")
     val notFound = (name: String) => AvroError(s"$name is not a member of ${names.typeName} ($entries)")
 

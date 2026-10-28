@@ -6,8 +6,8 @@
 
 package vulcan.generic.examples
 
-import vulcan.Codec
 import vulcan.generic.*
+import vulcan.v2.Codec
 
 @AvroAlias("CaseClassOtherAlias")
 final case class CaseClassAvroAlias(

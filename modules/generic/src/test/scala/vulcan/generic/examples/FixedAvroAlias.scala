@@ -6,11 +6,12 @@
 
 package vulcan.generic.examples
 
-import vulcan.Codec
+import scodec.bits.ByteVector
 import vulcan.generic.*
+import vulcan.v2.Codec
 
 @AvroAlias("FixedOtherAlias")
-final case class FixedAvroAlias(bytes: Array[Byte])
+final case class FixedAvroAlias(bytes: ByteVector)
 
 object FixedAvroAlias {
   implicit val codec: Codec[FixedAvroAlias] =

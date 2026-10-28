@@ -6,8 +6,8 @@
 
 package vulcan.generic.examples
 
-import vulcan.Codec
 import vulcan.generic.*
+import vulcan.v2.Codec
 
 @AvroDoc("documentation")
 final case class CaseClassEnumAvroDoc(value: Option[String])

@@ -6,11 +6,12 @@
 
 package vulcan.generic.examples
 
-import vulcan.Codec
+import scodec.bits.ByteVector
 import vulcan.generic.*
+import vulcan.v2.Codec
 
 @AvroName("FixedOtherName")
-final case class FixedAvroName(bytes: Array[Byte])
+final case class FixedAvroName(bytes: ByteVector)
 
 object FixedAvroName {
   implicit val codec: Codec[FixedAvroName] =

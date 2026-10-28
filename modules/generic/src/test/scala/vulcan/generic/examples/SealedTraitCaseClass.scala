@@ -6,8 +6,8 @@
 
 package vulcan.generic.examples
 
-import vulcan.Codec
 import vulcan.generic.*
+import vulcan.v2.Codec
 
 sealed trait SealedTraitCaseClass
 

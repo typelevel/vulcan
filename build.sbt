@@ -3,7 +3,6 @@ val catsVersion = "2.13.0"
 val circeVersion = "0.14.17"
 val disciplineScalaTestVersion = "2.3.0"
 val enumeratumVersion = "1.9.8"
-val jacksonVersion = "2.22.4"
 val magnolia2Version = "1.1.14"
 val magnolia3Version = "1.3.24"
 val munitScalaCheckVersion = "1.3.1"
@@ -11,7 +10,6 @@ val munitVersion = "1.3.6"
 val refinedVersion = "0.11.4"
 val scala213Version = "2.13.18"
 val scala3Version = "3.3.8"
-val scalacCompatVersion = "0.1.5"
 val scodecBitsVersion = "1.2.5"
 val slf4jNopVersion = "2.0.20"
 
@@ -59,14 +57,11 @@ lazy val core = project
   .settings(
     name := "vulcan",
     libraryDependencies ++= Seq(
-      "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
-      "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
       "io.circe" %% "circe-core" % circeVersion,
       "io.circe" %% "circe-jawn" % circeVersion,
-      "org.apache.avro" % "avro" % avroVersion,
       "org.scodec" %% "scodec-bits" % scodecBitsVersion,
       "org.typelevel" %% "cats-free" % catsVersion,
-      "org.typelevel" %% "scalac-compat-annotation" % scalacCompatVersion % Test
+      "org.apache.avro" % "avro" % avroVersion % Test
     ),
     headerSettings,
     scalatestSettings
@@ -78,8 +73,7 @@ lazy val enumeratum = project
   .settings(
     name := "vulcan-enumeratum",
     libraryDependencies ++= Seq(
-      "com.beachape" %% "enumeratum" % enumeratumVersion,
-      "org.apache.avro" % "avro" % avroVersion
+      "com.beachape" %% "enumeratum" % enumeratumVersion
     ),
     headerSettings,
     scalatestSettings,
@@ -92,7 +86,6 @@ lazy val generic = project
   .settings(
     name := "vulcan-generic",
     libraryDependencies ++= Seq(
-      "org.apache.avro" % "avro" % avroVersion,
       "org.typelevel" %% "cats-core" % catsVersion,
       "org.typelevel" %% "cats-free" % catsVersion
     ) ++ {

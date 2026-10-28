@@ -11,7 +11,7 @@ import eu.timepit.refined.types.numeric.NonPosInt
 import eu.timepit.refined.types.numeric.PosInt
 import munit.ScalaCheckSuite
 import org.scalacheck.Prop.*
-import vulcan.Codec
+import vulcan.v2.Codec
 
 final class RefinedSpec extends ScalaCheckSuite with EitherValues {
   property("Refined should succeed for values conforming to predicate") {

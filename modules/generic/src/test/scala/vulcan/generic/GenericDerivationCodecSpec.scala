@@ -6,12 +6,13 @@
 
 package vulcan.generic
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericData
+import vulcan.BaseSpec
 import vulcan.generic.examples.*
-import vulcan.internal.converters.collection.*
+import vulcan.v2.AvroValue
+import vulcan.v2.CodecSpecHelpers
+import vulcan.v2.Schema
 
-final class GenericDerivationCodecSpec extends CodecBase {
+final class GenericDerivationCodecSpec extends BaseSpec with CodecSpecHelpers {
   describe("Codec") {
 
     describe("derive") {
@@ -61,7 +62,7 @@ final class GenericDerivationCodecSpec extends CodecBase {
 
           it("should capture errors on invalid names") {
             assertSchemaError[CaseClassFieldInvalidName] {
-              """org.apache.avro.SchemaParseException: Illegal initial character: -value"""
+              """Invalid field "-value" in record vulcan.generic.examples.CaseClassFieldInvalidName: must start with a letter or underscore"""
             }
           }
 
@@ -110,23 +111,14 @@ final class GenericDerivationCodecSpec extends CodecBase {
           it("should encode as record") {
             assertEncodeIs[CaseClassField](
               CaseClassField(0),
-              Right {
-                val record = new GenericData.Record(unsafeSchema[CaseClassField])
-                record.put(0, unsafeEncode(0))
-                record
-              }
+              Right(AvroValue.Record(Vector(unsafeEncode(0))))
             )
           }
 
           it("should encode as record with multiple fields") {
             assertEncodeIs[CaseClassTwoFields](
               CaseClassTwoFields("the-name", 0),
-              Right {
-                val record = new GenericData.Record(unsafeSchema[CaseClassTwoFields])
-                record.put(0, unsafeEncode("the-name"))
-                record.put(1, unsafeEncode(0))
-                record
-              }
+              Right(AvroValue.Record(Vector(unsafeEncode("the-name"), unsafeEncode(0))))
             )
           }
         }
@@ -143,39 +135,25 @@ final class GenericDerivationCodecSpec extends CodecBase {
             assertDecodeError[CaseClassField](
               unsafeEncode(CaseClassField(123)),
               unsafeSchema[String],
-              "Error decoding vulcan.generic.examples.CaseClassField: Got unexpected schema type STRING, expected schema type RECORD"
+              "Error decoding vulcan.generic.examples.CaseClassField: Got unexpected schema type string, expected schema type record"
             )
           }
 
-          it("should error if value is not indexed record") {
+          it("should error if value is not record") {
             assertDecodeError[CaseClassField](
               unsafeEncode(123),
               unsafeSchema[CaseClassField],
-              "Error decoding vulcan.generic.examples.CaseClassField: Got unexpected type java.lang.Integer, expected type IndexedRecord"
+              "Error decoding vulcan.generic.examples.CaseClassField: Invalid int value for record vulcan.generic.examples.CaseClassField"
             )
           }
 
           it("should error if any field is missing in writer schema") {
             assertDecodeError[CaseClassField](
-              {
-                val schema =
-                  Schema.createRecord("CaseClassField", null, "vulcan.generic.examples", false)
-
-                schema.setFields(
-                  List(
-                    new Schema.Field(
-                      "other",
-                      unsafeSchema[Int],
-                      null
-                    )
-                  ).asJava
-                )
-
-                val record = new GenericData.Record(schema)
-                record.put(0, 123)
-                record
-              },
-              unsafeSchema[CaseClassField],
+              AvroValue.Record(Vector(unsafeEncode(123))),
+              Schema.Record(
+                Schema.Name("CaseClassField", Some("vulcan.generic.examples")),
+                Vector(Schema.Field("other", unsafeSchema[Int]))
+              ),
               "Error decoding vulcan.generic.examples.CaseClassField: Record writer schema is missing field 'value'"
             )
           }
@@ -212,7 +190,7 @@ final class GenericDerivationCodecSpec extends CodecBase {
 
           it("should capture errors on nested unions") {
             assertSchemaError[SealedTraitNestedUnion] {
-              """org.apache.avro.AvroRuntimeException: Nested union: [["null","int"]]"""
+              """Unions cannot directly contain other unions: [["null","int"]]"""
             }
           }
         }
@@ -221,7 +199,7 @@ final class GenericDerivationCodecSpec extends CodecBase {
           it("should error if value is not an alternative") {
             assertEncodeError[SealedTraitCaseClassIncomplete](
               SecondInSealedTraitCaseClassIncomplete(0),
-              "Error encoding union: Exhausted alternatives for type vulcan.generic.examples.SecondInSealedTraitCaseClassIncomplete"
+              "Exhausted alternatives for union"
             )
           }
 
@@ -229,7 +207,7 @@ final class GenericDerivationCodecSpec extends CodecBase {
             val value = CaseClassInSealedTrait(0)
             assertEncodeIs[SealedTraitCaseClass](
               value,
-              Right(unsafeEncode[SealedTraitCaseClass](value))
+              Right(AvroValue.Union(0, unsafeEncode(value)))
             )
           }
         }
@@ -239,23 +217,23 @@ final class GenericDerivationCodecSpec extends CodecBase {
             assertDecodeError[SealedTraitCaseClass](
               unsafeEncode[SealedTraitCaseClass](CaseClassInSealedTrait(0)),
               unsafeSchema[String],
-              "Error decoding vulcan.generic.examples.SealedTraitCaseClass: Error decoding union: Missing schema CaseClassInSealedTrait in union"
+              "Error decoding vulcan.generic.examples.SealedTraitCaseClass: Missing alternative for string in union"
             )
           }
 
           it("should decode if schema is part of union") {
             assertDecodeIs[SealedTraitCaseClass](
-              unsafeEncode[SealedTraitCaseClass](CaseClassInSealedTrait(0)),
+              unsafeEncode(CaseClassInSealedTrait(0)),
               Right(CaseClassInSealedTrait(0)),
               Some(unsafeSchema[CaseClassInSealedTrait])
             )
           }
 
-          it("should error if value is not an alternative") {
+          it("should error if value is not a union value") {
             assertDecodeError[SealedTraitCaseClass](
               unsafeEncode(123),
               unsafeSchema[SealedTraitCaseClass],
-              "Error decoding vulcan.generic.examples.SealedTraitCaseClass: Error decoding union: Exhausted alternatives for type java.lang.Integer"
+              "Invalid int value for union"
             )
           }
 
@@ -263,7 +241,7 @@ final class GenericDerivationCodecSpec extends CodecBase {
             assertDecodeError[SealedTraitCaseObject](
               unsafeEncode[SealedTraitCaseObject](CaseObjectInSealedTrait),
               unsafeSchema[SealedTraitCaseClass],
-              "Error decoding vulcan.generic.examples.SealedTraitCaseObject: Error decoding union: Missing schema CaseObjectInSealedTrait in union"
+              "Error decoding vulcan.generic.examples.SealedTraitCaseObject: Missing alternative for record vulcan.generic.examples.CaseClassInSealedTrait in union"
             )
           }
 
@@ -271,7 +249,7 @@ final class GenericDerivationCodecSpec extends CodecBase {
             assertDecodeError[SealedTraitCaseClass](
               unsafeEncode[SealedTraitCaseObject](CaseObjectInSealedTrait),
               unsafeSchema[SealedTraitCaseObject],
-              "Error decoding vulcan.generic.examples.SealedTraitCaseClass: Error decoding union: Missing alternative CaseObjectInSealedTrait in union"
+              "Error decoding vulcan.generic.examples.SealedTraitCaseClass: Missing alternative for record vulcan.generic.examples.CaseObjectInSealedTrait in union"
             )
           }
 
