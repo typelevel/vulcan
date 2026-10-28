@@ -18,12 +18,13 @@ Codec[Option[Option[Instant]]]
 Encoding and decoding with a @:api(vulcan.Codec) might also be unsuccessful, so results are wrapped in `Either` with error type @:api(vulcan.AvroError). Encoding accepts a value to be encoded according to the schema defined by the @:api(vulcan.Codec), and decoding accepts a value and a schema to decode the value against. For example, what happens if we try to decode `Int`s using a `Boolean` schema?
 
 ```scala mdoc
-import org.apache.avro.SchemaBuilder
+import vulcan.AvroValue
+import vulcan.Schema
 
-Codec[Int].decode(10, SchemaBuilder.builder.booleanType)
+Codec[Int].decode(AvroValue.Int(10), Schema.Boolean)
 ```
 
-Since the Apache Avro library encodes and decodes using `Object`, @:api(vulcan.Codec)s encode and decode between Scala types and `Any`. This means type safety is lost and tests should be used to ensure @:api(vulcan.Codec)s work as intended. This becomes important when we define @:api(vulcan.Codec)s from scratch. Note `Schema`s are treated as effectively immutable, even though they're in fact mutable.
+@:api(vulcan.Codec)s encode Scala types as `AvroValue`s, and decode `AvroValue`s using the schema they were written with. Encoded values are not checked against the schema until they are written as Avro binary or JSON, so tests should be used to ensure @:api(vulcan.Codec)s work as intended. This becomes important when we define @:api(vulcan.Codec)s from scratch.
 
 @:api(vulcan.Codec)s form [invariant functors][invariant], which means you can easily use an existing @:api(vulcan.Codec) to encode and decode a different type, by mapping back-and-forth between the @:api(vulcan.Codec)'s existing type argument and the new type. This becomes useful when dealing with newtypes, like `InstallationTime` in the following example.
 
@@ -96,11 +97,13 @@ Derivation for enumeration types can be partly automated using the [generic](der
 
 ## Fixed
 
-Avro fixed types correspond to `Array[Byte]`s with a fixed size.
+Avro fixed types correspond to `ByteVector`s with a fixed size.
 
 We can use `Codec.fixed` to define a codec.
 
 ```scala mdoc
+import scodec.bits.ByteVector
+
 sealed abstract case class Pence(value: Byte)
 
 object Pence {
@@ -113,7 +116,7 @@ Codec.fixed[Pence](
   name = "Pence",
   namespace = "com.example",
   size = 1,
-  encode = pence => Array[Byte](pence.value),
+  encode = pence => ByteVector(pence.value),
   decode = bytes => Pence(bytes.head),
   doc = Some("Amount of pence as a single byte")
 )

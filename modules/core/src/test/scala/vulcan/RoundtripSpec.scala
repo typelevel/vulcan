@@ -8,16 +8,22 @@ package vulcan
 
 import cats.Eq
 import cats.data.*
-import cats.implicits.*
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneOffset
 import java.util.UUID
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalatest.Assertion
+import scala.collection.immutable.SortedMap
 import scala.collection.immutable.SortedSet
+import scodec.bits.ByteVector
+import vulcan.Codec.InstantMicros
 import vulcan.examples.*
+
 final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
   describe("BigDecimal") {
     it("roundtrip") {
@@ -25,16 +31,7 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
         Codec.decimal(precision = 10, scale = 5)
 
       implicit val bigDecimalArbitrary: Arbitrary[BigDecimal] =
-        Arbitrary {
-          Arbitrary.arbBigDecimal.arbitrary
-            .map(_.setScale(5, scala.math.BigDecimal.RoundingMode.HALF_UP))
-            .map { decimal =>
-              if (decimal.precision > 10)
-                (decimal * BigDecimal(10).pow(10 - decimal.precision))
-                  .setScale(5, scala.math.BigDecimal.RoundingMode.HALF_UP)
-              else decimal
-            }
-        }
+        Arbitrary(Gen.chooseNum(-9999999999L, 9999999999L).map(BigDecimal(_, 5)))
 
       roundtrip[BigDecimal]
     }
@@ -44,14 +41,15 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
 
   describe("Byte") { it("roundtrip") { roundtrip[Byte] } }
 
-  describe("Array[Byte]") {
+  describe("ByteVector") {
     it("roundtrip") {
-      implicit val arrayByteEq: Eq[Array[Byte]] =
-        Eq.instance { (a, b) =>
-          a.size == b.size && a.zip(b).forall { case (b1, b2) => b1 == b2 }
-        }
+      implicit val byteVectorArbitrary: Arbitrary[ByteVector] =
+        Arbitrary(arbitrary[Array[Byte]].map(ByteVector(_)))
 
-      roundtrip[Array[Byte]]
+      implicit val byteVectorEq: Eq[ByteVector] =
+        Eq.fromUniversalEquals
+
+      roundtrip[ByteVector]
     }
   }
 
@@ -70,6 +68,8 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
 
   describe("Double") { it("roundtrip") { roundtrip[Double] } }
 
+  describe("Either") { it("roundtrip") { roundtrip[Either[Int, String]] } }
+
   describe("Enum") { it("roundtrip") { roundtrip[SealedTraitEnum] } }
 
   describe("Fixed") { it("roundtrip") { roundtrip[FixedBoolean] } }
@@ -79,15 +79,24 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
   describe("Instant") {
     it("roundtrip") {
       implicit val instantArbitrary: Arbitrary[Instant] =
-        Arbitrary(Gen.posNum[Long].map { millis =>
-          val instant = Instant.ofEpochMilli(millis)
-          instant.minusNanos(instant.getNano().toLong)
-        })
+        Arbitrary(arbitrary[Long].map(Instant.ofEpochMilli))
 
       implicit val instantEq: Eq[Instant] =
-        Eq.instance(_ equals _)
+        Eq.fromUniversalEquals
 
       roundtrip[Instant]
+    }
+  }
+
+  describe("InstantMicros") {
+    it("roundtrip") {
+      implicit val instantMicrosArbitrary: Arbitrary[InstantMicros] =
+        Arbitrary(arbitrary[Long].map(InstantMicros.fromEpochMicro))
+
+      implicit val instantMicrosEq: Eq[InstantMicros] =
+        Eq.fromUniversalEquals
+
+      roundtrip[InstantMicros]
     }
   }
 
@@ -98,12 +107,55 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
   describe("LocalDate") {
     it("roundtrip") {
       implicit val localDateArbitrary: Arbitrary[LocalDate] =
-        Arbitrary(Gen.posNum[Int].map(day => LocalDate.ofEpochDay(day.toLong)))
+        Arbitrary(arbitrary[Int].map(days => LocalDate.ofEpochDay(days.toLong)))
 
       implicit val localDateEq: Eq[LocalDate] =
-        Eq.instance(_ isEqual _)
+        Eq.fromUniversalEquals
 
       roundtrip[LocalDate]
+    }
+  }
+
+  describe("LocalDateTime") {
+    it("roundtrip") {
+      implicit val localDateTimeArbitrary: Arbitrary[LocalDateTime] =
+        Arbitrary(arbitrary[Long].map { millis =>
+          LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneOffset.UTC)
+        })
+
+      implicit val localDateTimeEq: Eq[LocalDateTime] =
+        Eq.fromUniversalEquals
+
+      roundtrip[LocalDateTime]
+    }
+  }
+
+  describe("LocalTime") {
+    implicit val localTimeEq: Eq[LocalTime] =
+      Eq.fromUniversalEquals
+
+    it("roundtrip micros") {
+      implicit val localTimeCodec: Codec[LocalTime] =
+        Codec.localTimeMicros
+
+      implicit val localTimeArbitrary: Arbitrary[LocalTime] =
+        Arbitrary(
+          Gen.chooseNum(0L, 86399999999L).map(micros => LocalTime.ofNanoOfDay(micros * 1000L))
+        )
+
+      roundtrip[LocalTime]
+    }
+
+    it("roundtrip millis") {
+      implicit val localTimeCodec: Codec[LocalTime] =
+        Codec.localTimeMillis
+
+      implicit val localTimeArbitrary: Arbitrary[LocalTime] =
+        Arbitrary(
+          Gen.chooseNum(0L, 86399999L).map(millis => LocalTime.ofNanoOfDay(millis * 1000000L))
+        )
+
+      roundtrip[LocalTime]
     }
   }
 
@@ -141,6 +193,21 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
     }
   }
 
+  describe("NonEmptyMap") {
+    it("roundtrip") {
+      implicit def arbitraryNonEmptyMap[A](implicit
+        arbitrary: Arbitrary[A]
+      ): Arbitrary[NonEmptyMap[String, A]] =
+        Arbitrary(
+          Gen
+            .nonEmptyListOf(Arbitrary.arbitrary[(String, A)])
+            .map(entries => NonEmptyMap.fromMapUnsafe(SortedMap(entries: _*)))
+        )
+
+      roundtrip[NonEmptyMap[String, Int]]
+    }
+  }
+
   describe("NonEmptySet") {
     it("roundtrip") {
       implicit def arbitraryNonEmptySet[A](implicit
@@ -172,7 +239,11 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
     }
   }
 
-  describe("Option") { it("roundtrip") { roundtrip[Option[Int]] } }
+  describe("Option") {
+    it("roundtrip") { roundtrip[Option[Int]] }
+
+    it("roundtrip with the types of unions") { roundtrip[Option[Either[Int, String]]] }
+  }
 
   describe("Record") { it("roundtrip") { roundtrip[CaseClassField] } }
 
@@ -200,18 +271,23 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
 
   describe("String") { it("roundtrip") { roundtrip[String] } }
 
+  describe("Union") { it("roundtrip") { roundtrip[SealedTraitCaseClass] } }
+
+  describe("Unit") { it("roundtrip") { roundtrip[Unit] } }
+
   describe("UUID") {
     it("roundtrip") {
       implicit val uuidArbitrary: Arbitrary[UUID] =
-        Arbitrary(arbitrary[Array[Byte]].map(UUID.nameUUIDFromBytes(_)))
+        Arbitrary(Gen.zip(arbitrary[Long], arbitrary[Long]).map { case (most, least) =>
+          new UUID(most, least)
+        })
+
+      implicit val uuidEq: Eq[UUID] =
+        Eq.fromUniversalEquals
 
       roundtrip[UUID]
     }
   }
-
-  describe("Union") { it("roundtrip") { roundtrip[SealedTraitCaseClass] } }
-
-  describe("Unit") { it("roundtrip") { roundtrip[Unit] } }
 
   describe("Vector") { it("roundtrip") { roundtrip[Vector[Int]] } }
 }

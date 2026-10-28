@@ -46,8 +46,10 @@ deriveEnum[Fruit](
 `deriveFixed` can be used to partly derive @:api(vulcan.Codec)s for fixed types. Annotations like `@AvroDoc` can be used to customize the derivation.
 
 ```scala mdoc
+import scodec.bits.ByteVector
 import vulcan.AvroError
 
+@AvroNamespace("com.example")
 sealed abstract case class Pence(value: Byte)
 
 object Pence {
@@ -58,7 +60,7 @@ object Pence {
 
 deriveFixed[Pence](
   size = 1,
-  encode = pence => Array[Byte](pence.value),
+  encode = pence => ByteVector(pence.value),
   decode = bytes => Pence(bytes.head)
 )
 ```

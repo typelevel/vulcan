@@ -16,6 +16,7 @@ Refinement types are encoded using their base type (e.g. `Int` for `PosInt`). Wh
 
 ```scala mdoc:reset-object
 import eu.timepit.refined.types.numeric.PosInt
+import vulcan.AvroValue
 import vulcan.Codec
 import vulcan.refined._
 
@@ -23,5 +24,5 @@ Codec[PosInt]
 
 Codec.encode(PosInt.MinValue)
 
-Codec.decode[PosInt](0)
+Codec.decode[PosInt](AvroValue.Int(0))
 ```

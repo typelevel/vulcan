@@ -9,7 +9,9 @@ package vulcan
 import cats.data.Chain
 import cats.free.FreeApplicative
 import cats.implicits.*
+import io.circe.JsonObject
 import magnolia1.*
+import scodec.bits.ByteVector
 import vulcan.internal.Names
 
 package object generic {
@@ -78,7 +80,7 @@ package object generic {
                       Some(None.asInstanceOf[param.PType]) // TODO: remove cast
                     else None
                   ),
-                  props = getProps.getOrElse(Props.empty)
+                  props = getProps.getOrElse(JsonObject.empty)
                 ).widen
               }
               .map(caseClass.rawConstruct(_))
@@ -92,7 +94,7 @@ package object generic {
     final def derive[A]: Codec[A] =
       macro Magnolia.gen[A]
 
-    final def split[A](sealedTrait: SealedTrait[Codec, A]): Codec.Aux[Any, A] = {
+    final def split[A](sealedTrait: SealedTrait[Codec, A]): Codec[A] = {
 
       Codec
         .union[A](alt =>
@@ -116,7 +118,7 @@ package object generic {
     symbols: Seq[String],
     encode: A => String,
     decode: String => Either[AvroError, A]
-  )(implicit names: Names[A]): Codec.Aux[Avro.EnumSymbol, A] =
+  )(implicit names: Names[A]): Codec[A] =
     Codec.enumeration(
       name = names.typeName,
       symbols = symbols,
@@ -135,9 +137,9 @@ package object generic {
     */
   final def deriveFixed[A](
     size: Int,
-    encode: A => Array[Byte],
-    decode: Array[Byte] => Either[AvroError, A]
-  )(implicit names: Names[A]): Codec.Aux[Avro.Fixed, A] =
+    encode: A => ByteVector,
+    decode: ByteVector => Either[AvroError, A]
+  )(implicit names: Names[A]): Codec[A] =
     Codec.fixed(
       name = names.typeName,
       size = size,

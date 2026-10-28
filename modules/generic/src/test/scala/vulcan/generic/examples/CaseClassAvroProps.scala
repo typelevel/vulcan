@@ -6,14 +6,15 @@
 
 package vulcan.generic.examples
 
+import io.circe.Json
+import io.circe.JsonObject
 import vulcan.Codec
-import vulcan.Props
 import vulcan.generic.*
 
 @AvroName("CaseClassAvroProps")
 final case class CaseClassAvroProps(
   @AvroName("value")
-  @AvroProps(Props.one("prop1", "A").add("prop2", "B"))
+  @AvroProps(JsonObject("prop1" -> Json.fromString("A"), "prop2" -> Json.fromString("B")))
   value: Option[String]
 )
 

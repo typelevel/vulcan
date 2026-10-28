@@ -7,7 +7,6 @@
 package vulcan.examples
 
 import cats.Eq
-import cats.implicits.*
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
@@ -20,8 +19,8 @@ object SealedTraitCaseClass {
     Codec.union { alt =>
       assert(alt.toString() == "AltBuilder")
 
-      alt[FirstInSealedTraitCaseClass] |+|
-        alt[SecondInSealedTraitCaseClass] |+|
+      alt[FirstInSealedTraitCaseClass] ++
+        alt[SecondInSealedTraitCaseClass] ++
         alt[ThirdInSealedTraitCaseClass]
     }
 

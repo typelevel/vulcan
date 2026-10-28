@@ -7,11 +7,12 @@
 package vulcan.examples
 
 import cats.Eq
+import io.circe.Json
+import io.circe.JsonObject
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
 import vulcan.AvroError
 import vulcan.Codec
-import vulcan.Props
 
 sealed trait SealedTraitEnumNoDefault
 
@@ -39,7 +40,7 @@ object SealedTraitEnumNoDefault {
         case "second" => Right(SecondInSealedTraitEnumNoDefault)
         case other => Left(AvroError(other))
       },
-      props = Props.one("custom1", 10).add("custom2", "value2")
+      props = JsonObject("custom1" -> Json.fromInt(10), "custom2" -> Json.fromString("value2"))
     )
 }
 

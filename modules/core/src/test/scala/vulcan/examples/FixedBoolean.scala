@@ -7,11 +7,13 @@
 package vulcan.examples
 
 import cats.Eq
+import io.circe.Json
+import io.circe.JsonObject
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
+import scodec.bits.*
 import vulcan.AvroError
 import vulcan.Codec
-import vulcan.Props
 
 sealed trait FixedBoolean extends Product with Serializable
 
@@ -23,8 +25,8 @@ object FixedBoolean {
         namespace = "vulcan.examples",
         size = 1,
         encode = {
-          case FalseFixedBoolean => Array(0.toByte)
-          case TrueFixedBoolean => Array(0.toByte, 1.toByte)
+          case FalseFixedBoolean => hex"00"
+          case TrueFixedBoolean => hex"01"
         },
         decode = bytes => {
           val byte = bytes.head
@@ -34,14 +36,14 @@ object FixedBoolean {
         },
         doc = Some("A boolean represented as a byte"),
         aliases = List("SomeOtherBoolean"),
-        props = Props.one("custom", "value")
+        props = JsonObject("custom" -> Json.fromString("value"))
       )
 
   implicit val fixedBooleanEq: Eq[FixedBoolean] =
     Eq.fromUniversalEquals
 
   implicit val fixedBooleanArbitrary: Arbitrary[FixedBoolean] =
-    Arbitrary(Gen.const(FalseFixedBoolean))
+    Arbitrary(Gen.oneOf(FalseFixedBoolean, TrueFixedBoolean))
 }
 
 case object TrueFixedBoolean extends FixedBoolean

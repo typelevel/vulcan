@@ -6,28 +6,29 @@
 
 package vulcan.generic
 
+import io.circe.Json
+import io.circe.JsonObject
 import vulcan.BaseSpec
-import vulcan.Props
 final class AvroPropsSpec extends BaseSpec {
   describe("AvroProps") {
     it("should provide props via props") {
       forAll { (name: String, value: String) =>
-        assert(new AvroProps(Props.one(name, value)).prop.toChain == Props.one(name, value).toChain)
+        val props = JsonObject(name -> Json.fromString(value))
+        assert(new AvroProps(props).props == props)
       }
     }
 
-    it("should include name and value in props toString") {
+    it("should include props in toString") {
       forAll { (name: String, value: String) =>
-        val propsString = new AvroProps(Props.one(name, value)).toString
-        assert(propsString.contains(name) && propsString.contains(value))
+        val props = JsonObject(name -> Json.fromString(value))
+        assert(new AvroProps(props).toString.contains(props.toString))
       }
     }
 
     it("should provide an extractor for props") {
       forAll { (name: String, value: String) =>
-        assert(new AvroProps(Props.one(name, value)) match {
-          case AvroProps(props) =>
-            props.toChain.toOption.exists(_.exists { case (n, _) => n == name })
+        assert(new AvroProps(JsonObject(name -> Json.fromString(value))) match {
+          case AvroProps(props) => props.contains(name)
         })
       }
     }

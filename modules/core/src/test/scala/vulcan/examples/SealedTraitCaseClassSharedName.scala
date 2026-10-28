@@ -7,7 +7,6 @@
 package vulcan.examples
 
 import cats.Eq
-import cats.implicits.*
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
@@ -20,7 +19,7 @@ object SealedTraitCaseClassSharedName {
     Codec.union { alt =>
       assert(alt.toString() == "AltBuilder")
 
-      alt[First.SharedNameSealedTraitCaseClass] |+| alt[Second.SharedNameSealedTraitCaseClass]
+      alt[First.SharedNameSealedTraitCaseClass] ++ alt[Second.SharedNameSealedTraitCaseClass]
     }
 
   implicit val sealedTraitCaseClassEq: Eq[SealedTraitCaseClassSharedName] =
@@ -50,7 +49,6 @@ object First {
     implicit val arb: Arbitrary[SharedNameSealedTraitCaseClass] =
       Arbitrary(arbitrary[Int].map(apply))
   }
-
 }
 
 object Second {
@@ -67,7 +65,5 @@ object Second {
 
     implicit val arb: Arbitrary[SharedNameSealedTraitCaseClass] =
       Arbitrary(arbitrary[String].map(apply))
-
   }
-
 }

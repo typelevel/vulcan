@@ -6,10 +6,11 @@
 
 package vulcan.examples
 
-import cats.implicits.*
-import org.apache.avro.Schema
+import cats.syntax.all.*
+import io.circe.Json
+import io.circe.JsonObject
 import vulcan.Codec
-import vulcan.Props
+import vulcan.Schema
 
 final case class CaseClassTwoFields(name: String, age: Int)
 
@@ -20,7 +21,7 @@ object CaseClassTwoFields {
       namespace = "vulcan.examples",
       doc = Some("some documentation for example"),
       aliases = Seq("FirstAlias", "SecondAlias"),
-      props = Props.one("custom", List(1, 2, 3))
+      props = JsonObject("custom" -> Json.arr(Json.fromInt(1), Json.fromInt(2), Json.fromInt(3)))
     ) { field =>
       assert(field.toString() == "FieldBuilder")
 
@@ -30,9 +31,9 @@ object CaseClassTwoFields {
           access = _.name,
           doc = Some("some doc"),
           default = Some("default name"),
-          order = Some(Schema.Field.Order.DESCENDING),
+          order = Some(Schema.Field.Order.Descending),
           aliases = Seq("TheAlias"),
-          props = Props.one("custom", "value")
+          props = JsonObject("custom" -> Json.fromString("value"))
         ),
         field("age", _.age)
       ).mapN(CaseClassTwoFields(_, _))

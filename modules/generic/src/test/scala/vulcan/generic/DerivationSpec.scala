@@ -26,6 +26,12 @@ final class DerivationSpec extends BaseSpec with RoundtripHelpers with CodecSpec
             """{"type":"enum","name":"SealedTraitEnumDerived","namespace":"com.example","symbols":["first","second"]}"""
           }
         }
+
+        it("should use enclosing objects as namespace") {
+          assertSchemaIs[AvroRecordDefault.Enum] {
+            """{"type":"enum","name":"Enum","namespace":"vulcan.generic.examples.AvroRecordDefault","symbols":["A","B"]}"""
+          }
+        }
       }
 
       it("should roundtrip") { roundtrip[SealedTraitEnumDerived] }

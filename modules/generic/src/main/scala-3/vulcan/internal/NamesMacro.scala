@@ -30,9 +30,11 @@ object NamesMacro {
       }
 
     val typeName = getAnnotValue[AvroName].map(e => '{ $e.name }).getOrElse(Expr(symbol.name))
+
+    // Full names of objects end with $, which is not part of the namespace
     val namespace = getAnnotValue[AvroNamespace]
       .map(e => '{ $e.namespace })
-      .getOrElse(Expr(symbol.owner.fullName))
+      .getOrElse(Expr(symbol.owner.fullName.replace("$.", ".").stripSuffix("$")))
 
     val doc = toExprOpt(getAnnotValue[AvroDoc].map(e => '{ $e.doc }))
     val alias = toExprOpt(getAnnotValue[AvroAlias].map(e => '{ $e.alias }))

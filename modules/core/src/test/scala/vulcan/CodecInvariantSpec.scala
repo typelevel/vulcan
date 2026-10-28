@@ -11,11 +11,10 @@ import cats.laws.discipline.InvariantTests
 import cats.tests.CatsSuite
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
-import org.apache.avro.Schema
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
-import scala.annotation.nowarn
 import scala.util.Try
+import scodec.bits.ByteVector
 
 final class CodecInvariantSpec extends CatsSuite with EitherValues {
   val schemaGen: Gen[Either[AvroError, Schema]] =
@@ -33,26 +32,19 @@ final class CodecInvariantSpec extends CatsSuite with EitherValues {
       StandardCharsets.UTF_16
     )
 
-  @nowarn("cat=deprecation") // TODO
   implicit val codecStringArbitrary: Arbitrary[Codec[String]] =
     Arbitrary {
       schemaGen.flatMap { schema =>
         charsetGen.map { charset =>
           Codec
-            .instance[Any, String](
+            .instance[String](
               schema,
-              s => Right(s.getBytes(charset)),
-              (value, schema) => {
-                if (schema.getType() == Schema.Type.STRING)
-                  Right(new String(value.asInstanceOf[Array[Byte]], charset))
-                else
-                  Left {
-                    AvroError
-                      .decodeUnexpectedSchemaType(
-                        schema.getType(),
-                        Schema.Type.STRING
-                      )
-                  }
+              s => Right(AvroValue.Bytes(ByteVector.view(s.getBytes(charset)))),
+              {
+                case (AvroValue.Bytes(bytes), _: Schema.String) =>
+                  Right(new String(bytes.toArray, charset))
+                case (_, schema) =>
+                  Left(AvroError(s"Got unexpected schema $schema"))
               }
             )
             .withTypeName("String")
