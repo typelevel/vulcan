@@ -196,7 +196,7 @@ jobs:
       - name: Submit Dependencies
         uses: scalacenter/sbt-dependency-submission@v2
         with:
-          modules-ignore: vulcan-benchmarks_2.13 vulcan-benchmarks_3 rootjs_2.13 rootjs_3 docs_3 rootjvm_2.13 rootjvm_3 rootnative_2.13 rootnative_3
+          modules-ignore: vulcan-benchmarks_2.13 vulcan-benchmarks_3 rootjs_2.13 rootjs_3 docs_3 rootjvm_2.13 rootjvm_3 rootnative_2.13 rootnative_3 vulcan-tests_2.13 vulcan-tests_3
           configs-ignore: test scala-tool scala-doc-tool test-internal
 
   site:
