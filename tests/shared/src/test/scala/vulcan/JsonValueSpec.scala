@@ -9,21 +9,19 @@ package vulcan
 import io.circe.Json
 import scodec.bits.*
 import vulcan.internal.JsonPrinter
-import vulcan.internal.JsonValueDecoder
-import vulcan.internal.JsonValueEncoder
 
 final class JsonValueSpec extends BaseSpec {
   private def encode(schema: Schema, value: AvroValue): String =
-    JsonPrinter.print(JsonValueEncoder(schema).value.encode(value).value)
+    JsonPrinter.print(JsonEncoder(schema).value.encode(value).value)
 
   private def encodeError(schema: Schema, value: AvroValue): String =
-    JsonValueEncoder(schema).value.encode(value).swap.value.message
+    JsonEncoder(schema).value.encode(value).swap.value.message
 
   private def decode(schema: Schema, json: String): AvroValue =
-    JsonValueDecoder(schema).value.decode(io.circe.jawn.parse(json).value).value
+    JsonDecoder(schema).value.decode(io.circe.jawn.parse(json).value).value
 
   private def decodeError(schema: Schema, json: String): String =
-    JsonValueDecoder(schema).value.decode(io.circe.jawn.parse(json).value).swap.value.message
+    JsonDecoder(schema).value.decode(io.circe.jawn.parse(json).value).swap.value.message
 
   /** A JSON string with the characters, for characters which do not need escaping. */
   private def string(chars: Int*): String =
@@ -54,7 +52,7 @@ final class JsonValueSpec extends BaseSpec {
       )
     )
 
-  describe("JsonValueEncoder and JsonValueDecoder") {
+  describe("JsonEncoder and JsonDecoder") {
     it("should decode encoded values") {
       forAll(AvroValueGenerators.genSchemaAndValue, minSuccessful(1000)) { case (schema, value) =>
         assert(decode(schema, encode(schema, value)) == value)
@@ -192,6 +190,12 @@ final class JsonValueSpec extends BaseSpec {
       }
 
       assert(decodeError(Schema.Union(Vector(Schema.Int)), "null") == "Invalid null for union")
+    }
+
+    it("should not compile invalid schemas") {
+      val undefined = Schema.Ref(name("Undefined"))
+      assert(JsonEncoder(undefined).swap.value.message == "Undefined name Undefined")
+      assert(JsonDecoder(undefined).swap.value.message == "Undefined name Undefined")
     }
   }
 }

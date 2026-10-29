@@ -15,8 +15,8 @@ import cats.data.NonEmptyMap
 import cats.data.NonEmptySet
 import cats.data.NonEmptyVector
 import cats.free.FreeApplicative
-import cats.~>
 import cats.syntax.all.*
+import cats.~>
 import io.circe.Json
 import io.circe.JsonObject
 import java.nio.charset.StandardCharsets
@@ -54,7 +54,7 @@ sealed abstract class Codec[A] {
 
   /** Returns an `Encoder` for values, or an error if the schema is invalid. */
   final def encoder: Either[AvroError, Encoder[A]] =
-    schema.flatMap(SchemaValidator.validate(_, validateDefaults = false)).as {
+    schema.flatMap(SchemaValidator.validate(_, validateDefaults = false)).map { _ =>
       new Encoder[A] {
         override def encode(a: A): Either[AvroError, AvroValue] =
           Codec.this.encode(a)
@@ -66,7 +66,7 @@ sealed abstract class Codec[A] {
     * writer schema, or an error if the writer schema is invalid.
     */
   final def decoder(writerSchema: Schema): Either[AvroError, Decoder[A]] =
-    SchemaValidator.validate(writerSchema, validateDefaults = false).as {
+    SchemaValidator.validate(writerSchema, validateDefaults = false).map { _ =>
       val resolved = resolveDecoder(writerSchema, new Definitions(writerSchema))
       new Decoder[A] {
         override def decode(value: AvroValue): Either[AvroError, A] =
@@ -76,7 +76,7 @@ sealed abstract class Codec[A] {
 
   /** Returns a `BinaryEncoder` for Avro binary, or an error if the schema is invalid. */
   final def binaryEncoder: Either[AvroError, BinaryEncoder[A]] =
-    schema.flatMap(BinaryValueEncoder(_)).map { compiled =>
+    schema.flatMap(BinaryEncoder(_)).map { compiled =>
       new BinaryEncoder[A] {
         override def encode(a: A): Either[AvroError, ByteVector] =
           Codec.this.encode(a).flatMap(compiled.encode)
@@ -88,7 +88,7 @@ sealed abstract class Codec[A] {
     * writer schema, or an error if the writer schema is invalid.
     */
   final def binaryDecoder(writerSchema: Schema): Either[AvroError, BinaryDecoder[A]] =
-    BinaryValueDecoder(writerSchema).map { compiled =>
+    BinaryDecoder(writerSchema).map { compiled =>
       val resolved = resolveDecoder(writerSchema, new Definitions(writerSchema))
       new BinaryDecoder[A] {
         override def decode(bytes: ByteVector): Either[AvroError, A] =
@@ -98,7 +98,7 @@ sealed abstract class Codec[A] {
 
   /** Returns a `JsonEncoder` for Avro `Json`, or an error if the schema is invalid. */
   final def jsonEncoder: Either[AvroError, JsonEncoder[A]] =
-    schema.flatMap(JsonValueEncoder(_)).map { compiled =>
+    schema.flatMap(JsonEncoder(_)).map { compiled =>
       new JsonEncoder[A] {
         override def encode(a: A): Either[AvroError, Json] =
           Codec.this.encode(a).flatMap(compiled.encode)
@@ -110,7 +110,7 @@ sealed abstract class Codec[A] {
     * writer schema, or an error if the writer schema is invalid.
     */
   final def jsonDecoder(writerSchema: Schema): Either[AvroError, JsonDecoder[A]] =
-    JsonValueDecoder(writerSchema).map { compiled =>
+    JsonDecoder(writerSchema).map { compiled =>
       val resolved = resolveDecoder(writerSchema, new Definitions(writerSchema))
       new JsonDecoder[A] {
         override def decode(json: Json): Either[AvroError, A] =
@@ -190,7 +190,7 @@ sealed abstract class Codec[A] {
   private[vulcan] final def encodeForSchema(a: A): Either[AvroError, Json] =
     for {
       validSchema <- schema
-      encoder <- JsonValueEncoder.withoutUnionTypes(validSchema)
+      encoder <- JsonEncoder.withoutUnionTypes(validSchema)
       value <- encode(a)
       json <- encoder.encode(value)
     } yield json
@@ -853,7 +853,7 @@ object Codec {
   ) extends Codec[A] {
     override lazy val schema: Either[AvroError, Schema] =
       instanceSchema.flatMap { schema =>
-        SchemaValidator.validate(schema, validateDefaults = true).as(schema)
+        SchemaValidator.validate(schema, validateDefaults = true).map(_ => schema)
       }
 
     override def encode(a: A): Either[AvroError, AvroValue] =
@@ -1819,7 +1819,7 @@ object Codec {
 
   /** The schema, if it is valid, including defaults. */
   private def validated(schema: Schema): Either[AvroError, Schema] =
-    SchemaValidator.validate(schema, validateDefaults = true).as(schema)
+    SchemaValidator.validate(schema, validateDefaults = true).map(_ => schema)
 
   /** A function decoding any value to the error. */
   private[vulcan] def failing[A](error: AvroError): AvroValue => Either[AvroError, A] = {
