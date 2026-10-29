@@ -29,11 +29,8 @@ final class ByteVectorsSpec extends BaseSpec {
         assert(decode(hex"61" ++ hex"6263") == "abc")
       }
 
-      it("should decode bytes not backed by an array") {
-        val buffer = ByteBuffer.allocateDirect(3)
-        buffer.put(hex"616263".toArray)
-        buffer.flip()
-        val bytes = ByteVector.view(buffer)
+      it("should decode bytes without an accessible array") {
+        val bytes = ByteVector.view(ByteBuffer.wrap(hex"616263".toArray).asReadOnlyBuffer)
         assert(!bytes.toByteBufferUnsafe.hasArray)
         assert(decode(bytes) == "abc")
       }

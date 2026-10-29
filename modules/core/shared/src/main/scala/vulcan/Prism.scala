@@ -118,7 +118,7 @@ private[vulcan] sealed abstract class PrismLowPriority {
     tag: ClassTag[A]
   ): Prism[S, A] = {
     val getOption = (s: S) =>
-      if (tag.runtimeClass.isInstance(s))
+      if (s != null && tag.runtimeClass.isInstance(s))
         Some(s.asInstanceOf[A])
       else None
 

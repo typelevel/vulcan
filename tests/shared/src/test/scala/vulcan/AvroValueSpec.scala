@@ -24,7 +24,8 @@ final class AvroValueSpec extends BaseSpec {
       }
 
       it("should distinguish positive and negative zero") {
-        assert(AvroValue.Float(0.0f) != AvroValue.Float(-0.0f))
+        val negativeZero = java.lang.Float.intBitsToFloat(Int.MinValue)
+        assert(AvroValue.Float(0.0f) != AvroValue.Float(negativeZero))
       }
     }
 
@@ -42,7 +43,8 @@ final class AvroValueSpec extends BaseSpec {
       }
 
       it("should distinguish positive and negative zero") {
-        assert(AvroValue.Double(0.0d) != AvroValue.Double(-0.0d))
+        val negativeZero = java.lang.Double.longBitsToDouble(Long.MinValue)
+        assert(AvroValue.Double(0.0d) != AvroValue.Double(negativeZero))
       }
     }
 

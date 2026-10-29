@@ -66,7 +66,18 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
 
   describe("Char") { it("roundtrip") { roundtrip[Char] } }
 
-  describe("Double") { it("roundtrip") { roundtrip[Double] } }
+  describe("Double") {
+    it("roundtrip") { roundtrip[Double] }
+
+    it("roundtrip negative zero") {
+      val bits = java.lang.Double.doubleToRawLongBits(-0.0d)
+      val decoded = List(
+        Codec.toBinary(-0.0d).flatMap(Codec.fromBinary[Double](_, Schema.Double)),
+        Codec.toJson(-0.0d).flatMap(Codec.fromJson[Double](_, Schema.Double))
+      )
+      decoded.foreach(double => assert(double.map(java.lang.Double.doubleToRawLongBits) == Right(bits)))
+    }
+  }
 
   describe("Either") { it("roundtrip") { roundtrip[Either[Int, String]] } }
 
@@ -74,7 +85,18 @@ final class RoundtripSpec extends BaseSpec with RoundtripHelpers {
 
   describe("Fixed") { it("roundtrip") { roundtrip[FixedBoolean] } }
 
-  describe("Float") { it("roundtrip") { roundtrip[Float] } }
+  describe("Float") {
+    it("roundtrip") { roundtrip[Float] }
+
+    it("roundtrip negative zero") {
+      val bits = java.lang.Float.floatToRawIntBits(-0.0f)
+      val decoded = List(
+        Codec.toBinary(-0.0f).flatMap(Codec.fromBinary[Float](_, Schema.Float)),
+        Codec.toJson(-0.0f).flatMap(Codec.fromJson[Float](_, Schema.Float))
+      )
+      decoded.foreach(float => assert(float.map(java.lang.Float.floatToRawIntBits) == Right(bits)))
+    }
+  }
 
   describe("Instant") {
     it("roundtrip") {
