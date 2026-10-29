@@ -159,8 +159,8 @@ lazy val docs = project
       tlSiteApiUrl := None,
       tlSitePreview := tlSitePreview.dependsOn(laikaGenerateAPI).value,
       mdocVariables ++= Map(
-        "AVRO_VERSION" -> avroVersion,
         "CATS_VERSION" -> catsVersion,
+        "CIRCE_VERSION" -> circeVersion,
         "CORE_CROSS_SCALA_VERSIONS" -> crossScalaVersionsOf(core.jvm).value,
         "CORE_MODULE_NAME" -> (core.jvm / moduleName).value,
         "ENUMERATUM_CROSS_SCALA_VERSIONS" -> crossScalaVersionsOf(enumeratum.jvm).value,
@@ -175,7 +175,11 @@ lazy val docs = project
         "REFINED_MODULE_NAME" -> (refined.jvm / moduleName).value,
         "REFINED_VERSION" -> refinedVersion,
         "SCALA_DOCS_VERSION" -> scalaVersionOf(scalaVersion.value),
-        "SCALA_PUBLISH_VERSIONS" -> crossScalaVersionsOf(core.jvm).value
+        "SCALA_JAVA_TIME_VERSION" -> scalaJavaTimeVersion,
+        "SCALA_JS_MAJOR_MINOR_VERSION" -> scalaJsMajorMinorVersion,
+        "SCALA_NATIVE_MAJOR_MINOR_VERSION" -> scalaNativeMajorMinorVersion,
+        "SCALA_PUBLISH_VERSIONS" -> crossScalaVersionsOf(core.jvm).value,
+        "SCODEC_BITS_VERSION" -> scodecBitsVersion
       ),
       tlSiteHelium := {
         val gitHubUrl = "https://github.com/typelevel/vulcan"
@@ -191,7 +195,7 @@ lazy val docs = project
           .site
           .metadata(
             title = Some("Vulcan · Functional Avro for Scala"),
-            description = Some("Functional Avro encodings for Scala using the official Apache Avro library."),
+            description = Some("Functional Avro encodings for Scala on the JVM, Scala.js, and Scala Native."),
             authors = developers.value.map(_.name),
             language = Some("en"),
             version = Some(version.value)
@@ -394,3 +398,19 @@ def crossScalaVersionsOf(project: Project): Def.Initialize[String] =
     if (scalaVersions.size <= 2) scalaVersions.mkString(" and ")
     else scalaVersions.init.mkString(", ") ++ " and " ++ scalaVersions.last
   }
+
+lazy val scalaJsMajorMinorVersion =
+  """"org.scala-js" % "sbt-scalajs" % "([^"]+)"""".r
+    .findFirstMatchIn(IO.read(file("project/plugins.sbt")))
+    .map(_.group(1))
+    .flatMap(CrossVersion.partialVersion)
+    .map { case (major, minor) => s"$major.$minor" }
+    .getOrElse(throw new MessageOnlyException("unable to determine Scala.js plugin version"))
+
+lazy val scalaNativeMajorMinorVersion =
+  """"org.scala-native" % "sbt-scala-native" % "([^"]+)"""".r
+    .findFirstMatchIn(IO.read(file("project/plugins.sbt")))
+    .map(_.group(1))
+    .flatMap(CrossVersion.partialVersion)
+    .map { case (major, minor) => s"$major.$minor" }
+    .getOrElse(throw new MessageOnlyException("unable to determine Scala Native plugin version"))

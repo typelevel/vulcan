@@ -1,12 +1,16 @@
 # Overview
 
-Vulcan provides Avro schemas, encoders, and decoders between Scala types and types used by the official Apache Avro library. The aims are reduced boilerplate code and improved type safety, compared to when directly using the Apache Avro library. In particular, the following features are supported.
+Vulcan provides Avro schemas, encoders, and decoders for Scala types. It's written in pure Scala, without the official Apache Avro library, and works on the JVM, Scala.js, and Scala Native. The aims are reduced boilerplate code and improved type safety. In particular, the following features are supported.
 
 - Schemas, encoders, and decoders for many standard library types.
 
 - Ability to easily create schemas, encoders, and decoders for custom types.
 
 - Derivation of schemas, encoders, and decoders for `case class`es and `sealed trait`s.
+
+- Avro binary and JSON encodings, compatible with the official Apache Avro library.
+
+- Decoding of values written with a different schema, following Avro's schema resolution.
 
 Documentation is kept up-to-date, currently documenting v@VERSION@ on Scala @SCALA_DOCS_VERSION@.
 
@@ -18,13 +22,15 @@ To get started with [sbt](https://scala-sbt.org), simply add the following line 
 libraryDependencies += "@ORGANIZATION@" %% "@CORE_MODULE_NAME@" % "@VERSION@"
 ```
 
-Published for Scala @SCALA_PUBLISH_VERSIONS@. For changes, refer to the [release notes](https://github.com/typelevel/vulcan/releases).
+Published for Scala @SCALA_PUBLISH_VERSIONS@, [Scala.js](https://www.scala-js.org) @SCALA_JS_MAJOR_MINOR_VERSION@ and [Scala Native](https://scala-native.org) @SCALA_NATIVE_MAJOR_MINOR_VERSION@.
+
+For changes between versions, please refer to the [release notes](https://github.com/typelevel/vulcan/releases).
 
 ### External Modules
 
 Following is an incomplete list of third-party integrations.
 
-- [fs2-kafka-vulcan](https://typelevel.org/fs2-kafka)
+- [fs2-kafka-vulcan](https://typelevel.org/fs2-kafka), which currently uses Vulcan 1.x.
 
 ### Signatures
 
@@ -52,12 +58,12 @@ libraryDependencies += "@ORGANIZATION@" %% "@CORE_MODULE_NAME@" % "@SNAPSHOT_VER
 
 Refer to the table below for dependencies and version support across modules.
 
-| Module                                                   | Dependencies                                                                                                           | Scala                                   |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `@CORE_MODULE_NAME@`                                     | [Apache Avro @AVRO_VERSION@](https://github.com/apache/avro), [Cats @CATS_VERSION@](https://github.com/typelevel/cats) | Scala @CORE_CROSS_SCALA_VERSIONS@       |
-| [`@ENUMERATUM_MODULE_NAME@`](integrations/enumeratum.md) | [Enumeratum @ENUMERATUM_VERSION@](https://github.com/lloydmeta/enumeratum)                                             | Scala @ENUMERATUM_CROSS_SCALA_VERSIONS@ |
-| [`@GENERIC_MODULE_NAME@`](derivation.md)                 | [Magnolia @MAGNOLIA_VERSION@](https://github.com/softwaremill/magnolia)                                                | Scala @GENERIC_CROSS_SCALA_VERSIONS@    |
-| [`@REFINED_MODULE_NAME@`](integrations/refined.md)       | [Refined @REFINED_VERSION@](https://github.com/fthomas/refined)                                                        | Scala @REFINED_CROSS_SCALA_VERSIONS@    |
+| Module                                                   | Dependencies                                                                                                                                                                                       | Scala                                   |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `@CORE_MODULE_NAME@`                                     | [cats-free @CATS_VERSION@](https://github.com/typelevel/cats), [circe @CIRCE_VERSION@](https://github.com/circe/circe), [scodec-bits @SCODEC_BITS_VERSION@](https://github.com/scodec/scodec-bits) | Scala @CORE_CROSS_SCALA_VERSIONS@       |
+| [`@ENUMERATUM_MODULE_NAME@`](integrations/enumeratum.md) | [enumeratum @ENUMERATUM_VERSION@](https://github.com/lloydmeta/enumeratum)                                                                                                                         | Scala @ENUMERATUM_CROSS_SCALA_VERSIONS@ |
+| [`@GENERIC_MODULE_NAME@`](derivation.md)                 | [magnolia @MAGNOLIA_VERSION@](https://github.com/softwaremill/magnolia)                                                                                                                            | Scala @GENERIC_CROSS_SCALA_VERSIONS@    |
+| [`@REFINED_MODULE_NAME@`](integrations/refined.md)       | [refined @REFINED_VERSION@](https://github.com/fthomas/refined)                                                                                                                                    | Scala @REFINED_CROSS_SCALA_VERSIONS@    |
 
 ## Inspiration
 
