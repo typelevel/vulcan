@@ -15,6 +15,7 @@ import cats.data.NonEmptyMap
 import cats.data.NonEmptySet
 import cats.data.NonEmptyVector
 import cats.free.FreeApplicative
+import cats.syntax.all.*
 import cats.~>
 import io.circe.Json
 import io.circe.JsonObject
@@ -37,7 +38,12 @@ import scala.util.Try
 import scodec.bits.ByteVector
 import vulcan.internal.*
 
-/** Provides a schema, along with encoding and decoding functions for a given type. */
+/**
+  * Provides a schema, along with encoders and decoders for a given type.
+  *
+  * Note encoders and decoders are compiled when requested, so make sure
+  * to request them once and reuse them as many times as required.
+  */
 @implicitNotFound(
   "could not find implicit Codec[${A}]; ensure no imports are missing or manually define an instance"
 )
@@ -46,27 +52,70 @@ sealed abstract class Codec[A] {
   /** The schema or an error if the schema could not be generated. */
   def schema: Either[AvroError, Schema]
 
-  /** Attempts to encode the specified value. */
-  def encode(a: A): Either[AvroError, AvroValue]
-
-  /** Attempts to decode the specified value, written using the writer schema. */
-  final def decode(value: AvroValue, writerSchema: Schema): Either[AvroError, A] =
-    decoder(writerSchema, new Definitions(writerSchema))(value)
+  /** Returns an `Encoder` for values, or an error if the schema is invalid. */
+  final def encoder: Either[AvroError, Encoder[A]] =
+    schema.flatMap(SchemaValidator.validate(_, validateDefaults = false)).map { _ =>
+      new Encoder[A] {
+        override def encode(a: A): Either[AvroError, AvroValue] =
+          Codec.this.encode(a)
+      }
+    }
 
   /**
-    * Returns a function decoding Avro binary written using the writer schema, or an error if the
-    * writer schema is invalid.
-    *
-    * The function is compiled once for the writer schema, and can be reused for any number of
-    * values, also concurrently. Values are decoded from the start of the bytes, and any remaining
-    * bytes are ignored.
+    * Returns a `Decoder` for values written using the provided
+    * writer schema, or an error if the writer schema is invalid.
     */
-  final def binaryDecoder(
-    writerSchema: Schema
-  ): Either[AvroError, ByteVector => Either[AvroError, A]] =
-    BinaryDecoder(writerSchema).map { binary =>
-      val decode = decoder(writerSchema, new Definitions(writerSchema))
-      (bytes: ByteVector) => binary.decode(bytes).flatMap(decode)
+  final def decoder(writerSchema: Schema): Either[AvroError, Decoder[A]] =
+    SchemaValidator.validate(writerSchema, validateDefaults = false).map { _ =>
+      val resolved = resolveDecoder(writerSchema, new Definitions(writerSchema))
+      new Decoder[A] {
+        override def decode(value: AvroValue): Either[AvroError, A] =
+          resolved(value)
+      }
+    }
+
+  /** Returns a `BinaryEncoder` for Avro binary, or an error if the schema is invalid. */
+  final def binaryEncoder: Either[AvroError, BinaryEncoder[A]] =
+    schema.flatMap(BinaryEncoder(_)).map { compiled =>
+      new BinaryEncoder[A] {
+        override def encode(a: A): Either[AvroError, ByteVector] =
+          Codec.this.encode(a).flatMap(compiled.encode)
+      }
+    }
+
+  /**
+    * Returns a `BinaryDecoder` for Avro binary written using the provided
+    * writer schema, or an error if the writer schema is invalid.
+    */
+  final def binaryDecoder(writerSchema: Schema): Either[AvroError, BinaryDecoder[A]] =
+    BinaryDecoder(writerSchema).map { compiled =>
+      val resolved = resolveDecoder(writerSchema, new Definitions(writerSchema))
+      new BinaryDecoder[A] {
+        override def decode(bytes: ByteVector): Either[AvroError, A] =
+          compiled.decode(bytes).flatMap(resolved)
+      }
+    }
+
+  /** Returns a `JsonEncoder` for Avro `Json`, or an error if the schema is invalid. */
+  final def jsonEncoder: Either[AvroError, JsonEncoder[A]] =
+    schema.flatMap(JsonEncoder(_)).map { compiled =>
+      new JsonEncoder[A] {
+        override def encode(a: A): Either[AvroError, Json] =
+          Codec.this.encode(a).flatMap(compiled.encode)
+      }
+    }
+
+  /**
+    * Returns a `JsonDecoder` for Avro `Json` written using the provided
+    * writer schema, or an error if the writer schema is invalid.
+    */
+  final def jsonDecoder(writerSchema: Schema): Either[AvroError, JsonDecoder[A]] =
+    JsonDecoder(writerSchema).map { compiled =>
+      val resolved = resolveDecoder(writerSchema, new Definitions(writerSchema))
+      new JsonDecoder[A] {
+        override def decode(json: Json): Either[AvroError, A] =
+          compiled.decode(json).flatMap(resolved)
+      }
     }
 
   /**
@@ -103,6 +152,9 @@ sealed abstract class Codec[A] {
   final def imapTry[B](f: A => Try[B])(g: B => A): Codec[B] =
     imapError(f(_).toEither.left.map(AvroError.fromThrowable))(g)
 
+  /** Attempts to encode the specified value. */
+  private[vulcan] def encode(a: A): Either[AvroError, AvroValue]
+
   /** Returns a function decoding values of the writer schema; neither a union nor a reference. */
   private[vulcan] def resolve(
     writerSchema: Schema,
@@ -110,7 +162,7 @@ sealed abstract class Codec[A] {
   ): AvroValue => Either[AvroError, A]
 
   /** Returns a function decoding values of the writer schema, resolved once for the schema. */
-  private[vulcan] final def decoder(
+  private[vulcan] final def resolveDecoder(
     writerSchema: Schema,
     definitions: Definitions
   ): AvroValue => Either[AvroError, A] =
@@ -142,14 +194,6 @@ sealed abstract class Codec[A] {
       value <- encode(a)
       json <- encoder.encode(value)
     } yield json
-
-  /** The binary encoder for the schema, compiled once for the codec. */
-  private[vulcan] final lazy val binaryEncoder: Either[AvroError, BinaryEncoder] =
-    schema.flatMap(BinaryEncoder(_))
-
-  /** The JSON encoder for the schema, compiled once for the codec. */
-  private[vulcan] final lazy val jsonEncoder: Either[AvroError, JsonEncoder] =
-    schema.flatMap(JsonEncoder(_))
 
   override final def toString: String =
     schema match {
@@ -256,15 +300,6 @@ object Codec {
     new DecimalCodec(precision, scale).withTypeName("BigDecimal")
 
   /**
-    * Returns the result of decoding the specified value to the specified type, using the schema of
-    * the codec as the writer schema.
-    *
-    * @group Utilities
-    */
-  final def decode[A](value: AvroValue)(implicit codec: Codec[A]): Either[AvroError, A] =
-    codec.schema.flatMap(codec.decode(value, _))
-
-  /**
     * @group General
     */
   implicit lazy val double: Codec[Double] =
@@ -280,14 +315,6 @@ object Codec {
     Codec
       .union[Either[A, B]](alt => alt[Left[A, B]] ++ alt[Right[A, B]])
       .withTypeName("Either")
-
-  /**
-    * Returns the result of encoding the specified value.
-    *
-    * @group Utilities
-    */
-  final def encode[A](a: A)(implicit codec: Codec[A]): Either[AvroError, AvroValue] =
-    codec.encode(a)
 
   /**
     * Returns a new enum [[Codec]] for type `A`.
@@ -341,29 +368,6 @@ object Codec {
     */
   implicit lazy val float: Codec[Float] =
     FloatCodec
-
-  /**
-    * Returns the result of decoding the specified Avro binary, written using the writer schema, to
-    * the specified type.
-    *
-    * The value is decoded from the start of the bytes, and any remaining bytes are ignored. To
-    * decode many values written using the same writer schema, use [[Codec#binaryDecoder]].
-    *
-    * @group Utilities
-    */
-  final def fromBinary[A: Codec](bytes: ByteVector, writerSchema: Schema): Either[AvroError, A] =
-    Codec[A].binaryDecoder(writerSchema).flatMap(_(bytes))
-
-  /**
-    * Returns the result of decoding the specified Avro JSON, written using the writer schema, to
-    * the specified type.
-    *
-    * @group Utilities
-    */
-  final def fromJson[A: Codec](json: Json, writerSchema: Schema): Either[AvroError, A] =
-    JsonDecoder(writerSchema)
-      .flatMap(_.decode(json))
-      .flatMap(Codec[A].decode(_, writerSchema))
 
   /**
     * Returns a new [[Codec]] instance using the specified schema, and encode and decode functions.
@@ -639,26 +643,6 @@ object Codec {
     StringCodec
 
   /**
-    * Returns the result of encoding the specified value to Avro binary.
-    *
-    * @group Utilities
-    */
-  final def toBinary[A: Codec](a: A): Either[AvroError, ByteVector] = {
-    val codec = Codec[A]
-    codec.binaryEncoder.flatMap(encoder => codec.encode(a).flatMap(encoder.encode))
-  }
-
-  /**
-    * Returns the result of encoding the specified value to Avro JSON.
-    *
-    * @group Utilities
-    */
-  final def toJson[A: Codec](a: A): Either[AvroError, Json] = {
-    val codec = Codec[A]
-    codec.jsonEncoder.flatMap(encoder => codec.encode(a).flatMap(encoder.encode))
-  }
-
-  /**
     * Returns a new union [[Codec]] for type `A`.
     *
     * Values are encoded with the first alternative which includes the value. Values are decoded
@@ -921,7 +905,7 @@ object Codec {
     ): AvroValue => Either[AvroError, C] =
       writerSchema match {
         case array: Schema.Array =>
-          val decode = items.decoder(array.items, definitions)
+          val decode = items.resolveDecoder(array.items, definitions)
           value =>
             value match {
               case AvroValue.Array(values) =>
@@ -957,7 +941,7 @@ object Codec {
     ): AvroValue => Either[AvroError, M] =
       writerSchema match {
         case map: Schema.Map =>
-          val decode = values.decoder(map.values, definitions)
+          val decode = values.resolveDecoder(map.values, definitions)
           value =>
             value match {
               case AvroValue.Map(entries) =>
@@ -1061,7 +1045,7 @@ object Codec {
       writerSchema: Schema,
       definitions: Definitions
     ): AvroValue => Either[AvroError, A] =
-      schema.flatMap(_ => types) match {
+      (schema >> types) match {
         case Right(types) =>
           unionType(writerSchema, types) match {
             case Some(index) =>
@@ -1358,10 +1342,8 @@ object Codec {
       writerSchema.logicalType match {
         case Some(writerLogicalType) if writerLogicalType == logicalType =>
           decode
-
         case writerLogicalType =>
-          val error = Left(unexpectedLogicalType(writerLogicalType))
-          decode(_).flatMap(_ => error)
+          decode(_) >> Left(unexpectedLogicalType(writerLogicalType))
       }
     }
   }
@@ -1618,7 +1600,7 @@ object Codec {
       val existing = decoders.get(index)
       if (existing != null) existing
       else {
-        val decoder = codec.decoder(types(index), definitions)
+        val decoder = codec.resolveDecoder(types(index), definitions)
         decoders.set(index, decoder)
         decoder
       }
@@ -1774,7 +1756,7 @@ object Codec {
 
     writerIndex match {
       case Some(index) =>
-        val decode = field.codec.decoder(record.fields(index).schema, definitions)
+        val decode = field.codec.resolveDecoder(record.fields(index).schema, definitions)
         values => decode(values(index)).left.map(AvroError.errorDecodingTo(s"field ${field.name}", _))
 
       case None =>

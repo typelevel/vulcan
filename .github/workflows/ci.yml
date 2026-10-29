@@ -30,6 +30,7 @@ jobs:
         os: [ubuntu-22.04]
         scala: [2.13, 3]
         java: [temurin@21]
+        project: [rootJS, rootJVM, rootNative]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -59,32 +60,40 @@ jobs:
 
       - name: Check headers and formatting
         if: matrix.java == 'temurin@21' && matrix.os == 'ubuntu-22.04'
-        run: sbt '++ ${{ matrix.scala }}' headerCheckAll scalafmtCheckAll 'project /' scalafmtSbtCheck
+        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' headerCheckAll scalafmtCheckAll 'project /' scalafmtSbtCheck
+
+      - name: scalaJSLink
+        if: matrix.project == 'rootJS'
+        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' Test/scalaJSLinkerResult
+
+      - name: nativeLink
+        if: matrix.project == 'rootNative'
+        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' Test/nativeLink
 
       - name: Test
-        run: sbt '++ ${{ matrix.scala }}' test
+        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' test
 
       - name: Check binary compatibility
         if: matrix.java == 'temurin@21' && matrix.os == 'ubuntu-22.04'
-        run: sbt '++ ${{ matrix.scala }}' mimaReportBinaryIssues
+        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' mimaReportBinaryIssues
 
       - name: Generate API documentation
         if: matrix.java == 'temurin@21' && matrix.os == 'ubuntu-22.04'
-        run: sbt '++ ${{ matrix.scala }}' doc
+        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' doc
 
       - name: Make target directories
         if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
-        run: mkdir -p modules/refined/target unidocs/target modules/enumeratum/target modules/generic/target modules/core/target project/target
+        run: mkdir -p modules/generic/.jvm/target unidocs/target modules/core/.native/target modules/enumeratum/.native/target modules/core/.js/target modules/generic/.js/target modules/core/.jvm/target modules/refined/.native/target modules/refined/.js/target modules/refined/.jvm/target modules/generic/.native/target modules/enumeratum/.js/target modules/enumeratum/.jvm/target project/target
 
       - name: Compress target directories
         if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
-        run: tar cf targets.tar modules/refined/target unidocs/target modules/enumeratum/target modules/generic/target modules/core/target project/target
+        run: tar cf targets.tar modules/generic/.jvm/target unidocs/target modules/core/.native/target modules/enumeratum/.native/target modules/core/.js/target modules/generic/.js/target modules/core/.jvm/target modules/refined/.native/target modules/refined/.js/target modules/refined/.jvm/target modules/generic/.native/target modules/enumeratum/.js/target modules/enumeratum/.jvm/target project/target
 
       - name: Upload target directories
         if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
         uses: actions/upload-artifact@v5
         with:
-          name: target-${{ matrix.os }}-${{ matrix.java }}-${{ matrix.scala }}
+          name: target-${{ matrix.os }}-${{ matrix.java }}-${{ matrix.scala }}-${{ matrix.project }}
           path: targets.tar
 
   publish:
@@ -118,22 +127,62 @@ jobs:
         if: matrix.java == 'temurin@21' && steps.setup-java-temurin-21.outputs.cache-hit == 'false'
         run: sbt +update
 
-      - name: Download target directories (2.13)
+      - name: Download target directories (2.13, rootJS)
         uses: actions/download-artifact@v6
         with:
-          name: target-${{ matrix.os }}-${{ matrix.java }}-2.13
+          name: target-${{ matrix.os }}-${{ matrix.java }}-2.13-rootJS
 
-      - name: Inflate target directories (2.13)
+      - name: Inflate target directories (2.13, rootJS)
         run: |
           tar xf targets.tar
           rm targets.tar
 
-      - name: Download target directories (3)
+      - name: Download target directories (2.13, rootJVM)
         uses: actions/download-artifact@v6
         with:
-          name: target-${{ matrix.os }}-${{ matrix.java }}-3
+          name: target-${{ matrix.os }}-${{ matrix.java }}-2.13-rootJVM
 
-      - name: Inflate target directories (3)
+      - name: Inflate target directories (2.13, rootJVM)
+        run: |
+          tar xf targets.tar
+          rm targets.tar
+
+      - name: Download target directories (2.13, rootNative)
+        uses: actions/download-artifact@v6
+        with:
+          name: target-${{ matrix.os }}-${{ matrix.java }}-2.13-rootNative
+
+      - name: Inflate target directories (2.13, rootNative)
+        run: |
+          tar xf targets.tar
+          rm targets.tar
+
+      - name: Download target directories (3, rootJS)
+        uses: actions/download-artifact@v6
+        with:
+          name: target-${{ matrix.os }}-${{ matrix.java }}-3-rootJS
+
+      - name: Inflate target directories (3, rootJS)
+        run: |
+          tar xf targets.tar
+          rm targets.tar
+
+      - name: Download target directories (3, rootJVM)
+        uses: actions/download-artifact@v6
+        with:
+          name: target-${{ matrix.os }}-${{ matrix.java }}-3-rootJVM
+
+      - name: Inflate target directories (3, rootJVM)
+        run: |
+          tar xf targets.tar
+          rm targets.tar
+
+      - name: Download target directories (3, rootNative)
+        uses: actions/download-artifact@v6
+        with:
+          name: target-${{ matrix.os }}-${{ matrix.java }}-3-rootNative
+
+      - name: Inflate target directories (3, rootNative)
         run: |
           tar xf targets.tar
           rm targets.tar
@@ -195,7 +244,7 @@ jobs:
       - name: Submit Dependencies
         uses: scalacenter/sbt-dependency-submission@v2
         with:
-          modules-ignore: vulcan-benchmarks_2.13 vulcan-benchmarks_3 root_2.13 root_3 docs_3
+          modules-ignore: vulcan-benchmarks_2.13 vulcan-benchmarks_3 rootjs_2.13 rootjs_3 docs_3 vulcan-tests_sjs1_2.13 vulcan-tests_sjs1_3 rootjvm_2.13 rootjvm_3 rootnative_2.13 rootnative_3 vulcan-benchmarks-1x_2.13 vulcan-benchmarks-1x_3 vulcan-tests_2.13 vulcan-tests_3 vulcan-tests_native0.5_2.13 vulcan-tests_native0.5_3
           configs-ignore: test scala-tool scala-doc-tool test-internal
 
   site:

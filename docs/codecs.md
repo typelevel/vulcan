@@ -1,6 +1,6 @@
 # Codecs
 
-@:api(vulcan.Codec) is the central concept in the library. @:api(vulcan.Codec)s represent an Avro `schema`, together with an `encode` and `decode` function for converting between Scala types and types recognized by the Apache Avro library. There are default @:api(vulcan.Codec)s defined for many standard library types. For example, we can check what the default `Option[Instant]` encoding is by asking for a @:api(vulcan.Codec) instance.
+@:api(vulcan.Codec) is the central concept in the library. @:api(vulcan.Codec)s represent an Avro `schema`, together with encoders and decoders for converting between Scala types and Avro. There are default @:api(vulcan.Codec)s defined for many standard library types. For example, we can check what the default `Option[Instant]` encoding is by asking for a @:api(vulcan.Codec) instance.
 
 ```scala mdoc:reset-object
 import java.time.Instant
@@ -15,13 +15,16 @@ In some cases, it's not possible to generate Avro schemas. This is why @:api(vul
 Codec[Option[Option[Instant]]]
 ```
 
-Encoding and decoding with a @:api(vulcan.Codec) might also be unsuccessful, so results are wrapped in `Either` with error type @:api(vulcan.AvroError). Encoding accepts a value to be encoded according to the schema defined by the @:api(vulcan.Codec), and decoding accepts a value and a schema to decode the value against. For example, what happens if we try to decode `Int`s using a `Boolean` schema?
+A @:api(vulcan.Codec) compiles encoders for its schema, and decoders for the schema values were written with, called the writer schema. They are compiled when requested, so request them once and reuse them for any number of values. Encoding and decoding might also be unsuccessful, so results are wrapped in `Either` with error type @:api(vulcan.AvroError). For example, what happens if we try to decode `Int`s written using a `Boolean` schema?
 
 ```scala mdoc
 import vulcan.AvroValue
 import vulcan.Schema
 
-Codec[Int].decode(AvroValue.Int(10), Schema.Boolean)
+for {
+  decoder <- Codec[Int].decoder(Schema.Boolean)
+  result <- decoder.decode(AvroValue.Boolean(true))
+} yield result
 ```
 
 @:api(vulcan.Codec)s encode Scala types as `AvroValue`s, and decode `AvroValue`s using the schema they were written with. Encoded values are not checked against the schema until they are written as Avro binary or JSON, so tests should be used to ensure @:api(vulcan.Codec)s work as intended. This becomes important when we define @:api(vulcan.Codec)s from scratch.

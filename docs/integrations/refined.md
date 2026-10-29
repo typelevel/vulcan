@@ -18,11 +18,12 @@ Refinement types are encoded using their base type (e.g. `Int` for `PosInt`). Wh
 import eu.timepit.refined.types.numeric.PosInt
 import vulcan.AvroValue
 import vulcan.Codec
+import vulcan.Schema
 import vulcan.refined._
 
 Codec[PosInt]
 
-Codec.encode(PosInt.MinValue)
+Codec[PosInt].encoder.flatMap(_.encode(PosInt.MinValue))
 
-Codec.decode[PosInt](AvroValue.Int(0))
+Codec[PosInt].decoder(Schema.Int).flatMap(_.decode(AvroValue.Int(0)))
 ```
