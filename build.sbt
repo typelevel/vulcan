@@ -10,8 +10,10 @@ val munitVersion = "1.3.6"
 val refinedVersion = "0.11.4"
 val scala213Version = "2.13.18"
 val scala3Version = "3.3.8"
+val scalaJavaTimeVersion = "2.7.0"
 val scodecBitsVersion = "1.2.5"
 val slf4jNopVersion = "2.0.20"
+val vulcan1xVersion = "1.14.1"
 
 inThisBuild(
   Seq(
@@ -32,86 +34,89 @@ inThisBuild(
   )
 )
 
-lazy val root = project
-  .in(file("."))
-  .enablePlugins(NoPublishPlugin)
-  .aggregate(benchmarks, core, enumeratum, generic, refined, unidocs)
+lazy val root = tlCrossRootProject
+  .aggregate(benchmarks, benchmarks1x, core, enumeratum, generic, refined, tests, unidocs)
 
 lazy val benchmarks = project
   .in(file("modules/benchmarks"))
   .enablePlugins(JmhPlugin, NoPublishPlugin)
-  .dependsOn(core)
+  .dependsOn(core.jvm)
   .settings(
     name := "vulcan-benchmarks",
     libraryDependencies ++= Seq(
       "org.apache.avro" % "avro" % avroVersion,
       "org.slf4j" % "slf4j-nop" % slf4jNopVersion
     ),
-    // JMH generates Java sources, which are compiled for Java 8
     javacOptions += "-Xlint:-options",
     headerSettings
   )
 
-lazy val core = project
+lazy val benchmarks1x = project
+  .in(file("modules/benchmarks-1x"))
+  .enablePlugins(JmhPlugin, NoPublishPlugin)
+  .settings(
+    name := "vulcan-benchmarks-1x",
+    libraryDependencies ++= Seq(
+      "com.github.fd4s" %% "vulcan" % vulcan1xVersion,
+      "org.slf4j" % "slf4j-nop" % slf4jNopVersion
+    ),
+    javacOptions += "-Xlint:-options",
+    headerSettings
+  )
+
+lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+  .crossType(CrossType.Pure)
   .in(file("modules/core"))
   .settings(
     name := "vulcan",
     libraryDependencies ++= Seq(
-      "io.circe" %% "circe-core" % circeVersion,
-      "io.circe" %% "circe-jawn" % circeVersion,
-      "org.scodec" %% "scodec-bits" % scodecBitsVersion,
-      "org.typelevel" %% "cats-free" % catsVersion,
-      "org.apache.avro" % "avro" % avroVersion % Test
+      "io.circe" %%% "circe-core" % circeVersion,
+      "io.circe" %%% "circe-jawn" % circeVersion,
+      "org.scodec" %%% "scodec-bits" % scodecBitsVersion,
+      "org.typelevel" %%% "cats-free" % catsVersion
     ),
-    headerSettings,
-    scalatestSettings
+    headerSettings
   )
 
-lazy val enumeratum = project
+lazy val enumeratum = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+  .crossType(CrossType.Pure)
   .in(file("modules/enumeratum"))
   .dependsOn(core, generic)
   .settings(
     name := "vulcan-enumeratum",
     libraryDependencies ++= Seq(
-      "com.beachape" %% "enumeratum" % enumeratumVersion
+      "com.beachape" %%% "enumeratum" % enumeratumVersion
     ),
-    headerSettings,
-    scalatestSettings,
-    Test / scalacOptions ++= (if (tlIsScala3.value) Seq("-Yretain-trees") else Seq())
+    headerSettings
   )
 
-lazy val generic = project
+lazy val generic = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+  .crossType(CrossType.Pure)
   .in(file("modules/generic"))
-  .dependsOn(core % "compile->compile;test->test")
+  .dependsOn(core)
   .settings(
     name := "vulcan-generic",
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "cats-core" % catsVersion,
-      "org.typelevel" %% "cats-free" % catsVersion
+      "org.typelevel" %%% "cats-core" % catsVersion,
+      "org.typelevel" %%% "cats-free" % catsVersion
     ) ++ {
       if (tlIsScala3.value)
-        Seq("com.softwaremill.magnolia1_3" %% "magnolia" % magnolia3Version)
+        Seq("com.softwaremill.magnolia1_3" %%% "magnolia" % magnolia3Version)
       else
-        Seq("com.softwaremill.magnolia1_2" %% "magnolia" % magnolia2Version)
+        Seq("com.softwaremill.magnolia1_2" %%% "magnolia" % magnolia2Version)
     } ++ scalaReflect(scalaVersion.value),
-    headerSettings,
-    scalatestSettings,
-    // magnolia requires compilation with the -Yretain-trees flag to support case class field default values on Scala 3
-    Test / scalacOptions ++= (if (tlIsScala3.value) Seq("-Yretain-trees") else Seq())
+    headerSettings
   )
 
-lazy val refined = project
+lazy val refined = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+  .crossType(CrossType.Pure)
   .in(file("modules/refined"))
   .dependsOn(core)
   .settings(
     name := "vulcan-refined",
     libraryDependencies ++= Seq(
-      "eu.timepit" %% "refined" % refinedVersion,
-      "org.typelevel" %% "cats-core" % catsVersion,
-      "eu.timepit" %% "refined-scalacheck" % refinedVersion % Test,
-      "org.scalameta" %% "munit" % munitVersion % Test,
-      "org.scalameta" %% "munit-scalacheck" % munitScalaCheckVersion % Test,
-      "org.slf4j" % "slf4j-nop" % slf4jNopVersion % Test
+      "eu.timepit" %%% "refined" % refinedVersion,
+      "org.typelevel" %%% "cats-core" % catsVersion
     ),
     headerSettings
   )
@@ -119,7 +124,7 @@ lazy val refined = project
 lazy val docs = project
   .in(file("site"))
   .enablePlugins(TypelevelSitePlugin)
-  .dependsOn(core, enumeratum, generic, refined)
+  .dependsOn(core.jvm, enumeratum.jvm, generic.jvm, refined.jvm)
   .settings {
     import laika.ast.Image
     import laika.ast.InlineSVGIcon
@@ -156,21 +161,21 @@ lazy val docs = project
       mdocVariables ++= Map(
         "AVRO_VERSION" -> avroVersion,
         "CATS_VERSION" -> catsVersion,
-        "CORE_CROSS_SCALA_VERSIONS" -> crossScalaVersionsOf(core).value,
-        "CORE_MODULE_NAME" -> (core / moduleName).value,
-        "ENUMERATUM_CROSS_SCALA_VERSIONS" -> crossScalaVersionsOf(enumeratum).value,
-        "ENUMERATUM_MODULE_NAME" -> (enumeratum / moduleName).value,
+        "CORE_CROSS_SCALA_VERSIONS" -> crossScalaVersionsOf(core.jvm).value,
+        "CORE_MODULE_NAME" -> (core.jvm / moduleName).value,
+        "ENUMERATUM_CROSS_SCALA_VERSIONS" -> crossScalaVersionsOf(enumeratum.jvm).value,
+        "ENUMERATUM_MODULE_NAME" -> (enumeratum.jvm / moduleName).value,
         "ENUMERATUM_VERSION" -> enumeratumVersion,
-        "GENERIC_CROSS_SCALA_VERSIONS" -> crossScalaVersionsOf(generic).value,
-        "GENERIC_MODULE_NAME" -> (generic / moduleName).value,
+        "GENERIC_CROSS_SCALA_VERSIONS" -> crossScalaVersionsOf(generic.jvm).value,
+        "GENERIC_MODULE_NAME" -> (generic.jvm / moduleName).value,
         "MAGNOLIA_VERSION" -> (if (tlIsScala3.value) magnolia3Version else magnolia2Version),
         "MAJOR_VERSION" -> majorVersion(version.value),
         "ORGANIZATION" -> (ThisBuild / organization).value,
-        "REFINED_CROSS_SCALA_VERSIONS" -> crossScalaVersionsOf(refined).value,
-        "REFINED_MODULE_NAME" -> (refined / moduleName).value,
+        "REFINED_CROSS_SCALA_VERSIONS" -> crossScalaVersionsOf(refined.jvm).value,
+        "REFINED_MODULE_NAME" -> (refined.jvm / moduleName).value,
         "REFINED_VERSION" -> refinedVersion,
         "SCALA_DOCS_VERSION" -> scalaVersionOf(scalaVersion.value),
-        "SCALA_PUBLISH_VERSIONS" -> crossScalaVersionsOf(core).value
+        "SCALA_PUBLISH_VERSIONS" -> crossScalaVersionsOf(core.jvm).value
       ),
       tlSiteHelium := {
         val gitHubUrl = "https://github.com/typelevel/vulcan"
@@ -286,6 +291,34 @@ lazy val docs = project
     )
   }
 
+lazy val tests = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+  .crossType(CrossType.Full)
+  .in(file("tests"))
+  .enablePlugins(NoPublishPlugin)
+  .dependsOn(enumeratum, generic, refined)
+  .settings(
+    name := "vulcan-tests",
+    libraryDependencies ++= Seq(
+      "eu.timepit" %%% "refined-scalacheck" % refinedVersion % Test,
+      "org.scalameta" %%% "munit" % munitVersion % Test,
+      "org.scalameta" %%% "munit-scalacheck" % munitScalaCheckVersion % Test,
+      "org.typelevel" %%% "cats-kernel-laws" % catsVersion % Test,
+      "org.typelevel" %%% "cats-laws" % catsVersion % Test,
+      "org.typelevel" %%% "discipline-scalatest" % disciplineScalaTestVersion % Test
+    ),
+    headerSettings,
+    Test / scalacOptions ++= (if (tlIsScala3.value) Seq("-Yretain-trees") else Seq())
+  )
+  .platformsSettings(JSPlatform, NativePlatform)(
+    libraryDependencies += "io.github.cquiroz" %%% "scala-java-time" % scalaJavaTimeVersion % Test
+  )
+  .jvmSettings(
+    libraryDependencies ++= Seq(
+      "org.apache.avro" % "avro" % avroVersion % Test,
+      "org.slf4j" % "slf4j-nop" % slf4jNopVersion % Test
+    )
+  )
+
 lazy val unidocs = project
   .enablePlugins(TypelevelUnidocPlugin)
   .settings(
@@ -293,7 +326,8 @@ lazy val unidocs = project
     headerSettings,
     crossScalaVersions := Seq(scala3Version),
     semanticdbEnabled := false,
-    ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(core, enumeratum, generic, refined),
+    ScalaUnidoc / unidoc / unidocProjectFilter :=
+      inProjects(core.jvm, enumeratum.jvm, generic.jvm, refined.jvm),
     ScalaUnidoc / unidoc / apiMappings := {
       val docsApiUrl = apiURL.value.map(_.toString)
       (ScalaUnidoc / unidoc / apiMappings).value.filterNot { case (_, url) =>
@@ -329,14 +363,6 @@ lazy val headerSettings = Seq(
       HeaderLicenseStyle.SpdxSyntax
     )
   )
-)
-
-lazy val scalatestSettings = Seq(
-  libraryDependencies ++= Seq(
-    "org.typelevel" %% "discipline-scalatest" % disciplineScalaTestVersion,
-    "org.typelevel" %% "cats-testkit" % catsVersion,
-    "org.slf4j" % "slf4j-nop" % slf4jNopVersion
-  ).map(_ % Test)
 )
 
 def scalaReflect(scalaVersion: String): Seq[ModuleID] =

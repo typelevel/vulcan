@@ -360,7 +360,7 @@ private[vulcan] object SchemaDecoder {
     schema match {
       case _: Schema.Float | _: Schema.Double =>
         default.asString.flatMap(text => Try(java.lang.Double.parseDouble(text)).toOption) match {
-          case Some(double) => Json.fromDouble(double).getOrElse(Json.fromString(double.toString))
+          case Some(double) => JsonNumbers.double(double)
           case None => default
         }
 
