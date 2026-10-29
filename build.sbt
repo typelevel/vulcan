@@ -13,6 +13,7 @@ val scala3Version = "3.3.8"
 val scalaJavaTimeVersion = "2.7.0"
 val scodecBitsVersion = "1.2.5"
 val slf4jNopVersion = "2.0.20"
+val vulcan1xVersion = "1.14.1"
 
 inThisBuild(
   Seq(
@@ -34,7 +35,7 @@ inThisBuild(
 )
 
 lazy val root = tlCrossRootProject
-  .aggregate(benchmarks, core, enumeratum, generic, refined, tests, unidocs)
+  .aggregate(benchmarks, benchmarks1x, core, enumeratum, generic, refined, tests, unidocs)
 
 lazy val benchmarks = project
   .in(file("modules/benchmarks"))
@@ -44,6 +45,19 @@ lazy val benchmarks = project
     name := "vulcan-benchmarks",
     libraryDependencies ++= Seq(
       "org.apache.avro" % "avro" % avroVersion,
+      "org.slf4j" % "slf4j-nop" % slf4jNopVersion
+    ),
+    javacOptions += "-Xlint:-options",
+    headerSettings
+  )
+
+lazy val benchmarks1x = project
+  .in(file("modules/benchmarks-1x"))
+  .enablePlugins(JmhPlugin, NoPublishPlugin)
+  .settings(
+    name := "vulcan-benchmarks-1x",
+    libraryDependencies ++= Seq(
+      "com.github.fd4s" %% "vulcan" % vulcan1xVersion,
       "org.slf4j" % "slf4j-nop" % slf4jNopVersion
     ),
     javacOptions += "-Xlint:-options",
