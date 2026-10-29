@@ -46,13 +46,12 @@ lazy val benchmarks = project
       "org.apache.avro" % "avro" % avroVersion,
       "org.slf4j" % "slf4j-nop" % slf4jNopVersion
     ),
-    // JMH generates Java sources, which are compiled for Java 8
     javacOptions += "-Xlint:-options",
     headerSettings
   )
 
 lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
-  .crossType(CrossType.Full)
+  .crossType(CrossType.Pure)
   .in(file("modules/core"))
   .settings(
     name := "vulcan",

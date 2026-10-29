@@ -83,11 +83,11 @@ jobs:
 
       - name: Make target directories
         if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
-        run: mkdir -p modules/generic/.jvm/target unidocs/target modules/core/native/target modules/enumeratum/.native/target modules/core/js/target modules/generic/.js/target modules/core/jvm/target modules/refined/.native/target modules/refined/.js/target modules/refined/.jvm/target modules/generic/.native/target modules/enumeratum/.js/target modules/enumeratum/.jvm/target project/target
+        run: mkdir -p modules/generic/.jvm/target unidocs/target modules/core/.native/target modules/enumeratum/.native/target modules/core/.js/target modules/generic/.js/target modules/core/.jvm/target modules/refined/.native/target modules/refined/.js/target modules/refined/.jvm/target modules/generic/.native/target modules/enumeratum/.js/target modules/enumeratum/.jvm/target project/target
 
       - name: Compress target directories
         if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
-        run: tar cf targets.tar modules/generic/.jvm/target unidocs/target modules/core/native/target modules/enumeratum/.native/target modules/core/js/target modules/generic/.js/target modules/core/jvm/target modules/refined/.native/target modules/refined/.js/target modules/refined/.jvm/target modules/generic/.native/target modules/enumeratum/.js/target modules/enumeratum/.jvm/target project/target
+        run: tar cf targets.tar modules/generic/.jvm/target unidocs/target modules/core/.native/target modules/enumeratum/.native/target modules/core/.js/target modules/generic/.js/target modules/core/.jvm/target modules/refined/.native/target modules/refined/.js/target modules/refined/.jvm/target modules/generic/.native/target modules/enumeratum/.js/target modules/enumeratum/.jvm/target project/target
 
       - name: Upload target directories
         if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
