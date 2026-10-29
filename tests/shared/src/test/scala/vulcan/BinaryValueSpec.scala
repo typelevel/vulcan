@@ -7,28 +7,28 @@
 package vulcan
 
 import scodec.bits.*
-import vulcan.internal.BinaryDecoder
-import vulcan.internal.BinaryEncoder
 import vulcan.internal.BinaryReader
+import vulcan.internal.BinaryValueDecoder
+import vulcan.internal.BinaryValueEncoder
 import vulcan.internal.BinaryWriter
 
 final class BinaryValueSpec extends BaseSpec {
   private def encode(schema: Schema, value: AvroValue): ByteVector =
-    BinaryEncoder(schema).value.encode(value).value
+    BinaryValueEncoder(schema).value.encode(value).value
 
   private def encodeError(schema: Schema, value: AvroValue): String =
-    BinaryEncoder(schema).value.encode(value).swap.value.message
+    BinaryValueEncoder(schema).value.encode(value).swap.value.message
 
   /** Decodes the value, checking that all bytes were read. */
   private def decode(schema: Schema, bytes: ByteVector): AvroValue = {
     val reader = BinaryReader(bytes)
-    val value = BinaryDecoder(schema).value.read(reader)
+    val value = BinaryValueDecoder(schema).value.read(reader)
     assert(reader.remaining == 0)
     value
   }
 
   private def decodeError(schema: Schema, bytes: ByteVector): String =
-    BinaryDecoder(schema).value.decode(bytes).swap.value.message
+    BinaryValueDecoder(schema).value.decode(bytes).swap.value.message
 
   /** Block counts without items, which is valid for items encoded using zero bytes. */
   private def blockCounts(counts: Long*): ByteVector = {
@@ -62,7 +62,7 @@ final class BinaryValueSpec extends BaseSpec {
       )
     )
 
-  describe("BinaryEncoder and BinaryDecoder") {
+  describe("BinaryValueEncoder and BinaryValueDecoder") {
     it("should decode encoded values") {
       forAll(AvroValueGenerators.genSchemaAndValue, minSuccessful(1000)) { case (schema, value) =>
         assert(decode(schema, encode(schema, value)) == value)
@@ -142,7 +142,7 @@ final class BinaryValueSpec extends BaseSpec {
 
     it("should not read past the end of the value") {
       val reader = BinaryReader(hex"3606666f6fff")
-      BinaryDecoder(record).value.read(reader)
+      BinaryValueDecoder(record).value.read(reader)
       assert(reader.position == 5)
     }
 
@@ -220,7 +220,7 @@ final class BinaryValueSpec extends BaseSpec {
 
     it("should limit the total number of items which are encoded using zero bytes") {
       val nulls = Schema.Array(Schema.Null)
-      val limit = BinaryDecoder.MaxZeroByteItems
+      val limit = BinaryValueDecoder.MaxZeroByteItems
 
       assert {
         decode(nulls, blockCounts(limit, 0L)) ==
@@ -254,15 +254,15 @@ final class BinaryValueSpec extends BaseSpec {
       val schema =
         Schema.Record(name("Loop"), Vector(Schema.Field("loop", Schema.Ref(name("Loop")))))
       assert {
-        BinaryDecoder(schema).swap.value.message ==
+        BinaryValueDecoder(schema).swap.value.message ==
           "Unable to decode record Loop, since it always contains itself"
       }
     }
 
     it("should not compile invalid schemas") {
       val schema = Schema.Union(Vector(Schema.Int, Schema.Int))
-      assert(BinaryEncoder(schema).swap.value.message == """Duplicate int in union ["int","int"]""")
-      assert(BinaryDecoder(schema).swap.value.message == """Duplicate int in union ["int","int"]""")
+      assert(BinaryValueEncoder(schema).swap.value.message == """Duplicate int in union ["int","int"]""")
+      assert(BinaryValueDecoder(schema).swap.value.message == """Duplicate int in union ["int","int"]""")
     }
   }
 }

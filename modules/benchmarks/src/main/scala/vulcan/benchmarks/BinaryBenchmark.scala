@@ -18,8 +18,8 @@ import org.openjdk.jmh.annotations.*
 import scodec.bits.ByteVector
 import vulcan.AvroError
 import vulcan.AvroValue
-import vulcan.internal.BinaryDecoder
-import vulcan.internal.BinaryEncoder
+import vulcan.internal.BinaryValueDecoder
+import vulcan.internal.BinaryValueEncoder
 
 /**
   * Compares the binary encoding of values with the generic records of the Java Avro library.
@@ -36,11 +36,11 @@ class BinaryBenchmark {
   private val value: AvroValue =
     Orders.value
 
-  private val encoder: BinaryEncoder =
-    BinaryEncoder(Orders.schema).fold(error => throw error.throwable, identity)
+  private val encoder: BinaryValueEncoder =
+    BinaryValueEncoder(Orders.schema).fold(error => throw error.throwable, identity)
 
-  private val decoder: BinaryDecoder =
-    BinaryDecoder(Orders.schema).fold(error => throw error.throwable, identity)
+  private val decoder: BinaryValueDecoder =
+    BinaryValueDecoder(Orders.schema).fold(error => throw error.throwable, identity)
 
   private val bytes: ByteVector =
     encoder.encode(value).fold(error => throw error.throwable, identity)

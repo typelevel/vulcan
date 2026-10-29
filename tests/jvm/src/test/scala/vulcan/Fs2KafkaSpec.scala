@@ -90,7 +90,8 @@ final class Fs2KafkaSpec extends BaseSpec {
       val registry = new Registry
       val schema = Codec[Test2].schema.value
       val javaSchema = JavaAvro.schema(schema)
-      val datum = JavaAvro.toJava(Codec[Test2].encode(Test2("test", 42)).value, schema, javaSchema)
+      val value = Codec[Test2].encoder.value.encode(Test2("test", 42)).value
+      val datum = JavaAvro.toJava(value, schema, javaSchema)
       val bytes = frame(registry.register(schema), JavaAvro.writeBinary(javaSchema, datum))
       assert(deserializer[Test](registry).value(bytes) == Right(Test("test")))
     }
@@ -138,7 +139,7 @@ final class Fs2KafkaSpec extends BaseSpec {
       record.put("next", null)
 
       val bytes = JavaAvro.writeBinary(javaSchema, record)
-      assert(Codec.fromBinary[Test](bytes, writerSchema) == Right(Test("test")))
+      assert(Codec[Test].binaryDecoder(writerSchema).flatMap(_.decode(bytes)) == Right(Test("test")))
     }
   }
 }
@@ -201,7 +202,8 @@ object Fs2KafkaSpec {
   def serialize[A](registry: Registry, a: A)(implicit codec: Codec[A]): Either[AvroError, Array[Byte]] =
     for {
       schema <- codec.schema
-      bytes <- Codec.toBinary(a)
+      encoder <- codec.binaryEncoder
+      bytes <- encoder.encode(a)
     } yield frame(registry.register(schema), bytes)
 
   /**
@@ -212,9 +214,9 @@ object Fs2KafkaSpec {
     registry: Registry
   )(implicit codec: Codec[A]): Either[AvroError, Array[Byte] => Either[AvroError, A]] =
     codec.schema.map { _ =>
-      val decoders = mutable.Map.empty[Int, Either[AvroError, ByteVector => Either[AvroError, A]]]
+      val decoders = mutable.Map.empty[Int, Either[AvroError, BinaryDecoder[A]]]
 
-      def decoder(id: Int): Either[AvroError, ByteVector => Either[AvroError, A]] =
+      def decoder(id: Int): Either[AvroError, BinaryDecoder[A]] =
         decoders.getOrElseUpdate(
           id,
           registry
@@ -227,7 +229,7 @@ object Fs2KafkaSpec {
       bytes => {
         val input = ByteVector.view(bytes)
         if (input.size < 5 || input.head != 0) Left(AvroError("Missing magic byte and schema id"))
-        else decoder(input.slice(1, 5).toInt()).flatMap(_(input.drop(5)))
+        else decoder(input.slice(1, 5).toInt()).flatMap(_.decode(input.drop(5)))
       }
     }
 }

@@ -387,7 +387,7 @@ final class CodecJavaSpec extends BaseSpec {
   private def assertDecodeSameAsJava[A](codec: Codec[A], value: AvroValue)(
     javaDecode: AvroValue => A
   ): Assertion =
-    (codec.decode(value, codec.schema.value), Try(javaDecode(value)).toEither) match {
+    (codec.decoder(codec.schema.value).flatMap(_.decode(value)), Try(javaDecode(value)).toEither) match {
       case (Right(decoded), Right(javaDecoded)) => assert(decoded == javaDecoded)
       case (Left(_), Left(_)) => succeed
       case (decoded, javaDecoded) =>
@@ -405,7 +405,7 @@ final class CodecJavaSpec extends BaseSpec {
     val bytes =
       JavaAvro.writeBinary(javaWriterSchema, JavaAvro.toJava(value, writerSchema, javaWriterSchema))
 
-    val decoded = Codec.fromBinary(bytes, writerSchema)(reader.codec)
+    val decoded = reader.codec.binaryDecoder(writerSchema).flatMap(_.decode(bytes))
     val javaDecoded =
       Try(JavaAvro.readBinary(javaWriterSchema, javaReaderSchema, bytes)).toEither
         .map(reader.fromJava)

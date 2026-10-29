@@ -216,7 +216,7 @@ final class RegressionSpec extends BaseSpec {
     it("should preserve the exception as cause") {
       val exception = new IllegalArgumentException("invalid")
       val codec = Codec[Int].imapTry[Int](_ => Failure(exception))(identity)
-      val error = codec.decode(AvroValue.Int(1), Schema.Int).swap.value
+      val error = codec.decoder(Schema.Int).flatMap(_.decode(AvroValue.Int(1))).swap.value
       assert(error.throwable.getCause eq exception)
     }
   }
@@ -312,7 +312,7 @@ final class RegressionSpec extends BaseSpec {
   describe("#350: dates exceeding the int range") {
     it("should error when encoding") {
       assert {
-        Codec.encode(LocalDate.MAX).swap.value.message ==
+        Codec[LocalDate].encoder.flatMap(_.encode(LocalDate.MAX)).swap.value.message ==
           "Error encoding LocalDate: Unable to encode date as epoch days of 365241780471 exceeds the maximum integer size"
       }
     }
@@ -355,8 +355,10 @@ final class RegressionSpec extends BaseSpec {
 
   describe("#398: zero bytes") {
     it("should decode as null") {
-      assert(Codec.fromBinary[Option[Int]](ByteVector.empty, Schema.Null) == Right(None))
-      assert(Codec.fromBinary[Unit](ByteVector.empty, Schema.Null) == Right(()))
+      val option = Codec[Option[Int]].binaryDecoder(Schema.Null).value
+      val unit = Codec[Unit].binaryDecoder(Schema.Null).value
+      assert(option.decode(ByteVector.empty) == Right(None))
+      assert(unit.decode(ByteVector.empty) == Right(()))
     }
   }
 
@@ -442,7 +444,8 @@ final class RegressionSpec extends BaseSpec {
 
     it("should encode timestamps after the year 2262") {
       val value = InstantMicros(Instant.parse("3000-01-01T00:00:00.000001Z"))
-      assert(Codec.encode(value) == Right(AvroValue.Long(32503680000000001L)))
+      val encoded = Codec[InstantMicros].encoder.flatMap(_.encode(value))
+      assert(encoded == Right(AvroValue.Long(32503680000000001L)))
     }
   }
 
@@ -454,7 +457,9 @@ final class RegressionSpec extends BaseSpec {
     for {
       schema <- writer.schema
       writerSchema <- Schema.parse(schema.toString)
-      bytes <- Codec.toBinary(a)(writer)
-      b <- Codec.fromBinary(bytes, writerSchema)(reader)
+      encoder <- writer.binaryEncoder
+      bytes <- encoder.encode(a)
+      decoder <- reader.binaryDecoder(writerSchema)
+      b <- decoder.decode(bytes)
     } yield b
 }

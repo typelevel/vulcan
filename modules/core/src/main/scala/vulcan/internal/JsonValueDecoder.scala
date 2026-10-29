@@ -16,18 +16,18 @@ import vulcan.AvroValue
 import vulcan.Schema
 
 /** Decodes values in the Avro JSON encoding of a writer schema, compiled once for the schema. */
-private[vulcan] final class JsonDecoder private (root: JsonDecoder.Node) {
+private[vulcan] final class JsonValueDecoder private (root: JsonValueDecoder.Node) {
   def decode(json: Json): Either[AvroError, AvroValue] =
     root.decode(json)
 }
 
-private[vulcan] object JsonDecoder {
+private[vulcan] object JsonValueDecoder {
 
   /** Returns a decoder for the writer schema, if the schema is valid. */
-  def apply(writerSchema: Schema): Either[AvroError, JsonDecoder] =
+  def apply(writerSchema: Schema): Either[AvroError, JsonValueDecoder] =
     SchemaValidator
       .validate(writerSchema, validateDefaults = false)
-      .map(_ => new JsonDecoder(new Compilation().compile(writerSchema)))
+      .as(new JsonValueDecoder(new Compilation().compile(writerSchema)))
 
   private sealed abstract class Node {
     def decode(json: Json): Either[AvroError, AvroValue]

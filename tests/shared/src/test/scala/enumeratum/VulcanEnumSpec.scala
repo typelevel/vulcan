@@ -11,11 +11,23 @@ import enumeratum.VulcanEnumSpec.Suit
 import org.scalacheck.Gen
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+import vulcan.AvroError
 import vulcan.Codec
 import vulcan.generic.AvroDoc
 import vulcan.generic.AvroNamespace
 
 final class VulcanEnumSpec extends AnyFunSpec with ScalaCheckPropertyChecks with EitherValues {
+
+  /** Encodes the value, and decodes it using the schema of the codec as the writer schema. */
+  private def encodeAndDecode[A](a: A)(implicit codec: Codec[A]): Either[AvroError, A] =
+    for {
+      encoder <- codec.encoder
+      value <- encoder.encode(a)
+      schema <- codec.schema
+      decoder <- codec.decoder(schema)
+      decoded <- decoder.decode(value)
+    } yield decoded
+
   describe("VulcanEnum") {
     describe("schema") {
       it("should use an enum schema") {
@@ -29,13 +41,13 @@ final class VulcanEnumSpec extends AnyFunSpec with ScalaCheckPropertyChecks with
     it("should roundtrip enum values") {
       val gen = Gen.oneOf[Suit](Suit.Diamonds, Suit.Hearts, Suit.Spades)
       forAll(gen) { suit =>
-        val roundtrip = Codec.encode(suit).flatMap(Codec.decode[Suit])
+        val roundtrip = encodeAndDecode(suit)
         assert(roundtrip.value === suit)
       }
     }
 
     it("should error if withNameOption does not handle schema symbol") {
-      val roundtrip = Codec.encode[Suit](Suit.Clubs).flatMap(Codec.decode[Suit])
+      val roundtrip = encodeAndDecode[Suit](Suit.Clubs)
       assert {
         roundtrip.swap.value.message ===
           "Error decoding com.example.Suit: clubs is not a member of Suit (clubs, diamonds, hearts, spades)"

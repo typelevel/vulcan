@@ -61,8 +61,8 @@ final class CodecInvariantSpec extends CatsSuite with EitherValues {
 
           assert(e1.isRight == e2.isRight)
           if (e1.isRight && e2.isRight) {
-            val d1 = c1.schema.flatMap(c1.decode(e1.value, _))
-            val d2 = c2.schema.flatMap(c2.decode(e2.value, _))
+            val d1 = c1.schema.flatMap(c1.decoder).flatMap(_.decode(e1.value))
+            val d2 = c2.schema.flatMap(c2.decoder).flatMap(_.decode(e2.value))
             val _ = assert(d1 === d2)
           }
         }

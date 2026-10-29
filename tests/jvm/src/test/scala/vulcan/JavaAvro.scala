@@ -14,7 +14,7 @@ import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericDatumReader
 import org.apache.avro.generic.GenericDatumWriter
 import org.apache.avro.io.DecoderFactory
-import org.apache.avro.io.Encoder
+import org.apache.avro.io.Encoder as JavaEncoder
 import org.apache.avro.io.EncoderFactory
 import scodec.bits.ByteVector
 import vulcan.internal.SchemaNames
@@ -62,7 +62,7 @@ object JavaAvro {
   private def write(
     javaSchema: JavaSchema,
     datum: Any,
-    encoder: ByteArrayOutputStream => Encoder
+    encoder: ByteArrayOutputStream => JavaEncoder
   ): Array[Byte] = {
     val output = new ByteArrayOutputStream()
     val javaEncoder = encoder(output)

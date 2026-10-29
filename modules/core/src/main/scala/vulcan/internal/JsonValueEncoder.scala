@@ -16,28 +16,28 @@ import vulcan.AvroValue
 import vulcan.Schema
 
 /** Encodes values in the Avro JSON encoding of a schema, compiled once for the schema. */
-private[vulcan] final class JsonEncoder private (root: JsonEncoder.Node) {
+private[vulcan] final class JsonValueEncoder private (root: JsonValueEncoder.Node) {
   def encode(value: AvroValue): Either[AvroError, Json] =
     root.encode(value)
 }
 
-private[vulcan] object JsonEncoder {
+private[vulcan] object JsonValueEncoder {
 
   /** Returns an encoder for the schema, if the schema is valid. */
-  def apply(schema: Schema): Either[AvroError, JsonEncoder] =
+  def apply(schema: Schema): Either[AvroError, JsonValueEncoder] =
     compile(schema, unionTypes = true)
 
   /**
     * Returns an encoder which encodes values of unions without the type, same as for defaults in
     * schemas.
     */
-  def withoutUnionTypes(schema: Schema): Either[AvroError, JsonEncoder] =
+  def withoutUnionTypes(schema: Schema): Either[AvroError, JsonValueEncoder] =
     compile(schema, unionTypes = false)
 
-  private def compile(schema: Schema, unionTypes: Boolean): Either[AvroError, JsonEncoder] =
+  private def compile(schema: Schema, unionTypes: Boolean): Either[AvroError, JsonValueEncoder] =
     SchemaValidator
       .validate(schema, validateDefaults = false)
-      .map(_ => new JsonEncoder(new Compilation(unionTypes).compile(schema)))
+      .as(new JsonValueEncoder(new Compilation(unionTypes).compile(schema)))
 
   /** Bytes as a string with one character per byte, same as the Java Avro library. */
   private def bytesJson(bytes: ByteVector): Json =

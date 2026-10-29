@@ -6,39 +6,39 @@
 
 package vulcan
 
-import vulcan.internal.BinaryDecoder
-import vulcan.internal.BinaryEncoder
+import vulcan.internal.BinaryValueDecoder
+import vulcan.internal.BinaryValueEncoder
 
 /** Checks the binary encoding of values against the Java Avro library. */
 final class BinaryValueJavaSpec extends BaseSpec {
-  describe("BinaryEncoder") {
+  describe("BinaryValueEncoder") {
     it("should encode the same as the Java Avro library") {
       forAll(AvroValueGenerators.genSchemaAndValue, minSuccessful(1000)) { case (schema, value) =>
         val javaSchema = JavaAvro.schema(schema)
         val javaBytes = JavaAvro.writeBinary(javaSchema, JavaAvro.toJava(value, schema, javaSchema))
-        assert(BinaryEncoder(schema).value.encode(value) == Right(javaBytes))
+        assert(BinaryValueEncoder(schema).value.encode(value) == Right(javaBytes))
       }
     }
 
     it("should encode values which the Java Avro library decodes") {
       forAll(AvroValueGenerators.genSchemaAndValue, minSuccessful(1000)) { case (schema, value) =>
         val javaSchema = JavaAvro.schema(schema)
-        val bytes = BinaryEncoder(schema).value.encode(value).value
+        val bytes = BinaryValueEncoder(schema).value.encode(value).value
         val javaBytes = JavaAvro.writeBinary(javaSchema, JavaAvro.readBinary(javaSchema, bytes))
         assert {
-          BinaryDecoder(schema).value.decode(javaBytes).map(JavaAvro.sortMaps) ==
+          BinaryValueDecoder(schema).value.decode(javaBytes).map(JavaAvro.sortMaps) ==
             Right(JavaAvro.sortMaps(value))
         }
       }
     }
   }
 
-  describe("BinaryDecoder") {
+  describe("BinaryValueDecoder") {
     it("should decode values encoded by the Java Avro library") {
       forAll(AvroValueGenerators.genSchemaAndValue, minSuccessful(1000)) { case (schema, value) =>
         val javaSchema = JavaAvro.schema(schema)
         val javaBytes = JavaAvro.writeBinary(javaSchema, JavaAvro.toJava(value, schema, javaSchema))
-        assert(BinaryDecoder(schema).value.decode(javaBytes) == Right(value))
+        assert(BinaryValueDecoder(schema).value.decode(javaBytes) == Right(value))
       }
     }
   }

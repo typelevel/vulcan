@@ -27,20 +27,31 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
   describe("Codec") {
     describe("binaryDecoder") {
       it("should decode values using the writer schema") {
-        val decode = Codec[Long].binaryDecoder(unsafeSchema[Int]).value
-        assert(decode(hex"02") == Right(1L))
-        assert(decode(hex"04") == Right(2L))
+        val decoder = Codec[Long].binaryDecoder(unsafeSchema[Int]).value
+        assert(decoder.decode(hex"02") == Right(1L))
+        assert(decoder.decode(hex"04") == Right(2L))
       }
 
       it("should decode values of unions using the written type") {
-        val decode = Codec[Long].binaryDecoder(Schema.Union(Vector(Schema.Int, Schema.Long))).value
-        assert(decode(hex"0002") == Right(1L))
-        assert(decode(hex"0204") == Right(2L))
+        val decoder = Codec[Long].binaryDecoder(Schema.Union(Vector(Schema.Int, Schema.Long))).value
+        assert(decoder.decode(hex"0002") == Right(1L))
+        assert(decoder.decode(hex"0204") == Right(2L))
       }
 
       it("should ignore remaining bytes") {
-        val decode = Codec[Int].binaryDecoder(unsafeSchema[Int]).value
-        assert(decode(hex"0204") == Right(1))
+        val decoder = Codec[Int].binaryDecoder(unsafeSchema[Int]).value
+        assert(decoder.decode(hex"0204") == Right(1))
+      }
+
+      it("should decode zero bytes as null") {
+        val decoder = Codec[Unit].binaryDecoder(unsafeSchema[Unit]).value
+        assert(decoder.decode(ByteVector.empty) == Right(()))
+      }
+
+      it("should decode items promoted to types with larger encodings") {
+        val bytes = Codec[List[Int]].binaryEncoder.value.encode(List(0, 1, Int.MaxValue)).value
+        val decoder = Codec[List[Float]].binaryDecoder(unsafeSchema[List[Int]]).value
+        assert(decoder.decode(bytes) == Right(List(0f, 1f, Int.MaxValue.toFloat)))
       }
 
       it("should error if the writer schema is invalid") {
@@ -49,18 +60,27 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       }
 
       it("should error if the binary does not match the writer schema") {
-        val decode = Codec[Int].binaryDecoder(unsafeSchema[Int]).value
+        val decoder = Codec[Int].binaryDecoder(unsafeSchema[Int]).value
         assert {
-          decode(ByteVector.empty).swap.value.message == "Unexpected end of input at position 0"
+          decoder.decode(ByteVector.empty).swap.value.message ==
+            "Unexpected end of input at position 0"
         }
       }
 
       it("should error if the writer schema does not match the type") {
-        val decode = Codec[Int].binaryDecoder(unsafeSchema[Long]).value
+        val decoder = Codec[Int].binaryDecoder(unsafeSchema[Long]).value
         assert {
-          decode(hex"02").swap.value.message ==
+          decoder.decode(hex"02").swap.value.message ==
             "Error decoding Int: Got unexpected schema type long, expected schema type int"
         }
+      }
+    }
+
+    describe("binaryEncoder") {
+      it("should encode to avro binary") {
+        val encoder = Codec[Int].binaryEncoder.value
+        assert(encoder.encode(1) == Right(hex"02"))
+        assert(encoder.encode(2) == Right(hex"04"))
       }
     }
 
@@ -469,11 +489,17 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       }
     }
 
-    describe("decode") {
+    describe("decoder") {
       it("should decode using codec for type") {
+        val decoder = Codec[Int].decoder(Schema.Int).value
         forAll { (n: Int) =>
-          assert(Codec.decode[Int](AvroValue.Int(n)).value == n)
+          assert(decoder.decode(AvroValue.Int(n)).value == n)
         }
+      }
+
+      it("should error if the writer schema is invalid") {
+        val result = Codec[Int].decoder(Schema.Union(Vector(Schema.Int, Schema.Int)))
+        assert(result.swap.value.message == """Duplicate int in union ["int","int"]""")
       }
 
       it("should decode values of unions using the written type") {
@@ -637,10 +663,11 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       }
     }
 
-    describe("encode") {
+    describe("encoder") {
       it("should encode using codec for type") {
+        val encoder = Codec[Int].encoder.value
         forAll { (n: Int) =>
-          assert(Codec.encode(n).value == AvroValue.Int(n))
+          assert(encoder.encode(n).value == AvroValue.Int(n))
         }
       }
     }
@@ -945,60 +972,6 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       }
     }
 
-    describe("fromBinary") {
-      it("should decode from avro binary") {
-        assert(Codec.fromBinary[Int](hex"02", unsafeSchema[Int]) == Right(1))
-      }
-
-      it("should decode using the writer schema") {
-        assert(Codec.fromBinary[Long](hex"02", unsafeSchema[Int]) == Right(1L))
-      }
-
-      it("should decode zero bytes as null") {
-        assert(Codec.fromBinary[Unit](ByteVector.empty, unsafeSchema[Unit]) == Right(()))
-      }
-
-      it("should decode items promoted to types with larger encodings") {
-        val bytes = Codec.toBinary(List(0, 1, Int.MaxValue)).value
-        assert {
-          Codec.fromBinary[List[Float]](bytes, unsafeSchema[List[Int]]) ==
-            Right(List(0f, 1f, Int.MaxValue.toFloat))
-        }
-      }
-
-      it("should error if the binary does not match the writer schema") {
-        val result = Codec.fromBinary[Int](ByteVector.empty, unsafeSchema[Int])
-        assert(result.swap.value.message == "Unexpected end of input at position 0")
-      }
-
-      it("should error if the writer schema does not match the type") {
-        val result = Codec.fromBinary[Int](hex"02", unsafeSchema[Long])
-        assert {
-          result.swap.value.message ==
-            "Error decoding Int: Got unexpected schema type long, expected schema type int"
-        }
-      }
-    }
-
-    describe("fromJson") {
-      it("should decode from avro json format") {
-        assert(Codec.fromJson[Int](Json.fromInt(1), unsafeSchema[Int]) == Right(1))
-      }
-
-      it("should error if the json does not match the writer schema") {
-        val result = Codec.fromJson[Int](Json.fromString("badValue"), unsafeSchema[Int])
-        assert(result.swap.value.message == "Invalid string for int")
-      }
-
-      it("should error if the writer schema does not match the type") {
-        val result = Codec.fromJson[Int](Json.fromString("1"), unsafeSchema[String])
-        assert {
-          result.swap.value.message ==
-            "Error decoding Int: Got unexpected schema type string, expected schema type int"
-        }
-      }
-    }
-
     describe("imapError") {
       case class PosInt(value: Int)
 
@@ -1132,15 +1105,14 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
       describe("decode") {
         it("should decode using the decode function") {
-          assert(codec.decode(AvroValue.Int(1), Schema.Int) == Right(1))
+          assert(codec.decoder(Schema.Int).flatMap(_.decode(AvroValue.Int(1))) == Right(1))
         }
 
         it("should decode values of unions using the written type") {
           assert {
-            codec.decode(
-              AvroValue.Union(1, AvroValue.Int(1)),
-              Schema.Union(Vector(Schema.Null, Schema.Int))
-            ) == Right(1)
+            codec
+              .decoder(Schema.Union(Vector(Schema.Null, Schema.Int)))
+              .flatMap(_.decode(AvroValue.Union(1, AvroValue.Int(1)))) == Right(1)
           }
         }
       }
@@ -1352,6 +1324,42 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
             Right(value)
           )
         }
+      }
+    }
+
+    describe("jsonDecoder") {
+      it("should decode values using the writer schema") {
+        val decoder = Codec[Long].jsonDecoder(unsafeSchema[Int]).value
+        assert(decoder.decode(Json.fromInt(1)) == Right(1L))
+        assert(decoder.decode(Json.fromInt(2)) == Right(2L))
+      }
+
+      it("should error if the writer schema is invalid") {
+        val result = Codec[Int].jsonDecoder(Schema.Union(Vector(Schema.Int, Schema.Int)))
+        assert(result.swap.value.message == """Duplicate int in union ["int","int"]""")
+      }
+
+      it("should error if the json does not match the writer schema") {
+        val decoder = Codec[Int].jsonDecoder(unsafeSchema[Int]).value
+        assert {
+          decoder.decode(Json.fromString("badValue")).swap.value.message == "Invalid string for int"
+        }
+      }
+
+      it("should error if the writer schema does not match the type") {
+        val decoder = Codec[Int].jsonDecoder(unsafeSchema[String]).value
+        assert {
+          decoder.decode(Json.fromString("1")).swap.value.message ==
+            "Error decoding Int: Got unexpected schema type string, expected schema type int"
+        }
+      }
+    }
+
+    describe("jsonEncoder") {
+      it("should encode to avro json") {
+        val encoder = Codec[Int].jsonEncoder.value
+        assert(encoder.encode(1) == Right(Json.fromInt(1)))
+        assert(encoder.encode(2) == Right(Json.fromInt(2)))
       }
     }
 
@@ -2243,32 +2251,23 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       describe("decode") {
         it("should decode null as none") {
           assert {
-            codec.decode(
-              AvroValue.Union(0, AvroValue.Null),
-              unsafeSchema[Option[FirstOrSecond]]
-            ) == Right(None)
+            codec
+              .decoder(unsafeSchema[Option[FirstOrSecond]])
+              .flatMap(_.decode(AvroValue.Union(0, AvroValue.Null))) == Right(None)
           }
         }
 
         it("should decode int as first") {
+          val decoder = codec.decoder(unsafeSchema[Option[FirstOrSecond]]).value
           forAll { (n: Int) =>
-            assert {
-              codec.decode(
-                AvroValue.Union(1, AvroValue.Int(n)),
-                unsafeSchema[Option[FirstOrSecond]]
-              ) == Right(Some(First(n)))
-            }
+            assert(decoder.decode(AvroValue.Union(1, AvroValue.Int(n))) == Right(Some(First(n))))
           }
         }
 
         it("should decode double as second") {
+          val decoder = codec.decoder(unsafeSchema[Option[FirstOrSecond]]).value
           forAll { (n: Double) =>
-            assert {
-              codec.decode(
-                AvroValue.Union(2, AvroValue.Double(n)),
-                unsafeSchema[Option[FirstOrSecond]]
-              ) == Right(Some(Second(n)))
-            }
+            assert(decoder.decode(AvroValue.Union(2, AvroValue.Double(n))) == Right(Some(Second(n))))
           }
         }
       }
@@ -3119,18 +3118,6 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       }
     }
 
-    describe("toBinary") {
-      it("should encode to avro binary") {
-        assert(Codec.toBinary[Int](1) == Right(hex"02"))
-      }
-    }
-
-    describe("toJson") {
-      it("should encode to avro json") {
-        assert(Codec.toJson[Int](1) == Right(Json.fromInt(1)))
-      }
-    }
-
     describe("union") {
       def enumCodec(
         name: String,
@@ -3528,7 +3515,7 @@ trait CodecSpecHelpers {
     codec.encode(a).value
 
   def unsafeDecode[A](value: AvroValue)(implicit codec: Codec[A]): A =
-    codec.schema.flatMap(codec.decode(value, _)).value
+    codec.schema.flatMap(codec.decoder).flatMap(_.decode(value)).value
 
   def assertSchemaIs[A](expectedSchema: String)(implicit codec: Codec[A]): Assertion =
     assert(codec.schema.value.toString == expectedSchema)
@@ -3546,7 +3533,7 @@ trait CodecSpecHelpers {
   )(implicit codec: Codec[A]): Assertion = {
     val decode =
       schema
-        .map(codec.decode(value, _).value)
+        .map(codec.decoder(_).flatMap(_.decode(value)).value)
         .getOrElse(unsafeDecode(value))
     assert(decode === decoded.value)
   }
@@ -3561,7 +3548,7 @@ trait CodecSpecHelpers {
     schema: Schema,
     expectedErrorMessage: String
   )(implicit codec: Codec[A]): Assertion =
-    assert(codec.decode(value, schema).swap.value.message == expectedErrorMessage)
+    assert(codec.decoder(schema).flatMap(_.decode(value)).swap.value.message == expectedErrorMessage)
 
   def assertEncodeError[A](
     a: A,

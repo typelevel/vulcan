@@ -14,11 +14,11 @@ import vulcan.AvroValue
 import vulcan.Schema
 
 /** Decodes values in the Avro binary encoding of a writer schema, compiled once for the schema. */
-private[vulcan] final class BinaryDecoder private (root: BinaryDecoder.Node) {
+private[vulcan] final class BinaryValueDecoder private (root: BinaryValueDecoder.Node) {
 
   /** Reads a value, throwing [[BinaryException]] for invalid input. */
   def read(reader: BinaryReader): AvroValue =
-    root.read(new BinaryDecoder.Input(reader))
+    root.read(new BinaryValueDecoder.Input(reader))
 
   /** Decodes a value from the start of the bytes, ignoring any remaining bytes. */
   def decode(bytes: ByteVector): Either[AvroError, AvroValue] =
@@ -28,14 +28,14 @@ private[vulcan] final class BinaryDecoder private (root: BinaryDecoder.Node) {
     }
 }
 
-private[vulcan] object BinaryDecoder {
+private[vulcan] object BinaryValueDecoder {
 
   /** The limit for the total number of array items in a value encoded using zero bytes. */
   val MaxZeroByteItems: Long =
     1000000L
 
   /** Returns a decoder for the writer schema, if the schema is valid. */
-  def apply(writerSchema: Schema): Either[AvroError, BinaryDecoder] =
+  def apply(writerSchema: Schema): Either[AvroError, BinaryValueDecoder] =
     SchemaValidator.validate(writerSchema, validateDefaults = false).flatMap { _ =>
       val definitions = SchemaNames.definitions(writerSchema)
 
@@ -52,7 +52,7 @@ private[vulcan] object BinaryDecoder {
 
         case None =>
           val root = new Compilation(definitions).compile(writerSchema)
-          Right(new BinaryDecoder(root))
+          Right(new BinaryValueDecoder(root))
       }
     }
 

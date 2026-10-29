@@ -6,6 +6,7 @@
 
 package vulcan.internal
 
+import cats.syntax.all.*
 import scala.collection.mutable
 import scodec.bits.ByteVector
 import vulcan.AvroError
@@ -13,7 +14,7 @@ import vulcan.AvroValue
 import vulcan.Schema
 
 /** Encodes values in the Avro binary encoding of a schema, compiled once for the schema. */
-private[vulcan] final class BinaryEncoder private (root: BinaryEncoder.Node) {
+private[vulcan] final class BinaryValueEncoder private (root: BinaryValueEncoder.Node) {
 
   /** Writes the value, throwing [[BinaryException]] if it does not match the schema. */
   def write(value: AvroValue, writer: BinaryWriter): Unit =
@@ -30,13 +31,13 @@ private[vulcan] final class BinaryEncoder private (root: BinaryEncoder.Node) {
   }
 }
 
-private[vulcan] object BinaryEncoder {
+private[vulcan] object BinaryValueEncoder {
 
   /** Returns an encoder for the schema, if the schema is valid. */
-  def apply(schema: Schema): Either[AvroError, BinaryEncoder] =
+  def apply(schema: Schema): Either[AvroError, BinaryValueEncoder] =
     SchemaValidator
       .validate(schema, validateDefaults = false)
-      .map(_ => new BinaryEncoder(new Compilation().compile(schema)))
+      .as(new BinaryValueEncoder(new Compilation().compile(schema)))
 
   private sealed abstract class Node {
     def write(value: AvroValue, writer: BinaryWriter): Unit

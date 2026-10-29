@@ -18,8 +18,8 @@ final class RefinedSpec extends ScalaCheckSuite with EitherValues {
     forAll { (posInt: PosInt) =>
       val codec = Codec[PosInt]
       val schema = codec.schema.value
-      val encoded = codec.encode(posInt).value
-      val decoded = codec.decode(encoded, schema).value
+      val encoded = codec.encoder.value.encode(posInt).value
+      val decoded = codec.decoder(schema).value.decode(encoded).value
       decoded == posInt
     }
   }
@@ -28,8 +28,8 @@ final class RefinedSpec extends ScalaCheckSuite with EitherValues {
     forAll { (nonPosInt: NonPosInt) =>
       val codec = Codec[PosInt]
       val schema = codec.schema.value
-      val encoded = Codec[Int].encode(nonPosInt.value).value
-      val error = codec.decode(encoded, schema).swap.map(_.message).value
+      val encoded = Codec[Int].encoder.value.encode(nonPosInt.value).value
+      val error = codec.decoder(schema).value.decode(encoded).swap.map(_.message).value
       error == s"Predicate failed: ($nonPosInt > 0)."
     }
   }

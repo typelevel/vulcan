@@ -39,7 +39,8 @@ final class AvroFieldDefaultSpec extends BaseSpec with CodecSpecHelpers {
       assertSchemaIs[HasUnion](
         """{"type":"record","name":"HasUnion","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"u","type":[{"type":"record","name":"A","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"a","type":"int"}]},{"type":"record","name":"B","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"b","type":"string"}]}],"default":{"a":1}}]}"""
       )
-      val result = Codec[HasUnion].decode(unsafeEncode(Empty()), unsafeSchema[Empty])
+      val decoder = Codec[HasUnion].decoder(unsafeSchema[Empty]).value
+      val result = decoder.decode(unsafeEncode(Empty()))
       assert(result.value == HasUnion(Union.A(1)))
     }
 
@@ -47,7 +48,8 @@ final class AvroFieldDefaultSpec extends BaseSpec with CodecSpecHelpers {
       assertSchemaIs[HasUnionSecond](
         """{"type":"record","name":"HasUnionSecond","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"u","type":[{"type":"record","name":"A","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"a","type":"int"}]},{"type":"record","name":"B","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"b","type":"string"}]}],"default":{"b":"foo"}}]}"""
       )
-      val result = Codec[HasUnionSecond].decode(unsafeEncode(Empty()), unsafeSchema[Empty])
+      val decoder = Codec[HasUnionSecond].decoder(unsafeSchema[Empty]).value
+      val result = decoder.decode(unsafeEncode(Empty()))
       assert(result.value == HasUnionSecond(Union.B("foo")))
     }
   }
