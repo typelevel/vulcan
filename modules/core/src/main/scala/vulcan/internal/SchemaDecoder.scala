@@ -11,7 +11,10 @@ import io.circe.Json
 import io.circe.JsonObject
 import scala.collection.mutable
 import scala.util.Try
-import vulcan.AvroError
+import vulcan.AvroException
+import vulcan.AvroException.ConflictingDefinitions
+import vulcan.AvroException.InvalidSchema
+import vulcan.AvroException.UndefinedName
 import vulcan.Schema
 
 private[vulcan] object SchemaDecoder {
@@ -25,7 +28,7 @@ private[vulcan] object SchemaDecoder {
     *
     * Field defaults are not validated, since schemas in schema registries can predate validation.
     */
-  def decode(json: Json): Either[AvroError, Schema] = {
+  def decode(json: Json): Either[AvroException, Schema] = {
     val decoding = new Decoding(definedNames(json))
 
     decoding.decode(json, None).flatMap { decoded =>
@@ -79,7 +82,7 @@ private[vulcan] object SchemaDecoder {
     val definitions: mutable.Map[String, Schema.Named] =
       mutable.Map.empty
 
-    def decode(json: Json, namespace: Option[String]): Either[AvroError, Schema] =
+    def decode(json: Json, namespace: Option[String]): Either[AvroException, Schema] =
       json.fold(
         invalidSchema(json),
         _ => invalidSchema(json),
@@ -92,7 +95,7 @@ private[vulcan] object SchemaDecoder {
     private def decodeObject(
       obj: JsonObject,
       namespace: Option[String]
-    ): Either[AvroError, Schema] =
+    ): Either[AvroException, Schema] =
       obj("type").flatMap(_.asString) match {
         case Some("record") =>
           decodeRecord(obj, namespace)
@@ -105,18 +108,18 @@ private[vulcan] object SchemaDecoder {
 
         case Some("array") =>
           obj("items")
-            .toRight(AvroError(s"Missing items in array ${print(obj)}"))
+            .toRight(new InvalidSchema(s"Missing items in array ${print(obj)}"))
             .flatMap(decode(_, namespace))
             .map(Schema.Array(_).withProps(props(obj, SchemaEncoder.SchemaReserved)))
 
         case Some("map") =>
           obj("values")
-            .toRight(AvroError(s"Missing values in map ${print(obj)}"))
+            .toRight(new InvalidSchema(s"Missing values in map ${print(obj)}"))
             .flatMap(decode(_, namespace))
             .map(Schema.Map(_).withProps(props(obj, SchemaEncoder.SchemaReserved)))
 
         case Some("error") =>
-          Left(AvroError(s"Unsupported type error in schema ${print(obj)}"))
+          Left(new InvalidSchema(s"Unsupported type error in schema ${print(obj)}"))
 
         // Same as earlier versions of the Java Avro library, named schemas can be referenced by type
         case Some(name) =>
@@ -126,7 +129,7 @@ private[vulcan] object SchemaDecoder {
           }
 
         case None =>
-          Left(AvroError(s"Missing type in schema ${print(obj)}"))
+          Left(new InvalidSchema(s"Missing type in schema ${print(obj)}"))
       }
 
     /**
@@ -136,7 +139,7 @@ private[vulcan] object SchemaDecoder {
     private def decodeReference(
       name: String,
       namespace: Option[String]
-    ): Either[AvroError, Schema] =
+    ): Either[AvroException, Schema] =
       primitive(name, JsonObject.empty) match {
         case Some(schema) =>
           Right(schema)
@@ -153,18 +156,18 @@ private[vulcan] object SchemaDecoder {
             .orElse(names.get(fullName))
             .orElse(names.get(name))
             .map(Schema.Ref(_))
-            .toRight(AvroError(s"Undefined name $name"))
+            .toRight(new UndefinedName(name))
       }
 
     private def decodeRecord(
       obj: JsonObject,
       namespace: Option[String]
-    ): Either[AvroError, Schema] =
+    ): Either[AvroException, Schema] =
       for {
         name <- decodeName(obj, namespace)
         fieldsJson <- obj("fields")
           .flatMap(_.asArray)
-          .toRight(AvroError(s"Missing fields in record ${print(obj)}"))
+          .toRight(new InvalidSchema(s"Missing fields in record ${print(obj)}"))
         fields <- fieldsJson.traverse(decodeField(_, name.namespace))
         aliases <- decodeAliases(obj)
         record <- define {
@@ -179,13 +182,13 @@ private[vulcan] object SchemaDecoder {
     private def decodeField(
       json: Json,
       namespace: Option[String]
-    ): Either[AvroError, Schema.Field] =
-      json.asObject.toRight(AvroError(s"Invalid field ${print(json)}")).flatMap { obj =>
+    ): Either[AvroException, Schema.Field] =
+      json.asObject.toRight(new InvalidSchema(s"Invalid field ${print(json)}")).flatMap { obj =>
         for {
           name <- obj("name")
             .flatMap(_.asString)
-            .toRight(AvroError(s"Missing name in field ${print(obj)}"))
-          schemaJson <- obj("type").toRight(AvroError(s"Missing type in field ${print(obj)}"))
+            .toRight(new InvalidSchema(s"Missing name in field ${print(obj)}"))
+          schemaJson <- obj("type").toRight(new InvalidSchema(s"Missing type in field ${print(obj)}"))
           schema <- decode(schemaJson, namespace)
           order <- decodeOrder(obj)
           aliases <- decodeAliases(obj)
@@ -198,15 +201,15 @@ private[vulcan] object SchemaDecoder {
           .withProps(props(obj, SchemaEncoder.FieldReserved))
       }
 
-    private def decodeEnum(obj: JsonObject, namespace: Option[String]): Either[AvroError, Schema] =
+    private def decodeEnum(obj: JsonObject, namespace: Option[String]): Either[AvroException, Schema] =
       for {
         name <- decodeName(obj, namespace)
         symbolsJson <- obj("symbols")
           .flatMap(_.asArray)
-          .toRight(AvroError(s"Missing symbols in enum ${print(obj)}"))
+          .toRight(new InvalidSchema(s"Missing symbols in enum ${print(obj)}"))
         symbols <- symbolsJson.traverse { symbol =>
           symbol.asString.toRight(
-            AvroError(s"Invalid symbol ${print(symbol)} in enum ${print(obj)}")
+            new InvalidSchema(s"Invalid symbol ${print(symbol)} in enum ${print(obj)}")
           )
         }
         aliases <- decodeAliases(obj)
@@ -220,12 +223,12 @@ private[vulcan] object SchemaDecoder {
         }
       } yield enumeration
 
-    private def decodeFixed(obj: JsonObject, namespace: Option[String]): Either[AvroError, Schema] =
+    private def decodeFixed(obj: JsonObject, namespace: Option[String]): Either[AvroException, Schema] =
       for {
         name <- decodeName(obj, namespace)
         size <- obj("size")
           .flatMap(SchemaValidator.intValue)
-          .toRight(AvroError(s"Missing or invalid size in fixed ${print(obj)}"))
+          .toRight(new InvalidSchema(s"Missing or invalid size in fixed ${print(obj)}"))
         aliases <- decodeAliases(obj)
         fixed <- define {
           Schema
@@ -237,10 +240,10 @@ private[vulcan] object SchemaDecoder {
       } yield fixed
 
     /** Defines the named schema, unless there is an equivalent definition already. */
-    private def define(named: Schema.Named): Either[AvroError, Schema.Named] =
+    private def define(named: Schema.Named): Either[AvroException, Schema.Named] =
       definitions.get(named.fullName) match {
         case Some(existing) if !SchemaValidator.equivalent(existing, named) =>
-          Left(AvroError(s"Conflicting definitions of named schema ${named.fullName}"))
+          Left(new ConflictingDefinitions(named.fullName))
 
         case Some(_) =>
           Right(named)
@@ -303,11 +306,11 @@ private[vulcan] object SchemaDecoder {
   private def decodeName(
     obj: JsonObject,
     namespace: Option[String]
-  ): Either[AvroError, Schema.Name] =
+  ): Either[AvroException, Schema.Name] =
     obj("name")
       .flatMap(_.asString)
       .map(SchemaNames.resolve(_, obj("namespace").flatMap(_.asString).orElse(namespace)))
-      .toRight(AvroError(s"Missing name in schema ${print(obj)}"))
+      .toRight(new InvalidSchema(s"Missing name in schema ${print(obj)}"))
 
   private def primitive(name: String, props: JsonObject): Option[Schema] =
     name match {
@@ -322,7 +325,7 @@ private[vulcan] object SchemaDecoder {
       case _ => None
     }
 
-  private def decodeOrder(obj: JsonObject): Either[AvroError, Schema.Field.Order] =
+  private def decodeOrder(obj: JsonObject): Either[AvroException, Schema.Field.Order] =
     obj("order") match {
       case None =>
         Right(Schema.Field.Order.Ascending)
@@ -339,11 +342,11 @@ private[vulcan] object SchemaDecoder {
             Right(Schema.Field.Order.Ignore)
 
           case _ =>
-            Left(AvroError(s"Invalid order in field ${print(obj)}"))
+            Left(new InvalidSchema(s"Invalid order in field ${print(obj)}"))
         }
     }
 
-  private def decodeAliases(obj: JsonObject): Either[AvroError, Vector[String]] =
+  private def decodeAliases(obj: JsonObject): Either[AvroException, Vector[String]] =
     obj("aliases") match {
       case None =>
         Right(Vector.empty)
@@ -352,7 +355,7 @@ private[vulcan] object SchemaDecoder {
         aliases.asArray
           .flatMap(_.traverse(_.asString))
           .map(_.distinct)
-          .toRight(AvroError(s"Invalid aliases in ${print(obj)}"))
+          .toRight(new InvalidSchema(s"Invalid aliases in ${print(obj)}"))
     }
 
   /** Same as the Java Avro library, converts text defaults of floats and doubles to numbers. */
@@ -374,8 +377,8 @@ private[vulcan] object SchemaDecoder {
   private def props(obj: JsonObject, reserved: Set[String]): JsonObject =
     JsonObject.fromIterable(obj.toIterable.filterNot { case (key, _) => reserved.contains(key) })
 
-  private def invalidSchema(json: Json): Either[AvroError, Schema] =
-    Left(AvroError(s"Invalid schema ${print(json)}"))
+  private def invalidSchema(json: Json): Either[AvroException, Schema] =
+    Left(new InvalidSchema(s"Invalid schema ${print(json)}"))
 
   private def print(json: Json): String =
     JsonPrinter.print(json)

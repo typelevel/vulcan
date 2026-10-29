@@ -15,8 +15,8 @@ import vulcan.Codec
 /**
   * An order with nested records, an array, a map, an enum, unions and logical types.
   *
-  * The benchmarks for the current version and for version 1.x have identical
-  * copies of this file, so they compare the same schema and values.
+  * The benchmarks for the current version and for version 1.x have copies of this
+  * file, which only differ in the error type, so they compare the same schema and values.
   */
 final case class Order(
   id: UUID,

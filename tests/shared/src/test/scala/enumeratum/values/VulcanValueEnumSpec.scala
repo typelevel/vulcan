@@ -10,13 +10,13 @@ import enumeratum.EitherValues
 import org.scalacheck.Gen
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import vulcan.AvroError
+import vulcan.AvroException
 import vulcan.Codec
 
 final class VulcanValueEnumSpec extends AnyFunSpec with ScalaCheckPropertyChecks with EitherValues {
 
   /** Encodes the value, and decodes it using the schema of the codec as the writer schema. */
-  private def encodeAndDecode[A](a: A)(implicit codec: Codec[A]): Either[AvroError, A] =
+  private def encodeAndDecode[A](a: A)(implicit codec: Codec[A]): Either[AvroException, A] =
     for {
       encoder <- codec.encoder
       value <- encoder.encode(a)

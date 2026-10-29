@@ -9,7 +9,7 @@ package vulcan.generic.examples
 import cats.Eq
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
-import vulcan.AvroError
+import vulcan.AvroException
 import vulcan.Codec
 import vulcan.generic.*
 
@@ -33,7 +33,7 @@ object SealedTraitEnumDerived {
       decode = {
         case "first" => Right(FirstInSealedTraitEnumDerived)
         case "second" => Right(SecondInSealedTraitEnumDerived)
-        case other => Left(AvroError(other))
+        case other => Left(AvroException(other))
       }
     )
 }

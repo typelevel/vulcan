@@ -201,7 +201,7 @@ final class RegressionSpec extends BaseSpec {
 
     implicit val thingCodec: Codec[Thing] =
       Codec.string.imapError { string =>
-        if (string == "thing") Right(Thing(string)) else Left(AvroError(s"$string is not a thing"))
+        if (string == "thing") Right(Thing(string)) else Left(AvroException(s"$string is not a thing"))
       }(_.value)
 
     it("should include the error of the alternative") {
@@ -217,7 +217,7 @@ final class RegressionSpec extends BaseSpec {
       val exception = new IllegalArgumentException("invalid")
       val codec = Codec[Int].imapTry[Int](_ => Failure(exception))(identity)
       val error = codec.decoder(Schema.Int).flatMap(_.decode(AvroValue.Int(1))).swap.value
-      assert(error.throwable.getCause eq exception)
+      assert(error.getCause eq exception)
     }
   }
 
@@ -453,7 +453,7 @@ final class RegressionSpec extends BaseSpec {
     * Writes the value as Avro binary using the writer codec, and reads it using the reader codec, with
     * the writer schema parsed from JSON.
     */
-  def writeRead[A, B](a: A)(implicit writer: Codec[A], reader: Codec[B]): Either[AvroError, B] =
+  def writeRead[A, B](a: A)(implicit writer: Codec[A], reader: Codec[B]): Either[AvroException, B] =
     for {
       schema <- writer.schema
       writerSchema <- Schema.parse(schema.toString)

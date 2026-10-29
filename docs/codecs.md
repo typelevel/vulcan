@@ -9,13 +9,13 @@ import vulcan.Codec
 Codec[Option[Instant]]
 ```
 
-In some cases, it's not possible to generate Avro schemas. This is why @:api(vulcan.Codec) `schema`s are wrapped in `Either` with error type @:api(vulcan.AvroError). For example, Avro doesn't support nested unions, so what would happen when we try to ask for a @:api(vulcan.Codec) for `Option[Option[Instant]]`?
+In some cases, it's not possible to generate Avro schemas. This is why @:api(vulcan.Codec) `schema`s are wrapped in `Either` with error type @:api(vulcan.AvroException). For example, Avro doesn't support nested unions, so what would happen when we try to ask for a @:api(vulcan.Codec) for `Option[Option[Instant]]`?
 
 ```scala mdoc
 Codec[Option[Option[Instant]]]
 ```
 
-A @:api(vulcan.Codec) compiles encoders for its schema, and decoders for the schema values were written with, called the writer schema. They are compiled when requested, so request them once and reuse them for any number of values. Encoding and decoding might also be unsuccessful, so results are wrapped in `Either` with error type @:api(vulcan.AvroError). For example, what happens if we try to decode `Int`s written using a `Boolean` schema?
+A @:api(vulcan.Codec) compiles encoders for its schema, and decoders for the schema values were written with, called the writer schema. They are compiled when requested, so request them once and reuse them for any number of values. Encoding and decoding might also be unsuccessful, so results are wrapped in `Either` with error type @:api(vulcan.AvroException). For example, what happens if we try to decode `Int`s written using a `Boolean` schema?
 
 ```scala mdoc
 import vulcan.AvroValue
@@ -40,15 +40,15 @@ Codec[Instant].imap(InstallationTime(_))(_.value)
 When we have a newtype where we ensure values are valid, we can use `imapError` instead.
 
 ```scala mdoc
-import vulcan.AvroError
+import vulcan.AvroException
 
 sealed abstract case class SerialNumber(value: String)
 
 object SerialNumber {
-  def apply(value: String): Either[AvroError, SerialNumber] =
+  def apply(value: String): Either[AvroException, SerialNumber] =
     if(value.length == 12 && value.forall(_.isDigit))
       Right(new SerialNumber(value) {})
-    else Left(AvroError(s"$value is not a serial number"))
+    else Left(AvroException(s"$value is not a serial number"))
 }
 
 Codec[String].imapError(SerialNumber(_))(_.value)
@@ -90,7 +90,7 @@ Codec.enumeration[Fruit](
     case "apple"  => Right(Apple)
     case "banana" => Right(Banana)
     case "cherry" => Right(Cherry)
-    case other    => Left(AvroError(s"$other is not a Fruit"))
+    case other    => Left(AvroException(s"$other is not a Fruit"))
   },
   default = Some(Banana)
 )
@@ -110,9 +110,9 @@ import scodec.bits.ByteVector
 sealed abstract case class Pence(value: Byte)
 
 object Pence {
-  def apply(value: Byte): Either[AvroError, Pence] =
+  def apply(value: Byte): Either[AvroException, Pence] =
     if(0 <= value && value < 100) Right(new Pence(value) {})
-    else Left(AvroError(s"Expected pence value, got $value"))
+    else Left(AvroException(s"Expected pence value, got $value"))
 }
 
 Codec.fixed[Pence](

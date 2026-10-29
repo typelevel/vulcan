@@ -6,7 +6,7 @@
 
 package vulcan.generic.examples
 
-import vulcan.AvroError
+import vulcan.AvroException
 import vulcan.Codec
 import vulcan.generic.*
 
@@ -27,7 +27,7 @@ object AvroRecordDefault {
       decode = {
         case "A" => Right(A)
         case "B" => Right(B)
-        case other => Left(AvroError(s"Invalid S: $other"))
+        case other => Left(AvroException(s"Invalid S: $other"))
       }
     )
   }

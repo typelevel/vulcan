@@ -8,6 +8,7 @@ package vulcan.internal
 
 import java.util.Arrays
 import scodec.bits.ByteVector
+import vulcan.AvroException.BinarySizeExceeded
 
 /** Writes values in the Avro binary encoding to a buffer which grows as needed. */
 private[vulcan] final class BinaryWriter(initialCapacity: Int) {
@@ -135,7 +136,7 @@ private[vulcan] final class BinaryWriter(initialCapacity: Int) {
     if (count > buffer.length - size) {
       val required = size + count
       if (required > BinaryWriter.MaxSize)
-        throw new BinaryException(s"Unable to write more than ${BinaryWriter.MaxSize} bytes")
+        throw new BinarySizeExceeded(BinaryWriter.MaxSize)
 
       val capacity = math.min(math.max(required, buffer.length * 2L), BinaryWriter.MaxSize.toLong)
       buffer = Arrays.copyOf(buffer, capacity.toInt)

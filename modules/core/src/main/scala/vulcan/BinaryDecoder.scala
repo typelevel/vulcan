@@ -9,7 +9,8 @@ package vulcan
 import scala.collection.immutable.ArraySeq
 import scala.collection.mutable
 import scodec.bits.ByteVector
-import vulcan.internal.BinaryException
+import vulcan.AvroException.InfiniteRecord
+import vulcan.AvroException.InvalidBinary
 import vulcan.internal.BinaryReader
 import vulcan.internal.SchemaNames
 import vulcan.internal.SchemaValidator
@@ -24,7 +25,7 @@ import vulcan.internal.SchemaValidator
 trait BinaryDecoder[A] {
 
   /** Attempts to decode a value from the start of the bytes, ignoring any remaining bytes. */
-  def decode(bytes: ByteVector): Either[AvroError, A]
+  def decode(bytes: ByteVector): Either[AvroException, A]
 }
 
 object BinaryDecoder {
@@ -34,13 +35,13 @@ object BinaryDecoder {
     1000000L
 
   /** Returns a decoder for values written using the writer schema, if the schema is valid. */
-  private[vulcan] def apply(writerSchema: Schema): Either[AvroError, BinaryDecoder[AvroValue]] =
+  private[vulcan] def apply(writerSchema: Schema): Either[AvroException, BinaryDecoder[AvroValue]] =
     reader(writerSchema).map { read =>
       new BinaryDecoder[AvroValue] {
-        override def decode(bytes: ByteVector): Either[AvroError, AvroValue] =
+        override def decode(bytes: ByteVector): Either[AvroException, AvroValue] =
           try Right(read(BinaryReader(bytes)))
           catch {
-            case e: BinaryException => Left(AvroError(e.getMessage))
+            case e: AvroException => Left(e)
           }
       }
     }
@@ -48,9 +49,9 @@ object BinaryDecoder {
   /**
     * Returns a function reading values written using the writer schema, if the schema is valid.
     *
-    * The function throws `BinaryException` for invalid input.
+    * The function throws `AvroException` for invalid input.
     */
-  private[vulcan] def reader(writerSchema: Schema): Either[AvroError, BinaryReader => AvroValue] =
+  private[vulcan] def reader(writerSchema: Schema): Either[AvroException, BinaryReader => AvroValue] =
     SchemaValidator.validate(writerSchema, validateDefaults = false).flatMap { _ =>
       val definitions = SchemaNames.definitions(writerSchema)
 
@@ -59,11 +60,7 @@ object BinaryDecoder {
           record
       } match {
         case Some(record) =>
-          Left(
-            AvroError(
-              s"Unable to decode record ${record.fullName}, since it always contains itself"
-            )
-          )
+          Left(new InfiniteRecord(record))
 
         case None =>
           val root = new Compilation(definitions).compile(writerSchema)
@@ -194,7 +191,7 @@ object BinaryDecoder {
       val index = input.reader.readInt()
       if (index >= 0 && index < symbols.length) AvroValue.Enum(symbols(index))
       else
-        throw new BinaryException(
+        throw new InvalidBinary(
           s"Invalid index $index at position $begin for enum $fullName with ${symbols.length} symbols"
         )
     }
@@ -263,7 +260,7 @@ object BinaryDecoder {
       val index = input.reader.readInt()
       if (index >= 0 && index < types.length) AvroValue.Union(index, types(index).read(input))
       else
-        throw new BinaryException(
+        throw new InvalidBinary(
           s"Invalid index $index at position $begin for union with ${types.length} types"
         )
     }
@@ -275,12 +272,12 @@ object BinaryDecoder {
 
     if (minItemSize > 0) {
       if (count > input.reader.remaining / minItemSize)
-        throw new BinaryException(
+        throw new InvalidBinary(
           s"Invalid block count $count at position $begin, exceeding the remaining input"
         )
     } else {
       if (count > MaxZeroByteItems - input.zeroByteItems)
-        throw new BinaryException(
+        throw new InvalidBinary(
           s"Invalid block count $count at position $begin, exceeding the limit of $MaxZeroByteItems zero byte items"
         )
       input.zeroByteItems += count

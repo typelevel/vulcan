@@ -17,9 +17,9 @@ import scala.util.Try
 import scodec.bits.ByteVector
 
 final class CodecInvariantSpec extends CatsSuite with EitherValues {
-  val schemaGen: Gen[Either[AvroError, Schema]] =
+  val schemaGen: Gen[Either[AvroException, Schema]] =
     Gen.oneOf(
-      Left(AvroError("error")),
+      Left(AvroException("error")),
       Codec[Int].schema,
       Codec[String].schema
     )
@@ -44,7 +44,7 @@ final class CodecInvariantSpec extends CatsSuite with EitherValues {
                 case (AvroValue.Bytes(bytes), _: Schema.String) =>
                   Right(new String(bytes.toArray, charset))
                 case (_, schema) =>
-                  Left(AvroError(s"Got unexpected schema $schema"))
+                  Left(AvroException(s"Got unexpected schema $schema"))
               }
             )
             .withTypeName("String")
@@ -63,7 +63,7 @@ final class CodecInvariantSpec extends CatsSuite with EitherValues {
           if (e1.isRight && e2.isRight) {
             val d1 = c1.schema.flatMap(c1.decoder).flatMap(_.decode(e1.value))
             val d2 = c2.schema.flatMap(c2.decoder).flatMap(_.decode(e2.value))
-            val _ = assert(d1 === d2)
+            val _ = assert(d1.left.map(_.message) === d2.left.map(_.message))
           }
         }
       }.isSuccess

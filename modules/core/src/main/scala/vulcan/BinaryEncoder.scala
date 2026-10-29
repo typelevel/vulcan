@@ -8,10 +8,13 @@ package vulcan
 
 import scala.collection.mutable
 import scodec.bits.ByteVector
-import vulcan.internal.BinaryException
+import vulcan.AvroException.InvalidEnumValue
+import vulcan.AvroException.InvalidFixedValue
+import vulcan.AvroException.InvalidRecordValue
+import vulcan.AvroException.InvalidUnionValue
+import vulcan.AvroException.InvalidValue
 import vulcan.internal.BinaryWriter
 import vulcan.internal.SchemaValidator
-import vulcan.internal.ValueNames
 
 /**
   * Encodes values of type `A` to Avro binary.
@@ -23,23 +26,23 @@ import vulcan.internal.ValueNames
 trait BinaryEncoder[A] {
 
   /** Attempts to encode the specified value to Avro binary. */
-  def encode(a: A): Either[AvroError, ByteVector]
+  def encode(a: A): Either[AvroException, ByteVector]
 }
 
 object BinaryEncoder {
 
   /** Returns an encoder for values of the schema, if the schema is valid. */
-  private[vulcan] def apply(schema: Schema): Either[AvroError, BinaryEncoder[AvroValue]] =
+  private[vulcan] def apply(schema: Schema): Either[AvroException, BinaryEncoder[AvroValue]] =
     SchemaValidator.validate(schema, validateDefaults = false).map { _ =>
       val root = new Compilation().compile(schema)
       new BinaryEncoder[AvroValue] {
-        override def encode(value: AvroValue): Either[AvroError, ByteVector] = {
+        override def encode(value: AvroValue): Either[AvroException, ByteVector] = {
           val writer = new BinaryWriter(64)
           try {
             root.write(value, writer)
             Right(writer.toByteVector)
           } catch {
-            case e: BinaryException => Left(AvroError(e.getMessage))
+            case e: AvroException => Left(e)
           }
         }
       }
@@ -182,9 +185,7 @@ object BinaryEncoder {
           }
 
         case AvroValue.Record(values) =>
-          throw new BinaryException(
-            s"Invalid record with ${values.size} values for record $fullName with ${fields.length} fields"
-          )
+          throw new InvalidRecordValue(values.size, fullName, fields.length)
 
         case _ =>
           throw invalid(value, s"record $fullName")
@@ -197,7 +198,7 @@ object BinaryEncoder {
         case AvroValue.Enum(symbol) =>
           indices.get(symbol) match {
             case Some(index) => writer.writeInt(index)
-            case None => throw new BinaryException(s"Invalid symbol $symbol for enum $fullName")
+            case None => throw new InvalidEnumValue(symbol, fullName)
           }
 
         case _ =>
@@ -212,9 +213,7 @@ object BinaryEncoder {
           writer.writeFixed(bytes)
 
         case AvroValue.Fixed(bytes) =>
-          throw new BinaryException(
-            s"Invalid fixed with ${bytes.size} bytes for fixed $fullName with size $size"
-          )
+          throw new InvalidFixedValue(bytes.size, fullName, size)
 
         case _ =>
           throw invalid(value, s"fixed $fullName")
@@ -264,13 +263,13 @@ object BinaryEncoder {
           types(index).write(branchValue, writer)
 
         case AvroValue.Union(index, _) =>
-          throw new BinaryException(s"Invalid index $index for union with ${types.length} types")
+          throw new InvalidUnionValue(index, types.length)
 
         case _ =>
           throw invalid(value, "union")
       }
   }
 
-  private def invalid(value: AvroValue, schema: String): BinaryException =
-    new BinaryException(s"Invalid ${ValueNames.typeName(value)} value for $schema")
+  private def invalid(value: AvroValue, schema: String): AvroException =
+    new InvalidValue(value, schema)
 }

@@ -343,7 +343,7 @@ trait RoundtripHelpers {
 
     val decoded = codec.decoder(avroSchema.value).flatMap(_.decode(encoded.value))
     withClue(s"Actual: $decoded, Expected: ${Right(a)}") {
-      assert(decoded === Right(a))
+      assert(decoded.left.map(_.message) === Right(a))
     }
   }
 
@@ -356,7 +356,7 @@ trait RoundtripHelpers {
 
     val decoded = codec.schema.flatMap(codec.binaryDecoder).flatMap(_.decode(binary.value))
     withClue(s"Actual: $decoded, Expected: ${Right(a)}") {
-      assert(decoded === Right(a))
+      assert(decoded.left.map(_.message) === Right(a))
     }
   }
 
@@ -369,7 +369,7 @@ trait RoundtripHelpers {
 
     val decoded = codec.schema.flatMap(codec.jsonDecoder).flatMap(_.decode(json.value))
     withClue(s"Actual: $decoded, Expected: ${Right(a)}") {
-      assert(decoded === Right(a))
+      assert(decoded.left.map(_.message) === Right(a))
     }
   }
 }

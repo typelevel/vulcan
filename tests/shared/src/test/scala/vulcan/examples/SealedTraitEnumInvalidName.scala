@@ -6,7 +6,7 @@
 
 package vulcan.examples
 
-import vulcan.AvroError
+import vulcan.AvroException
 import vulcan.Codec
 
 sealed trait `-SealedTraitEnumInvalidName`
@@ -17,7 +17,7 @@ object `-SealedTraitEnumInvalidName` {
       "-SealedTraitEnumInvalidName",
       symbols = Seq("value"),
       encode = _ => "value",
-      decode = _ => Left(AvroError("error")),
+      decode = _ => Left(AvroException("error")),
       namespace = ""
     )
 }

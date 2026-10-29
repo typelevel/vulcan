@@ -199,7 +199,7 @@ object Fs2KafkaSpec {
   def frame(id: Int, bytes: ByteVector): Array[Byte] =
     (ByteVector(0) ++ ByteVector.fromInt(id) ++ bytes).toArray
 
-  def serialize[A](registry: Registry, a: A)(implicit codec: Codec[A]): Either[AvroError, Array[Byte]] =
+  def serialize[A](registry: Registry, a: A)(implicit codec: Codec[A]): Either[AvroException, Array[Byte]] =
     for {
       schema <- codec.schema
       encoder <- codec.binaryEncoder
@@ -212,23 +212,23 @@ object Fs2KafkaSpec {
     */
   def deserializer[A](
     registry: Registry
-  )(implicit codec: Codec[A]): Either[AvroError, Array[Byte] => Either[AvroError, A]] =
+  )(implicit codec: Codec[A]): Either[AvroException, Array[Byte] => Either[AvroException, A]] =
     codec.schema.map { _ =>
-      val decoders = mutable.Map.empty[Int, Either[AvroError, BinaryDecoder[A]]]
+      val decoders = mutable.Map.empty[Int, Either[AvroException, BinaryDecoder[A]]]
 
-      def decoder(id: Int): Either[AvroError, BinaryDecoder[A]] =
+      def decoder(id: Int): Either[AvroException, BinaryDecoder[A]] =
         decoders.getOrElseUpdate(
           id,
           registry
             .schema(id)
-            .toRight(AvroError(s"Unknown schema id $id"))
+            .toRight(AvroException(s"Unknown schema id $id"))
             .flatMap(Schema.fromJson)
             .flatMap(codec.binaryDecoder)
         )
 
       bytes => {
         val input = ByteVector.view(bytes)
-        if (input.size < 5 || input.head != 0) Left(AvroError("Missing magic byte and schema id"))
+        if (input.size < 5 || input.head != 0) Left(AvroException("Missing magic byte and schema id"))
         else decoder(input.slice(1, 5).toInt()).flatMap(_.decode(input.drop(5)))
       }
     }

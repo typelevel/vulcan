@@ -15,7 +15,7 @@ libraryDependencies += "@ORGANIZATION@" %% "@GENERIC_MODULE_NAME@" % "@VERSION@"
 `deriveEnum` can be used to partly derive @:api(vulcan.Codec)s for enumeration types. Annotations like `@AvroDoc` can be used to customize the derivation.
 
 ```scala mdoc:reset-object
-import vulcan.AvroError
+import vulcan.AvroException
 import vulcan.generic._
 
 @AvroNamespace("com.example")
@@ -36,7 +36,7 @@ deriveEnum[Fruit](
     case "apple"  => Right(Apple)
     case "banana" => Right(Banana)
     case "cherry" => Right(Cherry)
-    case other    => Left(AvroError(s"$other is not a Fruit"))
+    case other    => Left(AvroException(s"$other is not a Fruit"))
   }
 )
 ```
@@ -47,15 +47,15 @@ deriveEnum[Fruit](
 
 ```scala mdoc
 import scodec.bits.ByteVector
-import vulcan.AvroError
+import vulcan.AvroException
 
 @AvroNamespace("com.example")
 sealed abstract case class Pence(value: Byte)
 
 object Pence {
-  def apply(value: Byte): Either[AvroError, Pence] =
+  def apply(value: Byte): Either[AvroException, Pence] =
     if(0 <= value && value < 100) Right(new Pence(value) {})
-    else Left(AvroError(s"Expected pence value, got $value"))
+    else Left(AvroException(s"Expected pence value, got $value"))
 }
 
 deriveFixed[Pence](

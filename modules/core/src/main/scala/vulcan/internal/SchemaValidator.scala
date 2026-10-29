@@ -11,13 +11,25 @@ import io.circe.Json
 import io.circe.JsonNumber
 import io.circe.JsonObject
 import scala.collection.mutable
-import vulcan.AvroError
+import vulcan.AvroException
+import vulcan.AvroException.ConflictingDefinitions
+import vulcan.AvroException.DuplicateField
+import vulcan.AvroException.DuplicateSymbol
+import vulcan.AvroException.DuplicateUnionType
+import vulcan.AvroException.InvalidEnumDefault
+import vulcan.AvroException.InvalidFieldDefault
+import vulcan.AvroException.InvalidFixedSize
+import vulcan.AvroException.InvalidName
+import vulcan.AvroException.NestedUnion
+import vulcan.AvroException.ReservedName
+import vulcan.AvroException.ReservedProperty
+import vulcan.AvroException.UndefinedName
 import vulcan.Schema
 
 private[vulcan] object SchemaValidator {
 
   /** Validate the schema, matching the Java Avro library for compatibility. */
-  def validate(schema: Schema, validateDefaults: Boolean): Either[AvroError, Unit] =
+  def validate(schema: Schema, validateDefaults: Boolean): Either[AvroException, Unit] =
     new Validation(validateDefaults).validate(schema)
 
   /**
@@ -70,14 +82,14 @@ private[vulcan] object SchemaValidator {
   private final class Validation(validateDefaults: Boolean) {
     private val defined = mutable.Map.empty[String, Schema.Named]
 
-    def validate(schema: Schema): Either[AvroError, Unit] =
+    def validate(schema: Schema): Either[AvroException, Unit] =
       schema match {
         case named: Schema.Named =>
           validateNamed(named)
 
         case ref: Schema.Ref =>
           if (defined.contains(ref.fullName)) Right(())
-          else Left(AvroError(s"Undefined name ${ref.fullName}"))
+          else Left(new UndefinedName(ref.fullName))
 
         case union: Schema.Union =>
           validateUnionTypes(union) >> union.types.traverse_(validate)
@@ -94,14 +106,14 @@ private[vulcan] object SchemaValidator {
           validateProps(schema.props, SchemaEncoder.SchemaReserved, SchemaNames.typeName(schema))
       }
 
-    private def validateNamed(named: Schema.Named): Either[AvroError, Unit] =
+    private def validateNamed(named: Schema.Named): Either[AvroException, Unit] =
       defined.get(named.fullName) match {
         case Some(existing) if existing eq named =>
           Right(())
 
         case Some(existing) =>
           if (equivalent(existing, named)) validateNested(named)
-          else Left(AvroError(s"Conflicting definitions of named schema ${named.fullName}"))
+          else Left(new ConflictingDefinitions(named.fullName))
 
         case None =>
           validateFullName(named.name) >> {
@@ -127,34 +139,34 @@ private[vulcan] object SchemaValidator {
 
                 case fixed: Schema.Fixed =>
                   if (fixed.size >= 0) Right(())
-                  else Left(AvroError(s"Invalid size ${fixed.size} for fixed ${fixed.fullName}"))
+                  else Left(new InvalidFixedSize(fixed))
               }
             }
           }
       }
 
     /** Validates the named schemas within an equivalent definition. */
-    private def validateNested(named: Schema.Named): Either[AvroError, Unit] =
+    private def validateNested(named: Schema.Named): Either[AvroException, Unit] =
       named match {
         case record: Schema.Record => record.fields.traverse_(field => validate(field.schema))
         case _ => Right(())
       }
 
-    private def validateFullName(name: Schema.Name): Either[AvroError, Unit] =
+    private def validateFullName(name: Schema.Name): Either[AvroException, Unit] =
       name.namespace.toList.flatMap(_.split("\\.", -1).toList).traverse_ { part =>
         validateName(part, s"""namespace part "$part" of ${name.fullName}""")
       } >>
         validateName(name.name, s"""name "${name.name}"""") >> {
           if (name.namespace.isEmpty && SchemaNames.PrimitiveNames.contains(name.name))
-            Left(AvroError(s"Named schemas cannot be named after primitive type ${name.name}"))
+            Left(new ReservedName(name.name))
           else Right(())
         }
 
-    private def validateFields(record: Schema.Record): Either[AvroError, Unit] =
+    private def validateFields(record: Schema.Record): Either[AvroException, Unit] =
       record.fields
         .foldLeftM(Set.empty[String]) { (names, field) =>
           if (names.contains(field.name))
-            Left(AvroError(s"""Duplicate field "${field.name}" in record ${record.fullName}"""))
+            Left(new DuplicateField(field.name, record))
           else {
             val description = s"""field "${field.name}" in record ${record.fullName}"""
             validateName(field.name, description) >>
@@ -170,10 +182,10 @@ private[vulcan] object SchemaValidator {
       props: JsonObject,
       reserved: Set[String],
       description: => String
-    ): Either[AvroError, Unit] =
+    ): Either[AvroException, Unit] =
       props.keys.find(reserved.contains) match {
         case Some(key) =>
-          Left(AvroError(s"""Invalid property "$key" of $description: name is reserved"""))
+          Left(new ReservedProperty(key, description))
 
         case None =>
           Right(())
@@ -182,50 +194,42 @@ private[vulcan] object SchemaValidator {
     private def validateDefault(
       record: Schema.Record,
       field: Schema.Field
-    ): Either[AvroError, Unit] =
+    ): Either[AvroException, Unit] =
       field.default match {
         case Some(default) if validateDefaults && !isValidDefault(field.schema, default) =>
-          Left {
-            AvroError(
-              s"""Invalid default ${JsonPrinter.print(
-                  default
-                )} for field "${field.name}" with schema ${field.schema} in record ${record.fullName}"""
-            )
-          }
+          Left(new InvalidFieldDefault(default, field, record))
 
         case _ =>
           Right(())
       }
 
-    private def validateSymbols(enumeration: Schema.Enum): Either[AvroError, Unit] =
+    private def validateSymbols(enumeration: Schema.Enum): Either[AvroException, Unit] =
       enumeration.symbols.foldLeftM(Set.empty[String]) { (symbols, symbol) =>
         if (symbols.contains(symbol))
-          Left(AvroError(s"""Duplicate symbol "$symbol" in enum ${enumeration.fullName}"""))
+          Left(new DuplicateSymbol(symbol, enumeration))
         else
           validateName(symbol, s"""symbol "$symbol" in enum ${enumeration.fullName}""")
             .as(symbols + symbol)
       } >> {
         enumeration.default match {
           case Some(default) if !enumeration.symbols.contains(default) =>
-            Left {
-              AvroError(s"""Default "$default" is not a symbol of enum ${enumeration.fullName}""")
-            }
+            Left(new InvalidEnumDefault(default, enumeration))
 
           case _ =>
             Right(())
         }
       }
 
-    private def validateUnionTypes(union: Schema.Union): Either[AvroError, Unit] =
+    private def validateUnionTypes(union: Schema.Union): Either[AvroException, Unit] =
       union.types
         .foldLeftM(Set.empty[String]) { (keys, schema) =>
           schema match {
             case _: Schema.Union =>
-              Left(AvroError(s"Unions cannot directly contain other unions: $union"))
+              Left(new NestedUnion(union))
 
             case _ =>
               val key = SchemaNames.unionKey(schema)
-              if (keys.contains(key)) Left(AvroError(s"Duplicate $key in union $union"))
+              if (keys.contains(key)) Left(new DuplicateUnionType(key, union))
               else Right(keys + key)
           }
         }
@@ -258,9 +262,9 @@ private[vulcan] object SchemaValidator {
           defined.get(ref.fullName).exists(isValidDefault(_, default))
       }
 
-    private def validateName(name: String, description: => String): Either[AvroError, Unit] =
+    private def validateName(name: String, description: => String): Either[AvroException, Unit] =
       SchemaNames.invalid(name) match {
-        case Some(reason) => Left(AvroError(s"Invalid $description: $reason"))
+        case Some(reason) => Left(new InvalidName(description, reason))
         case None => Right(())
       }
   }
