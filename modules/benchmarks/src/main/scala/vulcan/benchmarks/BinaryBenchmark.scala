@@ -16,7 +16,7 @@ import org.apache.avro.io.DecoderFactory
 import org.apache.avro.io.EncoderFactory
 import org.openjdk.jmh.annotations.*
 import scodec.bits.ByteVector
-import vulcan.AvroError
+import vulcan.AvroException
 import vulcan.AvroValue
 import vulcan.BinaryDecoder
 import vulcan.BinaryEncoder
@@ -37,13 +37,13 @@ class BinaryBenchmark {
     Orders.value
 
   private val encoder: BinaryEncoder[AvroValue] =
-    BinaryEncoder(Orders.schema).fold(error => throw error.throwable, identity)
+    BinaryEncoder(Orders.schema).fold(error => throw error, identity)
 
   private val decoder: BinaryDecoder[AvroValue] =
-    BinaryDecoder(Orders.schema).fold(error => throw error.throwable, identity)
+    BinaryDecoder(Orders.schema).fold(error => throw error, identity)
 
   private val bytes: ByteVector =
-    encoder.encode(value).fold(error => throw error.throwable, identity)
+    encoder.encode(value).fold(error => throw error, identity)
 
   private val javaSchema: JavaSchema =
     new JavaSchema.Parser().parse(Orders.schema.toString)
@@ -61,7 +61,7 @@ class BinaryBenchmark {
     javaReader.read(null, DecoderFactory.get().binaryDecoder(javaBytes, null))
 
   @Benchmark
-  def encode(): Either[AvroError, ByteVector] =
+  def encode(): Either[AvroException, ByteVector] =
     encoder.encode(value)
 
   @Benchmark
@@ -74,7 +74,7 @@ class BinaryBenchmark {
   }
 
   @Benchmark
-  def decode(): Either[AvroError, AvroValue] =
+  def decode(): Either[AvroException, AvroValue] =
     decoder.decode(bytes)
 
   @Benchmark

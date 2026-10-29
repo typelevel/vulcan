@@ -8,6 +8,7 @@ package vulcan
 
 import io.circe.Json
 import io.circe.JsonObject
+import vulcan.AvroException.InvalidSchema
 import vulcan.internal.JsonPrinter
 import vulcan.internal.SchemaDecoder
 import vulcan.internal.SchemaEncoder
@@ -42,15 +43,15 @@ sealed abstract class Schema {
 object Schema {
 
   /** Parses, decodes and validates the provided schema JSON `String`. */
-  def parse(json: Predef.String): Either[AvroError, Schema] =
+  def parse(json: Predef.String): Either[AvroException, Schema] =
     io.circe.jawn
       .parse(json)
       .left
-      .map(failure => AvroError(s"Invalid JSON: ${failure.message}"))
+      .map(failure => new InvalidSchema(s"Invalid JSON: ${failure.message}", Some(failure)))
       .flatMap(fromJson)
 
   /** Decodes and validates the provided schema `Json`. */
-  def fromJson(json: Json): Either[AvroError, Schema] =
+  def fromJson(json: Json): Either[AvroException, Schema] =
     SchemaDecoder.decode(json)
 
   sealed abstract class Null extends Schema {

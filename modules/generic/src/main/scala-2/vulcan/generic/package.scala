@@ -117,7 +117,7 @@ package object generic {
   final def deriveEnum[A](
     symbols: Seq[String],
     encode: A => String,
-    decode: String => Either[AvroError, A]
+    decode: String => Either[AvroException, A]
   )(implicit names: Names[A]): Codec[A] =
     Codec.enumeration(
       name = names.typeName,
@@ -138,7 +138,7 @@ package object generic {
   final def deriveFixed[A](
     size: Int,
     encode: A => ByteVector,
-    decode: ByteVector => Either[AvroError, A]
+    decode: ByteVector => Either[AvroException, A]
   )(implicit names: Names[A]): Codec[A] =
     Codec.fixed(
       name = names.typeName,

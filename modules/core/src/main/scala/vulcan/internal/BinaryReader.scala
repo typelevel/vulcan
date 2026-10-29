@@ -9,8 +9,10 @@ package vulcan.internal
 import java.nio.charset.StandardCharsets
 import java.util.Arrays
 import scodec.bits.ByteVector
+import vulcan.AvroException
+import vulcan.AvroException.InvalidBinary
 
-/** Reads values in the Avro binary encoding, throwing [[BinaryException]] for invalid input. */
+/** Reads values in the Avro binary encoding, throwing [[AvroException]] for invalid input. */
 private[vulcan] final class BinaryReader private (bytes: Array[Byte], start: Int, limit: Int) {
   private[this] var index: Int =
     start
@@ -133,7 +135,7 @@ private[vulcan] final class BinaryReader private (bytes: Array[Byte], start: Int
     val length = readLong()
     if (length < 0) throw invalid(begin, s"negative length $length")
     if (length > remaining)
-      throw new BinaryException(
+      throw new InvalidBinary(
         s"Invalid length $length at position ${begin - start}, exceeding the remaining input"
       )
     length.toInt
@@ -147,10 +149,10 @@ private[vulcan] final class BinaryReader private (bytes: Array[Byte], start: Int
 
   private def ensureRemaining(count: Long): Unit =
     if (count > remaining)
-      throw new BinaryException(s"Unexpected end of input at position $position")
+      throw new InvalidBinary(s"Unexpected end of input at position $position")
 
-  private def invalid(at: Int, description: String): BinaryException =
-    new BinaryException(s"Invalid $description at position ${at - start}")
+  private def invalid(at: Int, description: String): AvroException =
+    new InvalidBinary(s"Invalid $description at position ${at - start}")
 }
 
 private[vulcan] object BinaryReader {

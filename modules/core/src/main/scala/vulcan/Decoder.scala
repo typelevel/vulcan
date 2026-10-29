@@ -16,5 +16,5 @@ package vulcan
 trait Decoder[A] {
 
   /** Attempts to decode the specified value. */
-  def decode(value: AvroValue): Either[AvroError, A]
+  def decode(value: AvroValue): Either[AvroException, A]
 }

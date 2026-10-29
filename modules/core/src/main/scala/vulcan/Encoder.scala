@@ -16,5 +16,5 @@ package vulcan
 trait Encoder[A] {
 
   /** Attempts to encode the specified value. */
-  def encode(a: A): Either[AvroError, AvroValue]
+  def encode(a: A): Either[AvroException, AvroValue]
 }

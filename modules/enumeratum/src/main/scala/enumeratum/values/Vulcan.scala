@@ -6,7 +6,7 @@
 
 package enumeratum.values
 
-import vulcan.AvroError
+import vulcan.AvroException
 import vulcan.Codec
 import vulcan.generic.deriveEnum
 import vulcan.internal.Names
@@ -19,7 +19,8 @@ object Vulcan {
     names: Names[EntryType]
   ): Codec[EntryType] = {
     lazy val entries = `enum`.values.map(_.value).mkString(", ")
-    val notFound = (value: ValueType) => AvroError(s"$value is not a member of ${names.typeName} ($entries)")
+    val notFound = (value: ValueType) =>
+      AvroException(s"$value is not a member of ${names.typeName} ($entries)")
 
     codec.imapError(value => `enum`.withValueOpt(value).toRight(notFound(value)))(_.value)
   }
@@ -28,7 +29,7 @@ object Vulcan {
     `enum`: ValueEnum[String, EntryType]
   )(implicit names: Names[EntryType]): Codec[EntryType] = {
     lazy val entries = `enum`.values.map(_.value).mkString(", ")
-    val notFound = (value: String) => AvroError(s"$value is not a member of ${names.typeName} ($entries)")
+    val notFound = (value: String) => AvroException(s"$value is not a member of ${names.typeName} ($entries)")
 
     deriveEnum(
       symbols = `enum`.values.map(_.value),

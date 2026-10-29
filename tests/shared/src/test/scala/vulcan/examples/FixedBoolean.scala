@@ -12,7 +12,7 @@ import io.circe.JsonObject
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
 import scodec.bits.*
-import vulcan.AvroError
+import vulcan.AvroException
 import vulcan.Codec
 
 sealed trait FixedBoolean extends Product with Serializable
@@ -32,7 +32,7 @@ object FixedBoolean {
           val byte = bytes.head
           if (byte == 0.toByte) Right(FalseFixedBoolean)
           else if (byte == 1.toByte) Right(TrueFixedBoolean)
-          else Left(AvroError(s"unknown byte $byte"))
+          else Left(AvroException(s"unknown byte $byte"))
         },
         doc = Some("A boolean represented as a byte"),
         aliases = List("SomeOtherBoolean"),

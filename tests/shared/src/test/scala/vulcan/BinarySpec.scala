@@ -8,7 +8,6 @@ package vulcan
 
 import org.scalacheck.Gen
 import scodec.bits.*
-import vulcan.internal.BinaryException
 import vulcan.internal.BinaryReader
 import vulcan.internal.BinaryWriter
 
@@ -28,7 +27,7 @@ final class BinarySpec extends BaseSpec {
   }
 
   private def readError(bytes: ByteVector)(f: BinaryReader => Any): String =
-    intercept[BinaryException](f(BinaryReader(bytes))).getMessage
+    intercept[AvroException](f(BinaryReader(bytes))).getMessage
 
   private def string(codePoints: Int*): String =
     codePoints.map(codePoint => new String(Character.toChars(codePoint))).mkString

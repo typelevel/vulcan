@@ -11,11 +11,15 @@ import io.circe.Json
 import java.nio.charset.StandardCharsets
 import scala.collection.mutable
 import scodec.bits.ByteVector
+import vulcan.AvroException.InvalidEnumValue
+import vulcan.AvroException.InvalidFixedValue
+import vulcan.AvroException.InvalidRecordValue
+import vulcan.AvroException.InvalidUnionValue
+import vulcan.AvroException.InvalidValue
 import vulcan.internal.ByteVectors
 import vulcan.internal.JsonNumbers
 import vulcan.internal.SchemaNames
 import vulcan.internal.SchemaValidator
-import vulcan.internal.ValueNames
 
 /**
   * Encodes values of type `A` to Avro `Json`.
@@ -27,27 +31,27 @@ import vulcan.internal.ValueNames
 trait JsonEncoder[A] {
 
   /** Attempts to encode the specified value to Avro `Json`. */
-  def encode(a: A): Either[AvroError, Json]
+  def encode(a: A): Either[AvroException, Json]
 }
 
 object JsonEncoder {
 
   /** Returns an encoder for values of the schema, if the schema is valid. */
-  private[vulcan] def apply(schema: Schema): Either[AvroError, JsonEncoder[AvroValue]] =
+  private[vulcan] def apply(schema: Schema): Either[AvroException, JsonEncoder[AvroValue]] =
     compile(schema, unionTypes = true)
 
   /**
     * Returns an encoder which encodes values of unions without the type, same as for defaults in
     * schemas.
     */
-  private[vulcan] def withoutUnionTypes(schema: Schema): Either[AvroError, JsonEncoder[AvroValue]] =
+  private[vulcan] def withoutUnionTypes(schema: Schema): Either[AvroException, JsonEncoder[AvroValue]] =
     compile(schema, unionTypes = false)
 
-  private def compile(schema: Schema, unionTypes: Boolean): Either[AvroError, JsonEncoder[AvroValue]] =
+  private def compile(schema: Schema, unionTypes: Boolean): Either[AvroException, JsonEncoder[AvroValue]] =
     SchemaValidator.validate(schema, validateDefaults = false).map { _ =>
       val root = new Compilation(unionTypes).compile(schema)
       new JsonEncoder[AvroValue] {
-        override def encode(value: AvroValue): Either[AvroError, Json] =
+        override def encode(value: AvroValue): Either[AvroException, Json] =
           root.encode(value)
       }
     }
@@ -57,7 +61,7 @@ object JsonEncoder {
     Json.fromString(ByteVectors.decodeString(bytes, StandardCharsets.ISO_8859_1))
 
   private sealed abstract class Node {
-    def encode(value: AvroValue): Either[AvroError, Json]
+    def encode(value: AvroValue): Either[AvroException, Json]
   }
 
   private final class Compilation(unionTypes: Boolean) {
@@ -120,12 +124,12 @@ object JsonEncoder {
     def resolved: Node =
       if (node != null) node else this
 
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       node.encode(value)
   }
 
   private object NullNode extends Node {
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.Null => Right(Json.Null)
         case _ => invalid(value, "null")
@@ -133,7 +137,7 @@ object JsonEncoder {
   }
 
   private object BooleanNode extends Node {
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.Boolean(boolean) => Right(Json.fromBoolean(boolean))
         case _ => invalid(value, "boolean")
@@ -141,7 +145,7 @@ object JsonEncoder {
   }
 
   private object IntNode extends Node {
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.Int(int) => Right(Json.fromInt(int))
         case _ => invalid(value, "int")
@@ -149,7 +153,7 @@ object JsonEncoder {
   }
 
   private object LongNode extends Node {
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.Long(long) => Right(Json.fromLong(long))
         case _ => invalid(value, "long")
@@ -157,7 +161,7 @@ object JsonEncoder {
   }
 
   private object FloatNode extends Node {
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.Float(float) => Right(JsonNumbers.float(float))
         case _ => invalid(value, "float")
@@ -165,7 +169,7 @@ object JsonEncoder {
   }
 
   private object DoubleNode extends Node {
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.Double(double) => Right(JsonNumbers.double(double))
         case _ => invalid(value, "double")
@@ -173,7 +177,7 @@ object JsonEncoder {
   }
 
   private object BytesNode extends Node {
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.Bytes(bytes) => Right(bytesJson(bytes))
         case _ => invalid(value, "bytes")
@@ -181,7 +185,7 @@ object JsonEncoder {
   }
 
   private object StringNode extends Node {
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.String(string) => Right(Json.fromString(string))
         case _ => invalid(value, "string")
@@ -189,7 +193,7 @@ object JsonEncoder {
   }
 
   private final class RecordNode(fullName: String, fields: Vector[(String, Node)]) extends Node {
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.Record(values) if values.size == fields.size =>
           values
@@ -200,11 +204,7 @@ object JsonEncoder {
             .map(Json.fromFields)
 
         case AvroValue.Record(values) =>
-          Left(
-            AvroError(
-              s"Invalid record with ${values.size} values for record $fullName with ${fields.size} fields"
-            )
-          )
+          Left(new InvalidRecordValue(values.size, fullName, fields.size))
 
         case _ =>
           invalid(value, s"record $fullName")
@@ -212,13 +212,13 @@ object JsonEncoder {
   }
 
   private final class EnumNode(fullName: String, symbols: Set[String]) extends Node {
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.Enum(symbol) if symbols.contains(symbol) =>
           Right(Json.fromString(symbol))
 
         case AvroValue.Enum(symbol) =>
-          Left(AvroError(s"Invalid symbol $symbol for enum $fullName"))
+          Left(new InvalidEnumValue(symbol, fullName))
 
         case _ =>
           invalid(value, s"enum $fullName")
@@ -226,15 +226,13 @@ object JsonEncoder {
   }
 
   private final class FixedNode(fullName: String, size: Long) extends Node {
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.Fixed(bytes) if bytes.size == size =>
           Right(bytesJson(bytes))
 
         case AvroValue.Fixed(bytes) =>
-          Left(
-            AvroError(s"Invalid fixed with ${bytes.size} bytes for fixed $fullName with size $size")
-          )
+          Left(new InvalidFixedValue(bytes.size, fullName, size))
 
         case _ =>
           invalid(value, s"fixed $fullName")
@@ -242,7 +240,7 @@ object JsonEncoder {
   }
 
   private final class ArrayNode(items: Node) extends Node {
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.Array(values) => values.traverse(items.encode).map(Json.fromValues)
         case _ => invalid(value, "array")
@@ -250,7 +248,7 @@ object JsonEncoder {
   }
 
   private final class MapNode(values: Node) extends Node {
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.Map(entries) =>
           entries
@@ -267,7 +265,7 @@ object JsonEncoder {
     * type is not included.
     */
   private final class UnionNode(types: Vector[(Option[String], Node)]) extends Node {
-    override def encode(value: AvroValue): Either[AvroError, Json] =
+    override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.Union(index, branchValue) if index >= 0 && index < types.size =>
           val (key, node) = types(index)
@@ -276,13 +274,13 @@ object JsonEncoder {
           }
 
         case AvroValue.Union(index, _) =>
-          Left(AvroError(s"Invalid index $index for union with ${types.size} types"))
+          Left(new InvalidUnionValue(index, types.size))
 
         case _ =>
           invalid(value, "union")
       }
   }
 
-  private def invalid(value: AvroValue, schema: String): Either[AvroError, Json] =
-    Left(AvroError(s"Invalid ${ValueNames.typeName(value)} value for $schema"))
+  private def invalid(value: AvroValue, schema: String): Either[AvroException, Json] =
+    Left(new InvalidValue(value, schema))
 }

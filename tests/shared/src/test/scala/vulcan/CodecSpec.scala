@@ -721,7 +721,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
               namespace = "vulcan.examples",
               symbols = List("symbol"),
               encode = _ => "not-symbol",
-              decode = _ => Left(AvroError("error"))
+              decode = _ => Left(AvroException("error"))
             )
 
           assertEncodeError[SealedTraitEnum](
@@ -976,9 +976,9 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       case class PosInt(value: Int)
 
       object PosInt {
-        def apply(value: Int): Either[AvroError, PosInt] =
+        def apply(value: Int): Either[AvroException, PosInt] =
           if (value > 0) Right(new PosInt(value) {})
-          else Left(AvroError(s"$value is not positive"))
+          else Left(AvroException(s"$value is not positive"))
 
         implicit val posIntCodec: Codec[PosInt] =
           Codec[Int].imapError(apply)(_.value)
@@ -1052,7 +1052,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
         it("should succeed for valid values") {
           assertDecodeIs[PosInt](
             unsafeEncode(1),
-            PosInt(1).toEither.leftMap(AvroError.fromThrowable)
+            PosInt(1).toEither.leftMap(e => AvroException(e.toString, e))
           )
         }
 
@@ -1073,7 +1073,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           int => Right(AvroValue.Long(int.toLong)),
           {
             case (AvroValue.Int(int), _: Schema.Int) => Right(int)
-            case (value, schema) => Left(AvroError(s"Got value $value with schema $schema"))
+            case (value, schema) => Left(AvroException(s"Got value $value with schema $schema"))
           }
         )
 
@@ -1087,7 +1087,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
             Codec.instance[Int](
               Right(Schema.Fixed(Schema.Name("1Invalid"), 1)),
               int => Right(AvroValue.Int(int)),
-              (_, _) => Left(AvroError("error"))
+              (_, _) => Left(AvroException("error"))
             )
 
           assert {
@@ -1382,7 +1382,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
         it("should error if an item cannot be encoded") {
           implicit val intCodec: Codec[Int] =
-            Codec.int.imapErrors(Right(_))(_ => Left(AvroError("error")))
+            Codec.int.imapErrors(Right(_))(_ => Left(AvroException("error")))
 
           assertEncodeError[List[Int]](
             List(1, 2, 3),
@@ -2289,7 +2289,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           decode = {
             case "first" => Right(First)
             case "second" => Right(Second)
-            case other => Left(AvroError(other))
+            case other => Left(AvroException(other))
           },
           namespace = ""
         )
@@ -2304,7 +2304,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
         it("should error if default value can't be encoded") {
           implicit val intCodec: Codec[Int] =
-            Codec.int.imapErrors(_ => Left(AvroError("error")))(_ => Left(AvroError("error")))
+            Codec.int.imapErrors(_ => Left(AvroException("error")))(_ => Left(AvroException("error")))
 
           implicit val caseClassFieldCodec: Codec[CaseClassField] =
             Codec.record[CaseClassField]("CaseClassField", "") { field =>
@@ -2650,7 +2650,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
           implicit val testCodec: Codec[Test] =
             Codec.record("Test", "") { field =>
-              field("value", _.value)(Codec.int.imapErrors(Right(_))(_ => Left(AvroError("error"))))
+              field("value", _.value)(Codec.int.imapErrors(Right(_))(_ => Left(AvroException("error"))))
                 .map(Test(_))
             }
 
@@ -3038,13 +3038,13 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       it("should show the error if schema is unavailable") {
         val codec =
           Codec.instance[Int](
-            Left(AvroError("error")),
+            Left(AvroException("error")),
             int => Right(AvroValue.Int(int)),
-            (_, _) => Left(AvroError("error"))
+            (_, _) => Left(AvroException("error"))
           )
 
         assert {
-          codec.show == "AvroError(error)"
+          codec.show == "vulcan.AvroException: error"
         }
       }
 
@@ -3522,13 +3522,13 @@ trait CodecSpecHelpers {
 
   def assertEncodeIs[A](
     a: A,
-    encoded: Either[AvroError, AvroValue]
+    encoded: Either[AvroException, AvroValue]
   )(implicit codec: Codec[A]): Assertion =
     assert(codec.encode(a).value == encoded.value)
 
   def assertDecodeIs[A](
     value: AvroValue,
-    decoded: Either[AvroError, A],
+    decoded: Either[AvroException, A],
     schema: Option[Schema] = None
   )(implicit codec: Codec[A]): Assertion = {
     val decode =
