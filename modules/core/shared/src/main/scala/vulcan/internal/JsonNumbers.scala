@@ -9,20 +9,17 @@ package vulcan.internal
 import io.circe.Json
 import io.circe.JsonNumber
 
-/** JSON numbers for floats and doubles, formatted the same as the Java Avro library on every platform. */
 private[vulcan] object JsonNumbers {
-
-  /** The float as a JSON number, or as a string if it is not finite. */
   def float(value: Float): Json =
-    if (java.lang.Float.isFinite(value)) decimal(NumberFormat.float(value))
-    else Json.fromString(value.toString)
+    if (isNegativeZero(value.toDouble)) NegativeZero else Json.fromFloatOrString(value)
 
-  /** The double as a JSON number, or as a string if it is not finite. */
   def double(value: Double): Json =
-    if (java.lang.Double.isFinite(value)) decimal(NumberFormat.double(value))
-    else Json.fromString(value.toString)
+    if (isNegativeZero(value)) NegativeZero else Json.fromDoubleOrString(value)
 
-  /** Decimal numbers are printed verbatim, while circe prints doubles using the platform. */
-  private def decimal(value: String): Json =
-    Json.fromJsonNumber(JsonNumber.fromDecimalStringUnsafe(value))
+  /** Negative zero with its sign, which `toString` drops on Scala.js. */
+  private val NegativeZero: Json =
+    Json.fromJsonNumber(JsonNumber.fromDecimalStringUnsafe("-0.0"))
+
+  private def isNegativeZero(value: Double): Boolean =
+    value == 0d && 1d / value < 0d
 }

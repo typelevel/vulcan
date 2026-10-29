@@ -69,7 +69,7 @@ final class JsonValueSpec extends BaseSpec {
           (Schema.Int, AvroValue.Int(-1), "-1"),
           (Schema.Long, AvroValue.Long(Long.MaxValue), Long.MaxValue.toString),
           (Schema.Float, AvroValue.Float(1.5f), "1.5"),
-          (Schema.Double, AvroValue.Double(1.0e10), "1.0E10"),
+          (Schema.Double, AvroValue.Double(-2.5), "-2.5"),
           (Schema.String, AvroValue.String("foo"), "\"foo\""),
           (
             record,

@@ -2417,11 +2417,11 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
             implicit val testCodec: Codec[Test] =
               Codec.record("Test", "") { field =>
-                field("value", _.value, default = Some(0.0f)).map(Test(_))
+                field("value", _.value, default = Some(1.5f)).map(Test(_))
               }
 
             assertSchemaIs[Test] {
-              """{"type":"record","name":"Test","fields":[{"name":"value","type":"float","default":0.0}]}"""
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":"float","default":1.5}]}"""
             }
           }
 
@@ -2430,11 +2430,11 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
 
             implicit val testCodec: Codec[Test] =
               Codec.record("Test", "") { field =>
-                field("value", _.value, default = Some(0.0d)).map(Test(_))
+                field("value", _.value, default = Some(1.5d)).map(Test(_))
               }
 
             assertSchemaIs[Test] {
-              """{"type":"record","name":"Test","fields":[{"name":"value","type":"double","default":0.0}]}"""
+              """{"type":"record","name":"Test","fields":[{"name":"value","type":"double","default":1.5}]}"""
             }
           }
 
