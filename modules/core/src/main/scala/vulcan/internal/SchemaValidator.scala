@@ -120,7 +120,7 @@ private[vulcan] object SchemaValidator {
             defined.update(named.fullName, named)
 
             named.aliases.traverse_ { alias =>
-              val aliasName = SchemaNames.resolve(alias, named.name.namespace).name
+              val aliasName = Schema.Name(alias, named.name.namespace).name
               validateName(aliasName, s"""alias "$alias" of ${named.fullName}""")
             } >> {
               val reserved = named match {

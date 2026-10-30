@@ -309,7 +309,7 @@ private[vulcan] object SchemaDecoder {
   ): Either[AvroException, Schema.Name] =
     obj("name")
       .flatMap(_.asString)
-      .map(SchemaNames.resolve(_, obj("namespace").flatMap(_.asString).orElse(namespace)))
+      .map(Schema.Name(_, obj("namespace").flatMap(_.asString).orElse(namespace)))
       .toRight(new InvalidSchema(s"Missing name in schema ${print(obj)}"))
 
   private def primitive(name: String, props: JsonObject): Option[Schema] =

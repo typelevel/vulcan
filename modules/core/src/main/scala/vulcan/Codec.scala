@@ -347,7 +347,7 @@ object Codec {
     aliases: Seq[String] = Seq.empty,
     props: JsonObject = JsonObject.empty
   ): Codec[A] = {
-    val enumName = SchemaNames.resolve(name, Some(namespace))
+    val enumName = Schema.Name(name, Some(namespace))
     new EnumCodec(enumName, symbols.toVector, encode, decode, default, doc, aliases.toVector, props)
       .withTypeName(enumName.fullName)
   }
@@ -371,7 +371,7 @@ object Codec {
     aliases: Seq[String] = Seq.empty,
     props: JsonObject = JsonObject.empty
   ): Codec[A] = {
-    val fixedName = SchemaNames.resolve(name, Some(namespace))
+    val fixedName = Schema.Name(name, Some(namespace))
     new FixedCodec(fixedName, size, encode, decode, doc, aliases.toVector, props)
       .withTypeName(fixedName.fullName)
   }
@@ -611,7 +611,7 @@ object Codec {
     aliases: Seq[String] = Seq.empty,
     props: JsonObject = JsonObject.empty
   )(f: FieldBuilder[A] => FreeApplicative[Field[A, *], A]): Codec[A] = {
-    val recordName = SchemaNames.resolve(name, Some(namespace))
+    val recordName = Schema.Name(name, Some(namespace))
     new RecordCodec(recordName, doc, aliases.toVector, props, f(FieldBuilder.instance))
       .withTypeName(recordName.fullName)
   }
@@ -1807,7 +1807,7 @@ object Codec {
   ): Boolean =
     schema match {
       case named: Schema.Named if SchemaNames.typeName(named) == SchemaNames.typeName(writerSchema) =>
-        val aliases = named.aliases.map(SchemaNames.resolve(_, named.name.namespace))
+        val aliases = named.aliases.map(Schema.Name(_, named.name.namespace))
         (named.name +: aliases).exists(name(_) == name(writerSchema.name))
 
       case _ =>

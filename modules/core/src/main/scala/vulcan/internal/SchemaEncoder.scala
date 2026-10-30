@@ -140,7 +140,7 @@ private[vulcan] object SchemaEncoder {
   private def aliases(named: Schema.Named): List[(String, Json)] = {
     val names =
       named.aliases
-        .map(SchemaNames.resolve(_, named.name.namespace))
+        .map(Schema.Name(_, named.name.namespace))
         .distinctBy(_.fullName)
 
     if (names.isEmpty) Nil

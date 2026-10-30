@@ -470,12 +470,20 @@ object Schema {
   }
 
   object Name {
+
+    /** Returns a new name in the null namespace, unless the name is a full name with dots. */
     def apply(name: Predef.String): Name =
       apply(name, None)
 
-    /** Returns a new name, where an empty namespace is the null namespace. */
+    /**
+      * Returns a new name, where a name with dots is a full name, ignoring the namespace,
+      * and an empty namespace is the null namespace.
+      */
     def apply(name: Predef.String, namespace: Option[Predef.String]): Name =
-      NameImpl(name, namespace.filter(_.nonEmpty))
+      name.lastIndexOf('.') match {
+        case -1 => NameImpl(name, namespace.filter(_.nonEmpty))
+        case lastDot => apply(name.substring(lastDot + 1), Some(name.substring(0, lastDot)))
+      }
   }
 
   private final case class NameImpl(
