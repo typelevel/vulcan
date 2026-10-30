@@ -6,19 +6,16 @@
 
 package vulcan.generic
 
-import vulcan.BaseSpec
+import vulcan.BaseSuite
 import vulcan.RoundtripHelpers
 import vulcan.generic.examples.*
 
-final class GenericDerivationRoundtripSpec extends BaseSpec with RoundtripHelpers {
-
-  describe("derive") {
-    it("CaseClassAvroNamespace") { roundtrip[CaseClassAvroNamespace] }
-    it("CaseClassField") { roundtrip[CaseClassField] }
-    it("SealedTraitCaseClassAvroNamespace") { roundtrip[SealedTraitCaseClassAvroNamespace] }
-    it("SealedTraitCaseClassCustom") { roundtrip[SealedTraitCaseClassCustom] }
-    it("CaseClassAvroNullDefault") { roundtrip[CaseClassAvroNullDefault] }
-    it("CaseClassFieldAvroNullDefault") { roundtrip[CaseClassFieldAvroNullDefault] }
-    it("CaseClassAndFieldAvroNullDefault") { roundtrip[CaseClassAndFieldAvroNullDefault] }
-  }
+object GenericDerivationRoundtripSpec extends BaseSuite with RoundtripHelpers {
+  test("derive CaseClassAvroNamespace") { roundtrip[CaseClassAvroNamespace] }
+  test("derive CaseClassField") { roundtrip[CaseClassField] }
+  test("derive SealedTraitCaseClassAvroNamespace") { roundtrip[SealedTraitCaseClassAvroNamespace] }
+  test("derive SealedTraitCaseClassCustom") { roundtrip[SealedTraitCaseClassCustom] }
+  test("derive CaseClassAvroNullDefault") { roundtrip[CaseClassAvroNullDefault] }
+  test("derive CaseClassFieldAvroNullDefault") { roundtrip[CaseClassFieldAvroNullDefault] }
+  test("derive CaseClassAndFieldAvroNullDefault") { roundtrip[CaseClassAndFieldAvroNullDefault] }
 }
