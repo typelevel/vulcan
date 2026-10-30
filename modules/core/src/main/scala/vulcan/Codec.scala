@@ -63,11 +63,11 @@ sealed abstract class Codec[A] {
     }
 
   /**
-    * Returns a `Decoder` for values written using the provided
-    * writer schema, or an error if the writer schema is invalid.
+    * Returns a `Decoder` for values written using the provided writer
+    * schema, or an error if the schema or writer schema is invalid.
     */
   final def decoder(writerSchema: Schema): Either[AvroException, Decoder[A]] =
-    SchemaValidator.validate(writerSchema, validateDefaults = false).map { _ =>
+    (schema >> SchemaValidator.validate(writerSchema, validateDefaults = false)).map { _ =>
       val resolved = resolveDecoder(writerSchema, new Definitions(writerSchema))
       new Decoder[A] {
         override def decode(value: AvroValue): Either[AvroException, A] =
@@ -86,10 +86,10 @@ sealed abstract class Codec[A] {
 
   /**
     * Returns a `BinaryDecoder` for Avro binary written using the provided
-    * writer schema, or an error if the writer schema is invalid.
+    * writer schema, or an error if the schema or writer schema is invalid.
     */
   final def binaryDecoder(writerSchema: Schema): Either[AvroException, BinaryDecoder[A]] =
-    BinaryDecoder(writerSchema).map { compiled =>
+    (schema >> BinaryDecoder(writerSchema)).map { compiled =>
       val resolved = resolveDecoder(writerSchema, new Definitions(writerSchema))
       new BinaryDecoder[A] {
         override def decode(bytes: ByteVector): Either[AvroException, A] =
@@ -108,10 +108,10 @@ sealed abstract class Codec[A] {
 
   /**
     * Returns a `JsonDecoder` for Avro `Json` written using the provided
-    * writer schema, or an error if the writer schema is invalid.
+    * writer schema, or an error if the schema or writer schema is invalid.
     */
   final def jsonDecoder(writerSchema: Schema): Either[AvroException, JsonDecoder[A]] =
-    JsonDecoder(writerSchema).map { compiled =>
+    (schema >> JsonDecoder(writerSchema)).map { compiled =>
       val resolved = resolveDecoder(writerSchema, new Definitions(writerSchema))
       new JsonDecoder[A] {
         override def decode(json: Json): Either[AvroException, A] =

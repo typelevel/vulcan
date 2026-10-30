@@ -59,6 +59,11 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
         assert(result.swap.value.message == """Duplicate int in union ["int","int"]""")
       }
 
+      it("should error if the schema is invalid") {
+        val result = Codec.decimal(precision = -1, scale = -1).binaryDecoder(Schema.Bytes)
+        assert(result.swap.value.message == "Invalid decimal precision -1: must be positive")
+      }
+
       it("should error if the binary does not match the writer schema") {
         val decoder = Codec[Int].binaryDecoder(unsafeSchema[Int]).value
         assert {
@@ -500,6 +505,11 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       it("should error if the writer schema is invalid") {
         val result = Codec[Int].decoder(Schema.Union(Vector(Schema.Int, Schema.Int)))
         assert(result.swap.value.message == """Duplicate int in union ["int","int"]""")
+      }
+
+      it("should error if the schema is invalid") {
+        val result = Codec.decimal(precision = -1, scale = -1).decoder(Schema.Bytes)
+        assert(result.swap.value.message == "Invalid decimal precision -1: must be positive")
       }
 
       it("should decode values of unions using the written type") {
@@ -1337,6 +1347,11 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       it("should error if the writer schema is invalid") {
         val result = Codec[Int].jsonDecoder(Schema.Union(Vector(Schema.Int, Schema.Int)))
         assert(result.swap.value.message == """Duplicate int in union ["int","int"]""")
+      }
+
+      it("should error if the schema is invalid") {
+        val result = Codec.decimal(precision = -1, scale = -1).jsonDecoder(Schema.Bytes)
+        assert(result.swap.value.message == "Invalid decimal precision -1: must be positive")
       }
 
       it("should error if the json does not match the writer schema") {
