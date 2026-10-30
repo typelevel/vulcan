@@ -202,6 +202,22 @@ final class SchemaJavaSpec extends BaseSpec {
         """{"type":"record","name":"Person","fields":[{"name":"first","type":{"type":"enum","name":"Name","symbols":["Unknown","Other"],"default":"Unknown"}},{"name":"last","type":{"type":"enum","name":"Name","symbols":["Unknown","Other"],"default":"Other"}}]}"""
     )
 
+  /** Schemas with logical types, which are ignored if invalid for the type. */
+  private val LogicalTypes: List[String] =
+    List(
+      """{"type":"bytes","logicalType":"decimal","precision":4,"scale":2}""",
+      """{"type":"bytes","logicalType":"decimal","precision":4}""",
+      """{"type":"bytes","logicalType":"decimal","precision":4.0,"scale":2}""",
+      """{"type":"bytes","logicalType":"decimal","precision":4e0}""",
+      """{"type":"bytes","logicalType":"decimal","precision":4,"scale":2.0}""",
+      """{"type":"bytes","logicalType":"decimal","precision":4,"scale":null}""",
+      """{"type":"bytes","logicalType":"decimal","precision":"4"}""",
+      """{"type":"bytes","logicalType":"decimal","precision":2147483648}""",
+      """{"type":"bytes","logicalType":"decimal","precision":2,"scale":3}""",
+      """{"type":"fixed","name":"Decimal","size":2,"logicalType":"decimal","precision":4}""",
+      """{"type":"fixed","name":"Decimal","size":2,"logicalType":"decimal","precision":5}"""
+    )
+
   /** Parses the schema without validating defaults, since defaults are not validated. */
   private def javaParse(json: String): Try[String] =
     Try(new JavaSchema.Parser().setValidateDefaults(false).parse(json).toString)
@@ -218,6 +234,15 @@ final class SchemaJavaSpec extends BaseSpec {
     )
 
   describe("Schema") {
+    describe("logicalType") {
+      LogicalTypes.foreach { json =>
+        it(s"should be the same as the Java Avro library for $json") {
+          val expected = Option(new JavaSchema.Parser().parse(json).getLogicalType).map(_.getName)
+          assert(Schema.parse(json).value.logicalType.map(_.name) == expected)
+        }
+      }
+    }
+
     describe("toString") {
       it("should print the same as the Java Avro library") {
         forAll(SchemaGenerators.genSchema, minSuccessful(1000)) { schema =>
