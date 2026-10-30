@@ -170,7 +170,12 @@ sealed abstract class Codec[A] {
     definitions: Definitions
   ): AvroValue => Either[AvroException, A]
 
-  /** The value encoded as `null`, if there is one, used as the default of nullable fields. */
+  /**
+    * The value encoded as `null`, if there is one, used as the default of nullable fields.
+    *
+    * The generic module calls this, so changing the signature breaks binary compatibility
+    * between modules, which MiMa does not check for package-private members.
+    */
   private[vulcan] def nullValue: Option[A] =
     None
 
@@ -193,6 +198,12 @@ sealed abstract class Codec[A] {
         resolve(writerSchema, definitions)
     }
 
+  /**
+    * Returns a codec which includes the type name in errors when encoding and decoding.
+    *
+    * The generic module calls this, so changing the signature breaks binary compatibility
+    * between modules, which MiMa does not check for package-private members.
+    */
   private[vulcan] final def withTypeName(typeName: String): Codec[A] =
     new Codec.WithTypeName(this, typeName)
 
@@ -778,7 +789,7 @@ object Codec {
 
     def default: Option[B]
 
-    def order: Option[Schema.Field.Order]
+    def order: Schema.Field.Order
 
     def aliases: Seq[String]
 
@@ -794,7 +805,7 @@ object Codec {
       access: A => B,
       doc: Option[String] = None,
       default: Option[B] = None,
-      order: Option[Schema.Field.Order] = None,
+      order: Schema.Field.Order = Schema.Field.Order.Ascending,
       aliases: Seq[String] = Seq.empty,
       props: JsonObject = JsonObject.empty
     )(implicit codec: Codec[B]): FreeApplicative[Field[A, *], B]
@@ -808,7 +819,7 @@ object Codec {
           access: Any => B,
           doc: Option[String],
           default: Option[B],
-          order: Option[Schema.Field.Order],
+          order: Schema.Field.Order,
           aliases: Seq[String],
           props: JsonObject
         )(implicit codec: Codec[B]): FreeApplicative[Field[Any, *], B] = {
@@ -828,7 +839,7 @@ object Codec {
               override val codec: Codec[B] = _codec
               override val doc: Option[String] = _doc
               override val default: Option[B] = _default
-              override val order: Option[Schema.Field.Order] = _order
+              override val order: Schema.Field.Order = _order
               override val aliases: Seq[String] = _aliases
               override val props: JsonObject = _props
             }
@@ -1737,7 +1748,7 @@ object Codec {
       .Field(field.name, schema)
       .withDoc(field.doc)
       .withDefault(default)
-      .withOrder(field.order.getOrElse(Schema.Field.Order.Ascending))
+      .withOrder(field.order)
       .withAliases(field.aliases.toVector)
       .withProps(field.props)
 

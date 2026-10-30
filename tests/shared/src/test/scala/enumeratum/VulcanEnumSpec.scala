@@ -38,6 +38,10 @@ final class VulcanEnumSpec extends AnyFunSpec with ScalaCheckPropertyChecks with
       }
     }
 
+    it("should provide the codec as vulcanCodec") {
+      assert(Suit.vulcanCodec.schema === Codec[Suit].schema)
+    }
+
     it("should roundtrip enum values") {
       val gen = Gen.oneOf[Suit](Suit.Diamonds, Suit.Hearts, Suit.Spades)
       forAll(gen) { suit =>
