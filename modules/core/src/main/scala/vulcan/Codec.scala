@@ -170,6 +170,10 @@ sealed abstract class Codec[A] {
     definitions: Definitions
   ): AvroValue => Either[AvroException, A]
 
+  /** The value encoded as `null`, if there is one, used as the default of nullable fields. */
+  private[vulcan] def nullValue: Option[A] =
+    None
+
   /** Returns a function decoding values of the writer schema, resolved once for the schema. */
   private[vulcan] final def resolveDecoder(
     writerSchema: Schema,
@@ -892,6 +896,9 @@ object Codec {
     override def encode(a: A): Either[AvroException, AvroValue] =
       codec.encode(a).left.map(new ErrorEncodingType(typeName, _))
 
+    override def nullValue: Option[A] =
+      codec.nullValue
+
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
@@ -1011,6 +1018,9 @@ object Codec {
         case (Left(error), _) =>
           Left(error)
       }
+
+    override val nullValue: Option[Option[A]] =
+      Some(None)
 
     override def resolve(
       writerSchema: Schema,
@@ -1388,6 +1398,9 @@ object Codec {
 
     override def encode(a: A): Either[AvroException, AvroValue] =
       encoded
+
+    override val nullValue: Option[A] =
+      Some(value)
 
     override def resolve(
       writerSchema: Schema,

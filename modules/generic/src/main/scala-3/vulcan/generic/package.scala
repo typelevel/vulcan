@@ -78,9 +78,7 @@ package object generic {
                   alias
                 }.toList,
                 default = param.default.orElse(
-                  Option.when(codec.schema.exists(_.isNullable) && nullDefaultField)(
-                    None.asInstanceOf[param.PType] // TODO: remove cast
-                  )
+                  if (nullDefaultField) codec.nullValue else None
                 ),
                 props = getProps.getOrElse(JsonObject.empty)
               ).widen

@@ -6,8 +6,10 @@
 
 package vulcan.generic
 
+import io.circe.Json
 import vulcan.BaseSpec
 import vulcan.Codec
+import vulcan.Schema
 import vulcan.generic.examples.CaseClassAvroNullDefault
 
 final class AvroNullDefaultSpec extends BaseSpec {
@@ -47,5 +49,29 @@ final class AvroNullDefaultSpec extends BaseSpec {
       assert(decoded.value == CaseClassAvroNullDefault(Some(3), None, None, None, None, None, None))
 
     }
+
+    it("should only include null defaults for fields with null values") {
+      val schema = Codec[AvroNullDefaultSpec.NullableFields].schema.value
+      val defaults = schema.asInstanceOf[Schema.Record].fields.map(field => (field.name, field.default))
+
+      assert {
+        defaults == Vector(
+          "option" -> Some(Json.Null),
+          "unit" -> Some(Json.Null),
+          "none" -> Some(Json.Null),
+          "either" -> None
+        )
+      }
+    }
+  }
+}
+
+object AvroNullDefaultSpec {
+  @AvroNullDefault(true)
+  final case class NullableFields(option: Option[Int], unit: Unit, none: None.type, either: Either[Unit, Int])
+
+  object NullableFields {
+    implicit val codec: Codec[NullableFields] =
+      Codec.derive
   }
 }
