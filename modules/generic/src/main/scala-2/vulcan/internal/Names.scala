@@ -13,7 +13,7 @@ sealed abstract class Names[A] {
 
   def doc: Option[String]
 
-  def aliasOf: Option[String]
+  def aliases: Seq[String]
 }
 
 object Names {
@@ -21,7 +21,7 @@ object Names {
     override val typeName: String,
     override val namespace: String,
     override val doc: Option[String],
-    override val aliasOf: Option[String]
+    override val aliases: Seq[String]
   ) extends Names[A]
 
   // Public since the macro expansion calls it at the call site
@@ -29,13 +29,13 @@ object Names {
     typeName: String,
     namespace: String,
     doc: Option[String],
-    aliasOf: Option[String]
+    aliases: Seq[String]
   ): Names[A] =
     NamesImpl(
       typeName = typeName,
       namespace = namespace,
       doc = doc,
-      aliasOf = aliasOf
+      aliases = aliases
     )
 
   implicit def names[A]: Names[A] = macro NamesMacro.names[A]

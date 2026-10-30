@@ -35,9 +35,7 @@ package object generic {
             doc = caseClass.annotations.collectFirst { case AvroDoc(doc) =>
               doc
             },
-            aliases = caseClass.annotations.collectFirst { case AvroAlias(alias) =>
-              alias
-            }.toList
+            aliases = caseClass.annotations.collect { case AvroAlias(alias) => alias }.toList
           ) { (f: Codec.FieldBuilder[A]) =>
             val nullDefaultBase = caseClass.annotations
               .collectFirst { case AvroNullDefault(enabled) => enabled }
@@ -72,9 +70,7 @@ package object generic {
                   doc = param.annotations.collectFirst { case AvroDoc(doc) =>
                     doc
                   },
-                  aliases = param.annotations.collectFirst { case AvroAlias(alias) =>
-                    alias
-                  }.toList,
+                  aliases = param.annotations.collect { case AvroAlias(alias) => alias }.toList,
                   default = param.default.orElse(
                     if (nullDefaultField) codec.nullValue else None
                   ),
@@ -124,7 +120,7 @@ package object generic {
       decode = decode,
       namespace = names.namespace,
       doc = names.doc,
-      aliases = names.aliasOf.toSeq
+      aliases = names.aliases
     )
 
   /**
@@ -145,6 +141,6 @@ package object generic {
       decode = decode,
       namespace = names.namespace,
       doc = names.doc,
-      aliases = names.aliasOf.toSeq
+      aliases = names.aliases
     )
 }

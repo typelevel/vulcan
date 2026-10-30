@@ -48,9 +48,9 @@ final class GenericDerivationCodecSpec extends BaseSpec with CodecSpecHelpers {
             }
           }
 
-          it("should support annotation for record alias") {
+          it("should support annotations for record aliases") {
             assertSchemaIs[CaseClassAvroAlias] {
-              """{"type":"record","name":"CaseClassAvroAlias","namespace":"vulcan.generic.examples","fields":[{"name":"value","type":["null","string"],"aliases":["otherValueAlias"]}],"aliases":["CaseClassOtherAlias"]}"""
+              """{"type":"record","name":"CaseClassAvroAlias","namespace":"vulcan.generic.examples","fields":[{"name":"value","type":["null","string"],"aliases":["otherValueAlias","secondValueAlias"]}],"aliases":["CaseClassOtherAlias","CaseClassSecondAlias"]}"""
             }
           }
 

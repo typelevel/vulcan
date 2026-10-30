@@ -21,11 +21,14 @@ private[vulcan] final class NamesMacro(val c: blackbox.Context) {
     // Complete the symbol so that its annotations are available
     val _ = symbol.typeSignature
 
-    def annotationValue[T](implicit T: TypeTag[T]): Option[Tree] =
-      symbol.annotations.collectFirst {
+    def annotationValues[T](implicit T: TypeTag[T]): List[Tree] =
+      symbol.annotations.collect {
         case annotation if annotation.tree.tpe =:= T.tpe =>
           annotation.tree.children.last.duplicate
       }
+
+    def annotationValue[T](implicit T: TypeTag[T]): Option[Tree] =
+      annotationValues[T].headOption
 
     def optionTree(value: Option[Tree]): Tree =
       value.fold[Tree](q"_root_.scala.None")(value => q"_root_.scala.Some($value)")
@@ -41,11 +44,11 @@ private[vulcan] final class NamesMacro(val c: blackbox.Context) {
     val doc =
       optionTree(annotationValue[AvroDoc])
 
-    val aliasOf =
-      optionTree(annotationValue[AvroAlias])
+    val aliases =
+      q"_root_.scala.List(..${annotationValues[AvroAlias]})"
 
     c.Expr[Names[A]] {
-      q"_root_.vulcan.internal.Names[${A.tpe}]($typeName, $namespace, $doc, $aliasOf)"
+      q"_root_.vulcan.internal.Names[${A.tpe}]($typeName, $namespace, $doc, $aliases)"
     }
   }
 }

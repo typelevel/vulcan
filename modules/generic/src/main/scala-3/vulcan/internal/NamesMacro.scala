@@ -37,8 +37,14 @@ object NamesMacro {
       .getOrElse(Expr(symbol.owner.fullName.replace("$.", ".").stripSuffix("$")))
 
     val doc = toExprOpt(getAnnotValue[AvroDoc].map(e => '{ $e.doc }))
-    val alias = toExprOpt(getAnnotValue[AvroAlias].map(e => '{ $e.alias }))
 
-    '{ Names[A]($typeName, $namespace, $doc, $alias) }
+    // Annotations are in reverse source order in Scala 3
+    val aliases = Expr.ofList {
+      symbol.annotations.reverse
+        .filter(_.tpe.typeSymbol == TypeRepr.of[AvroAlias].typeSymbol)
+        .map(annotation => '{ ${ annotation.asExprOf[AvroAlias] }.alias })
+    }
+
+    '{ Names[A]($typeName, $namespace, $doc, $aliases) }
 
 }

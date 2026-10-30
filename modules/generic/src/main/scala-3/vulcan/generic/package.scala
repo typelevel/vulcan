@@ -37,9 +37,7 @@ package object generic {
           doc = caseClass.annotations.collectFirst { case AvroDoc(doc) =>
             doc
           },
-          aliases = caseClass.annotations.collectFirst { case AvroAlias(alias) =>
-            alias
-          }.toList
+          aliases = aliases(caseClass.annotations)
         ) { (f: Codec.FieldBuilder[A]) =>
           val nullDefaultBase = caseClass.annotations
             .collectFirst { case AvroNullDefault(enabled) => enabled }
@@ -74,9 +72,7 @@ package object generic {
                 doc = param.annotations.collectFirst { case AvroDoc(doc) =>
                   doc
                 },
-                aliases = param.annotations.collectFirst { case AvroAlias(alias) =>
-                  alias
-                }.toList,
+                aliases = aliases(param.annotations),
                 default = param.default.orElse(
                   if (nullDefaultField) codec.nullValue else None
                 ),
@@ -102,6 +98,10 @@ package object generic {
     }
 
     final type Typeclass[A] = Codec[A]
+
+    /** The aliases of `AvroAlias` annotations, which are in reverse source order in Scala 3. */
+    private def aliases(annotations: Seq[Any]): List[String] =
+      annotations.collect { case AvroAlias(alias) => alias }.toList.reverse
   }
 
   /**
@@ -122,7 +122,7 @@ package object generic {
       decode = decode,
       namespace = names.namespace,
       doc = names.doc,
-      aliases = names.aliasOf.toSeq
+      aliases = names.aliases
     )
 
   /**
@@ -143,7 +143,7 @@ package object generic {
       decode = decode,
       namespace = names.namespace,
       doc = names.doc,
-      aliases = names.aliasOf.toSeq
+      aliases = names.aliases
     )
 
 }

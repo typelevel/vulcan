@@ -10,8 +10,10 @@ import vulcan.Codec
 import vulcan.generic.*
 
 @AvroAlias("CaseClassOtherAlias")
+@AvroAlias("CaseClassSecondAlias")
 final case class CaseClassAvroAlias(
   @AvroAlias("otherValueAlias")
+  @AvroAlias("secondValueAlias")
   value: Option[String]
 )
 
