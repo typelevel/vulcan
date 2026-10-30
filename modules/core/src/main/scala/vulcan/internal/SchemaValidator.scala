@@ -118,32 +118,38 @@ private[vulcan] object SchemaValidator {
         case None =>
           validateFullName(named.name) >> {
             defined.update(named.fullName, named)
-
-            named.aliases.traverse_ { alias =>
-              val aliasName = Schema.Name(alias, named.name.namespace).name
-              validateName(aliasName, s"""alias "$alias" of ${named.fullName}""")
-            } >> {
-              val reserved = named match {
-                case _: Schema.Enum => SchemaEncoder.EnumReserved
-                case _ => SchemaEncoder.SchemaReserved
-              }
-
-              validateProps(named.props, reserved, SchemaNames.describe(named))
-            } >> {
-              named match {
-                case record: Schema.Record =>
-                  validateFields(record)
-
-                case enumeration: Schema.Enum =>
-                  validateSymbols(enumeration)
-
-                case fixed: Schema.Fixed =>
-                  if (fixed.size >= 0) Right(())
-                  else Left(new InvalidFixedSize(fixed))
-              }
-            }
+            validateAliases(named) >>
+              validateNamedProps(named) >>
+              validateContents(named)
           }
       }
+
+    private def validateAliases(named: Schema.Named): Either[AvroException, Unit] =
+      named.aliases.traverse_ { alias =>
+        val aliasName = Schema.Name(alias, named.name.namespace).name
+        validateName(aliasName, s"""alias "$alias" of ${named.fullName}""")
+      }
+
+    private def validateNamedProps(named: Schema.Named): Either[AvroException, Unit] = {
+      val reserved = named match {
+        case _: Schema.Enum => SchemaEncoder.EnumReserved
+        case _ => SchemaEncoder.SchemaReserved
+      }
+
+      validateProps(named.props, reserved, SchemaNames.describe(named))
+    }
+
+    /** Validates the fields of records, symbols of enums, and size of fixed schemas. */
+    private def validateContents(named: Schema.Named): Either[AvroException, Unit] =
+      named match {
+        case record: Schema.Record => validateFields(record)
+        case enumeration: Schema.Enum => validateSymbols(enumeration)
+        case fixed: Schema.Fixed => validateSize(fixed)
+      }
+
+    private def validateSize(fixed: Schema.Fixed): Either[AvroException, Unit] =
+      if (fixed.size >= 0) Right(())
+      else Left(new InvalidFixedSize(fixed))
 
     /** Validates the named schemas within an equivalent definition. */
     private def validateNested(named: Schema.Named): Either[AvroException, Unit] =
