@@ -379,19 +379,23 @@ object Codec {
     FloatCodec
 
   /**
-    * Returns a new [[Codec]] instance using the specified schema, and encode and decode functions.
+    * Returns a new [[Codec]] using the specified schema, encoder, and decoder function.
     *
-    * The decode function is called with values of the writer schema, which is neither a union nor a
-    * reference. Values of unions are decoded using the schema of the written type.
+    * The decoder function returns a [[Decoder]] for values of the writer schema, and is
+    * called once for each writer schema. Values of unions are decoded using the schema
+    * of the written type, so the writer schema is neither a union nor a reference. It
+    * includes the definitions of the named schemas it references, so it can be passed
+    * to [[Codec#decoder]] of other codecs. If the decoder function returns an error,
+    * decoding values fails with the error.
     *
     * @group Create
     */
   final def instance[A](
     schema: Either[AvroException, Schema],
-    encode: A => Either[AvroException, AvroValue],
-    decode: (AvroValue, Schema) => Either[AvroException, A]
+    encoder: Encoder[A],
+    decoder: Schema => Either[AvroException, Decoder[A]]
   ): Codec[A] =
-    new Instance(schema, encode, decode)
+    new Instance(schema, encoder, decoder)
 
   /**
     * @group JavaTime
@@ -857,8 +861,8 @@ object Codec {
 
   private[vulcan] final class Instance[A](
     val instanceSchema: Either[AvroException, Schema],
-    val instanceEncode: A => Either[AvroException, AvroValue],
-    val instanceDecode: (AvroValue, Schema) => Either[AvroException, A]
+    val instanceEncoder: Encoder[A],
+    val instanceDecoder: Schema => Either[AvroException, Decoder[A]]
   ) extends Codec[A] {
     override lazy val schema: Either[AvroException, Schema] =
       instanceSchema.flatMap { schema =>
@@ -866,13 +870,16 @@ object Codec {
       }
 
     override def encode(a: A): Either[AvroException, AvroValue] =
-      instanceEncode(a)
+      instanceEncoder.encode(a)
 
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
     ): AvroValue => Either[AvroException, A] =
-      instanceDecode(_, writerSchema)
+      instanceDecoder(definitions.expanded(writerSchema)) match {
+        case Right(decoder) => decoder.decode(_)
+        case Left(error) => failing(error)
+      }
   }
 
   private[vulcan] final class WithTypeName[A](
