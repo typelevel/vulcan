@@ -6,9 +6,10 @@
 
 package vulcan
 
-import cats.syntax.all.*
 import io.circe.Json
+import io.circe.JsonObject
 import java.nio.charset.StandardCharsets
+import scala.annotation.tailrec
 import scala.collection.mutable
 import scodec.bits.ByteVector
 import vulcan.AvroException.InvalidJson
@@ -30,21 +31,45 @@ trait JsonDecoder[A] {
 
 object JsonDecoder {
 
+  /** The limit for the number of nested values of recursive schemas, to avoid stack overflows. */
+  private[vulcan] val MaxDepth: Int =
+    512
+
   /** Returns a decoder for values written using the writer schema, if the schema is valid. */
   private[vulcan] def apply(writerSchema: Schema): Either[AvroException, JsonDecoder[AvroValue]] =
     SchemaValidator.validate(writerSchema, validateDefaults = false).map { _ =>
       val root = new Compilation().compile(writerSchema)
       new JsonDecoder[AvroValue] {
         override def decode(json: Json): Either[AvroException, AvroValue] =
-          root.decode(json)
+          root.decode(json, 0)
       }
     }
 
+  /** Decodes values, where the depth is the number of nested values of recursive schemas. */
   private sealed abstract class Node {
-    def decode(json: Json): Either[AvroException, AvroValue]
+    def decode(json: Json, depth: Int): Either[AvroException, AvroValue]
   }
 
-  private final case class Field(name: String, aliases: Vector[String], node: Node)
+  /** A record field, which is decoded from the value of the name, or else of the first alias. */
+  private final class Field(val name: String, aliases: Vector[String], val node: Node) {
+
+    /** The name and aliases, in the order they are looked up. */
+    val keys: Array[String] =
+      (name +: aliases).toArray
+
+    /** The value of the first key in the object, if any. */
+    def value(obj: JsonObject): Option[Json] = {
+      @tailrec def loop(index: Int): Option[Json] =
+        if (index < keys.length)
+          obj(keys(index)) match {
+            case None => loop(index + 1)
+            case found => found
+          }
+        else None
+
+      loop(0)
+    }
+  }
 
   private final class Compilation {
     private val compiled = mutable.Map.empty[String, Reference]
@@ -78,7 +103,7 @@ object JsonDecoder {
           case record: Schema.Record =>
             new RecordNode(
               record.fullName,
-              record.fields.map(field => Field(field.name, field.aliases, compile(field.schema)))
+              record.fields.map(field => new Field(field.name, field.aliases, compile(field.schema))).toArray
             )
           case enumeration: Schema.Enum =>
             new EnumNode(enumeration.fullName, enumeration.symbols.toSet)
@@ -91,39 +116,48 @@ object JsonDecoder {
     }
   }
 
-  /** A named schema, which is being compiled if references are recursive. */
+  /**
+    * A named schema, which is being compiled if references are recursive. Since references
+    * are only used for recursive schemas, decoding them limits the depth of nested values.
+    */
   private final class Reference extends Node {
     var node: Node = null
 
     def resolved: Node =
       if (node != null) node else this
 
-    override def decode(json: Json): Either[AvroException, AvroValue] =
-      node.decode(json)
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
+      if (depth == MaxDepth)
+        Left(
+          new InvalidJson(
+            s"Invalid depth ${MaxDepth + 1}, exceeding the limit of $MaxDepth nested values of recursive schemas"
+          )
+        )
+      else node.decode(json, depth + 1)
   }
 
   private object NullNode extends Node {
-    override def decode(json: Json): Either[AvroException, AvroValue] =
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       if (json.isNull) Right(AvroValue.Null) else invalid(json, "null")
   }
 
   private object BooleanNode extends Node {
-    override def decode(json: Json): Either[AvroException, AvroValue] =
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asBoolean.map(AvroValue.Boolean(_)).toRight(invalidError(json, "boolean"))
   }
 
   private object IntNode extends Node {
-    override def decode(json: Json): Either[AvroException, AvroValue] =
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asNumber.flatMap(_.toInt).map(AvroValue.Int(_)).toRight(invalidError(json, "int"))
   }
 
   private object LongNode extends Node {
-    override def decode(json: Json): Either[AvroException, AvroValue] =
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asNumber.flatMap(_.toLong).map(AvroValue.Long(_)).toRight(invalidError(json, "long"))
   }
 
   private object FloatNode extends Node {
-    override def decode(json: Json): Either[AvroException, AvroValue] =
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asNumber
         .map(_.toFloat)
         .orElse(json.asString.flatMap(nonFinite).map(_.toFloat))
@@ -132,7 +166,7 @@ object JsonDecoder {
   }
 
   private object DoubleNode extends Node {
-    override def decode(json: Json): Either[AvroException, AvroValue] =
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asNumber
         .map(_.toDouble)
         .orElse(json.asString.flatMap(nonFinite))
@@ -141,47 +175,73 @@ object JsonDecoder {
   }
 
   private object BytesNode extends Node {
-    override def decode(json: Json): Either[AvroException, AvroValue] =
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asString
         .map(string => AvroValue.Bytes(bytes(string)))
         .toRight(invalidError(json, "bytes"))
   }
 
   private object StringNode extends Node {
-    override def decode(json: Json): Either[AvroException, AvroValue] =
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asString.map(AvroValue.String(_)).toRight(invalidError(json, "string"))
   }
 
-  /** Decodes fields by name or alias, where all fields are required and no others are allowed. */
-  private final class RecordNode(fullName: String, fields: Vector[Field]) extends Node {
-    override def decode(json: Json): Either[AvroException, AvroValue] =
+  /**
+    * Decodes fields by name or alias, where all fields are required and no others are allowed.
+    *
+    * If no fields have the same name or alias, objects with as many keys as there are fields
+    * have no other keys, so other keys are only looked for in objects which may have them.
+    */
+  private final class RecordNode(fullName: String, fields: Array[Field]) extends Node {
+    private val distinctKeys: Boolean = {
+      val keys = fields.flatMap(_.keys)
+      keys.distinct.length == keys.length
+    }
+
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asObject match {
         case Some(obj) =>
-          fields
-            .traverse { field =>
-              (field.name +: field.aliases).collectFirstSome(key => obj(key).tupleLeft(key)) match {
-                case Some((key, value)) => field.node.decode(value).tupleLeft(key)
-                case None => Left(new InvalidJson(s"Missing field ${field.name} for record $fullName"))
-              }
-            }
-            .flatMap { decoded =>
-              val keys = decoded.map(_._1).toSet
-              obj.keys.filterNot(keys.contains).toList match {
-                case Nil =>
-                  Right(AvroValue.Record(decoded.map(_._2)))
+          val builder = Codec.vectorBuilder[AvroValue](fields.length)
 
-                case unknown =>
-                  Left(new InvalidJson(s"Unknown fields ${unknown.mkString(", ")} for record $fullName"))
+          // Decodes values in a loop, so nested values use few stack frames
+          @tailrec def loop(index: Int): Either[AvroException, AvroValue] =
+            if (index < fields.length) {
+              val field = fields(index)
+              field.value(obj) match {
+                case Some(fieldJson) =>
+                  field.node.decode(fieldJson, depth) match {
+                    case Right(value) =>
+                      builder += value
+                      loop(index + 1)
+
+                    case Left(error) =>
+                      Left(error)
+                  }
+
+                case None =>
+                  Left(new InvalidJson(s"Missing field ${field.name} for record $fullName"))
               }
+            } else {
+              val unknown = if (distinctKeys && obj.size == fields.length) Nil else unknownKeys(obj)
+              if (unknown.isEmpty) Right(AvroValue.Record(builder.result()))
+              else Left(new InvalidJson(s"Unknown fields ${unknown.mkString(", ")} for record $fullName"))
             }
+
+          loop(0)
 
         case None =>
           invalid(json, s"record $fullName")
       }
+
+    /** The keys in the object other than the keys the fields are decoded from. */
+    private def unknownKeys(obj: JsonObject): List[String] = {
+      val known = fields.iterator.flatMap(_.keys.find(obj.contains)).toSet
+      obj.keys.filterNot(known.contains).toList
+    }
   }
 
   private final class EnumNode(fullName: String, symbols: Set[String]) extends Node {
-    override def decode(json: Json): Either[AvroException, AvroValue] =
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asString match {
         case Some(symbol) if symbols.contains(symbol) =>
           Right(AvroValue.Enum(symbol))
@@ -195,7 +255,7 @@ object JsonDecoder {
   }
 
   private final class FixedNode(fullName: String, size: Long) extends Node {
-    override def decode(json: Json): Either[AvroException, AvroValue] =
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asString.map(bytes) match {
         case Some(fixed) if fixed.size == size =>
           Right(AvroValue.Fixed(fixed))
@@ -211,20 +271,53 @@ object JsonDecoder {
   }
 
   private final class ArrayNode(items: Node) extends Node {
-    override def decode(json: Json): Either[AvroException, AvroValue] =
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asArray match {
-        case Some(values) => values.traverse(items.decode).map(AvroValue.Array(_))
-        case None => invalid(json, "array")
+        case Some(values) =>
+          val builder = Codec.vectorBuilder[AvroValue](values.size)
+
+          // Decodes values in a loop, so nested values use few stack frames
+          @tailrec def loop(index: Int): Either[AvroException, AvroValue] =
+            if (index < values.size)
+              items.decode(values(index), depth) match {
+                case Right(value) =>
+                  builder += value
+                  loop(index + 1)
+
+                case Left(error) =>
+                  Left(error)
+              }
+            else Right(AvroValue.Array(builder.result()))
+
+          loop(0)
+
+        case None =>
+          invalid(json, "array")
       }
   }
 
   private final class MapNode(values: Node) extends Node {
-    override def decode(json: Json): Either[AvroException, AvroValue] =
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asObject match {
         case Some(obj) =>
-          obj.toVector
-            .traverse { case (key, value) => values.decode(value).tupleLeft(key) }
-            .map(AvroValue.Map(_))
+          val entries = obj.toIterable.iterator
+          val builder = Codec.vectorBuilder[(String, AvroValue)](obj.size)
+
+          // Decodes values in a loop, so nested values use few stack frames
+          @tailrec def loop(): Either[AvroException, AvroValue] =
+            if (entries.hasNext) {
+              val entry = entries.next()
+              values.decode(entry._2, depth) match {
+                case Right(value) =>
+                  builder += ((entry._1, value))
+                  loop()
+
+                case Left(error) =>
+                  Left(error)
+              }
+            } else Right(AvroValue.Map(builder.result()))
+
+          loop()
 
         case None =>
           invalid(json, "map")
@@ -233,14 +326,14 @@ object JsonDecoder {
 
   /** Decodes `null`, or objects with the key of the type of the value. */
   private final class UnionNode(types: Vector[(String, Node)]) extends Node {
-    override def decode(json: Json): Either[AvroException, AvroValue] =
+    override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asObject match {
         case Some(obj) =>
           obj.toList match {
             case (key, value) :: Nil =>
               types.indexWhere(_._1 == key) match {
                 case -1 => Left(new InvalidJson(s"Unknown type $key for union"))
-                case index => types(index)._2.decode(value).map(AvroValue.Union(index, _))
+                case index => types(index)._2.decode(value, depth).map(AvroValue.Union(index, _))
               }
 
             case _ =>

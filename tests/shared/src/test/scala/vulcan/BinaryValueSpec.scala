@@ -248,6 +248,29 @@ final class BinaryValueSpec extends BaseSpec {
       }
     }
 
+    it("should limit the number of nested values of recursive schemas") {
+      val limit = BinaryDecoder.MaxDepth
+
+      def nodes(count: Int): ByteVector = {
+        val writer = new BinaryWriter(0)
+        (1 until count).foreach { _ =>
+          writer.writeInt(0)
+          writer.writeInt(1)
+        }
+        writer.writeInt(0)
+        writer.writeInt(0)
+        writer.toByteVector
+      }
+
+      assert(BinaryDecoder(node).value.decode(nodes(limit + 1)).isRight)
+
+      val error =
+        s"Invalid depth ${limit + 1} at position ${2 * (limit + 1)}, exceeding the limit of $limit nested values of recursive schemas"
+
+      assert(decodeError(node, nodes(limit + 2)) == error)
+      assert(decodeError(node, nodes(100000)) == error)
+    }
+
     it("should not decode records which always contain themselves") {
       val schema =
         Schema.Record(name("Loop"), Vector(Schema.Field("loop", Schema.Ref(name("Loop")))))

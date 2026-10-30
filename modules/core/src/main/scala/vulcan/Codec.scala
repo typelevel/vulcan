@@ -87,6 +87,11 @@ sealed abstract class Codec[A] {
   /**
     * Returns a `BinaryDecoder` for Avro binary written using the provided
     * writer schema, or an error if the schema or writer schema is invalid.
+    *
+    * To protect against invalid input, decoding fails for values nested
+    * more than 512 levels deep in recursive schemas, and for values with
+    * more than 1,000,000 array or map items which are encoded using zero
+    * bytes, like nulls and empty records.
     */
   final def binaryDecoder(writerSchema: Schema): Either[AvroException, BinaryDecoder[A]] =
     (schema >> BinaryDecoder(writerSchema)).map { compiled =>
@@ -109,6 +114,9 @@ sealed abstract class Codec[A] {
   /**
     * Returns a `JsonDecoder` for Avro `Json` written using the provided
     * writer schema, or an error if the schema or writer schema is invalid.
+    *
+    * To protect against invalid input, decoding fails for values nested
+    * more than 512 levels deep in recursive schemas.
     */
   final def jsonDecoder(writerSchema: Schema): Either[AvroException, JsonDecoder[A]] =
     (schema >> JsonDecoder(writerSchema)).map { compiled =>
@@ -1627,7 +1635,7 @@ object Codec {
   }
 
   /** A builder for vectors of the given number of items, which only copies items if needed. */
-  private def vectorBuilder[A](size: Int): mutable.Builder[A, Vector[A]] =
+  private[vulcan] def vectorBuilder[A](size: Int): mutable.Builder[A, Vector[A]] =
     if (size <= 32) new ExactVectorBuilder(size) else Vector.newBuilder
 
   private def chainBuilder[A](size: Int): mutable.Builder[A, Chain[A]] =
