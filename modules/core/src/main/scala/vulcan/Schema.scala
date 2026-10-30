@@ -6,6 +6,7 @@
 
 package vulcan
 
+import cats.Show
 import io.circe.Json
 import io.circe.JsonObject
 import vulcan.AvroException.InvalidSchema
@@ -53,6 +54,9 @@ object Schema {
   /** Decodes and validates the provided schema `Json`. */
   def fromJson(json: Json): Either[AvroException, Schema] =
     SchemaDecoder.decode(json)
+
+  implicit final val schemaShow: Show[Schema] =
+    Show.fromToString
 
   sealed abstract class Null extends Schema {
     final def withProps(props: JsonObject): Null =

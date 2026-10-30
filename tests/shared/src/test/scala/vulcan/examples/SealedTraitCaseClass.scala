@@ -7,6 +7,7 @@
 package vulcan.examples
 
 import cats.Eq
+import cats.Show
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
@@ -26,6 +27,9 @@ object SealedTraitCaseClass {
 
   implicit val sealedTraitCaseClassEq: Eq[SealedTraitCaseClass] =
     Eq.fromUniversalEquals
+
+  implicit val sealedTraitCaseClassShow: Show[SealedTraitCaseClass] =
+    Show.fromToString
 
   implicit val sealedTraitCaseClassArbitrary: Arbitrary[SealedTraitCaseClass] =
     Arbitrary {
@@ -50,6 +54,9 @@ object FirstInSealedTraitCaseClass {
 
   implicit val arb: Arbitrary[FirstInSealedTraitCaseClass] =
     Arbitrary(arbitrary[Int].map(apply))
+
+  implicit val show: Show[FirstInSealedTraitCaseClass] =
+    Show.fromToString
 }
 
 final case class SecondInSealedTraitCaseClass(value: String) extends SealedTraitCaseClass
@@ -65,6 +72,9 @@ object SecondInSealedTraitCaseClass {
 
   implicit val arb: Arbitrary[SecondInSealedTraitCaseClass] =
     Arbitrary(arbitrary[String].map(apply))
+
+  implicit val show: Show[SecondInSealedTraitCaseClass] =
+    Show.fromToString
 }
 
 final case class ThirdInSealedTraitCaseClass(value: List[Int]) extends SealedTraitCaseClass
@@ -75,4 +85,7 @@ object ThirdInSealedTraitCaseClass {
 
   implicit val arb: Arbitrary[ThirdInSealedTraitCaseClass] =
     Arbitrary(arbitrary[List[Int]].map(apply))
+
+  implicit val show: Show[ThirdInSealedTraitCaseClass] =
+    Show.fromToString
 }

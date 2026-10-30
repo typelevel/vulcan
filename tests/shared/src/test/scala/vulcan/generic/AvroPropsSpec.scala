@@ -8,28 +8,27 @@ package vulcan.generic
 
 import io.circe.Json
 import io.circe.JsonObject
-import vulcan.BaseSpec
-final class AvroPropsSpec extends BaseSpec {
-  describe("AvroProps") {
-    it("should provide props via props") {
-      forAll { (name: String, value: String) =>
-        val props = JsonObject(name -> Json.fromString(value))
-        assert(new AvroProps(props).props == props)
-      }
-    }
+import vulcan.BaseSuite
 
-    it("should include props in toString") {
-      forAll { (name: String, value: String) =>
-        val props = JsonObject(name -> Json.fromString(value))
-        assert(new AvroProps(props).toString.contains(props.toString))
-      }
+object AvroPropsSpec extends BaseSuite {
+  test("AvroProps should provide props via props") {
+    forall { (name: String, value: String) =>
+      val props = JsonObject(name -> Json.fromString(value))
+      expect.eql(props, new AvroProps(props).props)
     }
+  }
 
-    it("should provide an extractor for props") {
-      forAll { (name: String, value: String) =>
-        assert(new AvroProps(JsonObject(name -> Json.fromString(value))) match {
-          case AvroProps(props) => props.contains(name)
-        })
+  test("AvroProps should include props in toString") {
+    forall { (name: String, value: String) =>
+      val props = JsonObject(name -> Json.fromString(value))
+      expect(new AvroProps(props).toString.contains(props.toString))
+    }
+  }
+
+  test("AvroProps should provide an extractor for props") {
+    forall { (name: String, value: String) =>
+      matches(new AvroProps(JsonObject(name -> Json.fromString(value)))) { case AvroProps(props) =>
+        expect(props.contains(name))
       }
     }
   }

@@ -6,6 +6,7 @@
 
 package vulcan
 
+import cats.Show
 import scodec.bits.ByteVector
 
 /** Avro value interpreted according to a [[Schema]]. */
@@ -63,4 +64,7 @@ object AvroValue {
 
   /** Union value, with the index of the union schema type. */
   final case class Union(index: scala.Int, value: AvroValue) extends AvroValue
+
+  implicit final val avroValueShow: Show[AvroValue] =
+    Show.fromToString
 }
