@@ -25,7 +25,7 @@ final class AvroNullDefault(final val enabled: Boolean) extends StaticAnnotation
     s"AvroNullDefault($enabled)"
 }
 
-object AvroNullDefault {
-  final def unapply(avroDefaultNulls: AvroNullDefault): Some[Boolean] =
-    Some(avroDefaultNulls.enabled)
+private[vulcan] object AvroNullDefault {
+  final def unapply(avroNullDefault: AvroNullDefault): Some[Boolean] =
+    Some(avroNullDefault.enabled)
 }

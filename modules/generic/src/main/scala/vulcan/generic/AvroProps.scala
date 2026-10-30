@@ -10,15 +10,10 @@ import io.circe.JsonObject
 import scala.annotation.StaticAnnotation
 
 /**
-  * Annotation which can be used to alter props in derived schemas.
+  * Annotation which can be used to include props for record fields in derived schemas.
   *
-  * The annotation can be used in the following situations.<br>
-  *   - Annotate a type for enum props when using [[deriveEnum]].<br>
-  *   - Annotate a type for fixed props when using [[deriveFixed]].<br>
-  *   - Annotate a `case class` for record props when using `Codec.derive` from the generic
-  *     module.<br>
-  *   - Annotate a `case class` parameter for record field props when using `Codec.derive` from the
-  *     generic module.
+  * Annotate a `case class` parameter for record field props when using `Codec.derive`
+  * from the generic module.
   */
 final class AvroProps(final val props: JsonObject) extends StaticAnnotation {
   override final def toString: String =
