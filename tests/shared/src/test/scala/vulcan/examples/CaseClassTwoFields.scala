@@ -31,7 +31,7 @@ object CaseClassTwoFields {
           access = _.name,
           doc = Some("some doc"),
           default = Some("default name"),
-          order = Some(Schema.Field.Order.Descending),
+          order = Schema.Field.Order.Descending,
           aliases = Seq("TheAlias"),
           props = JsonObject("custom" -> Json.fromString("value"))
         ),
