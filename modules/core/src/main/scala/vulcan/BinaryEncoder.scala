@@ -36,11 +36,20 @@ object BinaryEncoder {
     SchemaValidator.validate(schema, validateDefaults = false).map { _ =>
       val root = new Compilation().compile(schema)
       new BinaryEncoder[AvroValue] {
+
+        /**
+          * The size of the last value, since values usually have similar sizes. Concurrent
+          * encodes might not see the latest size, which only affects the initial capacity.
+          */
+        private[this] var lastSize: Int = 64
+
         override def encode(value: AvroValue): Either[AvroException, ByteVector] = {
-          val writer = new BinaryWriter(64)
+          val writer = new BinaryWriter(lastSize + lastSize / 8)
           try {
             root.write(value, writer)
-            Right(writer.toByteVector)
+            val bytes = writer.toByteVector
+            lastSize = bytes.size.toInt
+            Right(bytes)
           } catch {
             case e: AvroException => Left(e)
           }
@@ -179,8 +188,8 @@ object BinaryEncoder {
       value match {
         case AvroValue.Record(values) if values.size == fields.length =>
           var index = 0
-          values.foreach { fieldValue =>
-            fields(index).write(fieldValue, writer)
+          while (index < fields.length) {
+            fields(index).write(values(index), writer)
             index += 1
           }
 
@@ -227,7 +236,8 @@ object BinaryEncoder {
         case AvroValue.Array(values) =>
           if (values.nonEmpty) {
             writer.writeLong(values.size.toLong)
-            values.foreach(items.write(_, writer))
+            val iterator = values.iterator
+            while (iterator.hasNext) items.write(iterator.next(), writer)
           }
           writer.writeLong(0L)
 
@@ -243,9 +253,11 @@ object BinaryEncoder {
         case AvroValue.Map(entries) =>
           if (entries.nonEmpty) {
             writer.writeLong(entries.size.toLong)
-            entries.foreach { case (key, entryValue) =>
-              writer.writeString(key)
-              values.write(entryValue, writer)
+            val iterator = entries.iterator
+            while (iterator.hasNext) {
+              val entry = iterator.next()
+              writer.writeString(entry._1)
+              values.write(entry._2, writer)
             }
           }
           writer.writeLong(0L)

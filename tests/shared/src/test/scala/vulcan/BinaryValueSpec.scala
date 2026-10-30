@@ -122,6 +122,15 @@ final class BinaryValueSpec extends BaseSpec {
       }
     }
 
+    it("should encode values of different sizes using the same encoder") {
+      val encoder = BinaryEncoder(Schema.String).value
+
+      List("a" * 1000, "b", "c" * 100, "", "d" * 10000).foreach { string =>
+        val bytes = encoder.encode(AvroValue.String(string)).value
+        assert(decode(Schema.String, bytes) == AvroValue.String(string))
+      }
+    }
+
     it("should encode null using zero bytes") {
       assert(encode(Schema.Null, AvroValue.Null) == ByteVector.empty)
       assert(decode(Schema.Null, ByteVector.empty) == AvroValue.Null)
