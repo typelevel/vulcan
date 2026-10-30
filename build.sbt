@@ -43,7 +43,7 @@ lazy val root = tlCrossRootProject
 lazy val benchmarks = project
   .in(file("modules/benchmarks"))
   .enablePlugins(JmhPlugin, NoPublishPlugin)
-  .dependsOn(core.jvm)
+  .dependsOn(core.jvm, generic.jvm)
   .settings(
     name := "vulcan-benchmarks",
     libraryDependencies ++= Seq(
@@ -61,6 +61,7 @@ lazy val benchmarks1x = project
     name := "vulcan-benchmarks-1x",
     libraryDependencies ++= Seq(
       "com.github.fd4s" %% "vulcan" % vulcan1xVersion,
+      "com.github.fd4s" %% "vulcan-generic" % vulcan1xVersion,
       "org.slf4j" % "slf4j-nop" % slf4jNopVersion
     ),
     javacOptions += "-Xlint:-options",
