@@ -1,7 +1,6 @@
 val avroVersion = "1.12.2"
 val catsVersion = "2.13.0"
 val circeVersion = "0.14.17"
-val disciplineScalaTestVersion = "2.3.0"
 val enumeratumVersion = "1.9.8"
 val magnolia2Version = "1.1.14"
 val magnolia3Version = "1.3.24"
@@ -309,8 +308,8 @@ lazy val tests = crossProject(JVMPlatform, JSPlatform, NativePlatform)
       "eu.timepit" %%% "refined-scalacheck" % refinedVersion % Test,
       "org.typelevel" %%% "cats-kernel-laws" % catsVersion % Test,
       "org.typelevel" %%% "cats-laws" % catsVersion % Test,
-      "org.typelevel" %%% "discipline-scalatest" % disciplineScalaTestVersion % Test,
       "org.typelevel" %%% "weaver-cats" % weaverVersion % Test,
+      "org.typelevel" %%% "weaver-discipline" % weaverVersion % Test,
       "org.typelevel" %%% "weaver-scalacheck" % weaverVersion % Test
     ),
     headerSettings,

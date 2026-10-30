@@ -8,15 +8,17 @@ package vulcan
 
 import cats.Eq
 import cats.laws.discipline.InvariantTests
-import cats.tests.CatsSuite
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
-import scala.util.Try
+import org.scalacheck.Prop
+import org.scalacheck.Test
 import scodec.bits.ByteVector
+import weaver.FunSuite
+import weaver.discipline.Discipline
 
-final class CodecInvariantSpec extends CatsSuite with EitherValues {
+object CodecInvariantSpec extends FunSuite with Discipline {
   val schemaGen: Gen[Either[AvroException, Schema]] =
     Gen.oneOf(
       Left(AvroException("error")),
@@ -55,21 +57,16 @@ final class CodecInvariantSpec extends CatsSuite with EitherValues {
       }
     }
 
+  /** Returns the decoded string or error message, if the string can be encoded. */
+  private def roundtrip(codec: Codec[String], s: String): Option[Either[String, String]] =
+    codec.encode(s).toOption.map { encoded =>
+      codec.schema.flatMap(codec.decoder).flatMap(_.decode(encoded)).left.map(_.message)
+    }
+
   implicit val codecStringEq: Eq[Codec[String]] =
     Eq.instance { (c1, c2) =>
-      Try {
-        forAll { (s: String) =>
-          val e1 = c1.encode(s)
-          val e2 = c2.encode(s)
-
-          assert(e1.isRight == e2.isRight)
-          if (e1.isRight && e2.isRight) {
-            val d1 = c1.schema.flatMap(c1.decoder).flatMap(_.decode(e1.value))
-            val d2 = c2.schema.flatMap(c2.decoder).flatMap(_.decode(e2.value))
-            val _ = assert(d1.left.map(_.message) === d2.left.map(_.message))
-          }
-        }
-      }.isSuccess
+      val prop = Prop.forAll((s: String) => roundtrip(c1, s) == roundtrip(c2, s))
+      Test.check(Test.Parameters.default, prop).passed
     }
 
   checkAll("Codec", InvariantTests[Codec].invariant[String, String, String])

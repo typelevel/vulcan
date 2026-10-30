@@ -13,138 +13,128 @@ import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericRecord
 import scala.collection.mutable
 import scodec.bits.ByteVector
-import vulcan.Fs2KafkaSpec.*
 
 /**
   * Tests for the uses of fs2-kafka-vulcan. Avro binary is framed with a magic byte and the schema id,
   * like Confluent serializers do, and writer schemas are looked up as JSON from a schema registry.
   */
-final class Fs2KafkaSpec extends BaseSpec {
-  describe("serializer") {
-    it("should register the schema of the codec") {
-      val registry = new Registry
-      val _ = serialize[Either[Int, Boolean]](registry, Right(true)).value
-      assert(registry.schema(1).map(_.noSpaces) == Some("""["int","boolean"]"""))
-    }
+object Fs2KafkaSpec extends BaseSuite {
+  pureTest("serializer should register the schema of the codec") {
+    val registry = new Registry
+    val _ = serialize[Either[Int, Boolean]](registry, Right(true)).value
+    expect.eql(Some("""["int","boolean"]"""), registry.schema(1).map(_.noSpaces))
+  }
 
-    it("should error for invalid schemas") {
-      val codec = Codec.decimal(-1, -1)
-      assert {
-        serialize(new Registry, BigDecimal(1))(codec).swap.value.message ==
-          "Invalid decimal precision -1: must be positive"
-      }
-    }
+  pureTest("serializer should error for invalid schemas") {
+    val codec = Codec.decimal(-1, -1)
+    expect.eql(
+      "Invalid decimal precision -1: must be positive",
+      serialize(new Registry, BigDecimal(1))(codec).swap.value.message
+    )
+  }
 
-    it("should write values the Java Avro library reads") {
-      val bytes = ByteVector.view(serialize(new Registry, Test2("test", 42)).value)
-      val writerSchema = JavaAvro.schema(Codec[Test2].schema.value)
-      val readerSchema = JavaAvro.schema(Codec[Test].schema.value)
-      val record = JavaAvro.readBinary(writerSchema, readerSchema, bytes.drop(5)).asInstanceOf[GenericRecord]
-      assert(record.get("name").toString == "test")
+  pureTest("serializer should write values the Java Avro library reads") {
+    val bytes = ByteVector.view(serialize(new Registry, Test2("test", 42)).value)
+    val writerSchema = JavaAvro.schema(Codec[Test2].schema.value)
+    val readerSchema = JavaAvro.schema(Codec[Test].schema.value)
+    val record = JavaAvro.readBinary(writerSchema, readerSchema, bytes.drop(5)).asInstanceOf[GenericRecord]
+    expect.eql("test", record.get("name").toString)
+  }
+
+  pureTest("deserializer should roundtrip values") {
+    val registry = new Registry
+    val deserialize = deserializer[Either[Test, Int]](registry).value
+
+    forEach(List[Either[Test, Int]](Left(Test("test")), Right(1))) { value =>
+      expect.same(Right(value), deserialize(serialize[Either[Test, Int]](registry, value).value))
     }
   }
 
-  describe("deserializer") {
-    it("should roundtrip values") {
-      val registry = new Registry
-      val deserialize = deserializer[Either[Test, Int]](registry).value
+  pureTest("deserializer should decode using compatible schemas") {
+    val registry = new Registry
+    val bytes = serialize(registry, Test2("test", 42)).value
+    expect.same(Right(Test("test")), deserializer[Test](registry).value(bytes))
+  }
 
-      List(Left(Test("test")), Right(1)).foreach { value =>
-        assert(deserialize(serialize[Either[Test, Int]](registry, value).value) == Right(value))
-      }
-    }
+  pureTest("deserializer should error for mismatching logical types") {
+    val registry = new Registry
+    val bytes = serialize(registry, 42L).value
+    expect.eql(
+      "Error decoding Instant: Got unexpected missing logical type",
+      deserializer[Instant](registry).value(bytes).swap.value.message
+    )
+  }
 
-    it("should decode using compatible schemas") {
-      val registry = new Registry
-      val bytes = serialize(registry, Test2("test", 42)).value
-      assert(deserializer[Test](registry).value(bytes) == Right(Test("test")))
-    }
+  pureTest("deserializer should error for invalid schemas") {
+    val codec = Codec.decimal(-1, -1)
+    expect.eql(
+      "Invalid decimal precision -1: must be positive",
+      deserializer(new Registry)(codec).swap.value.message
+    )
+  }
 
-    it("should error for mismatching logical types") {
-      val registry = new Registry
-      val bytes = serialize(registry, 42L).value
-      assert {
-        deserializer[Instant](registry).value(bytes).swap.value.message ==
-          "Error decoding Instant: Got unexpected missing logical type"
-      }
-    }
+  pureTest("deserializer should error for values missing after the schema id") {
+    val registry = new Registry
+    val id = registry.register(Codec[Int].schema.value)
+    expect.eql(
+      "Unexpected end of input at position 0",
+      deserializer[Int](registry).value(frame(id, ByteVector.empty)).swap.value.message
+    )
+  }
 
-    it("should error for invalid schemas") {
-      val codec = Codec.decimal(-1, -1)
-      assert {
-        deserializer(new Registry)(codec).swap.value.message ==
-          "Invalid decimal precision -1: must be positive"
-      }
-    }
+  pureTest("deserializer should decode values the Java Avro library writes") {
+    val registry = new Registry
+    val schema = Codec[Test2].schema.value
+    val javaSchema = JavaAvro.schema(schema)
+    val value = Codec[Test2].encoder.value.encode(Test2("test", 42)).value
+    val datum = JavaAvro.toJava(value, schema, javaSchema)
+    val bytes = frame(registry.register(schema), JavaAvro.writeBinary(javaSchema, datum))
+    expect.same(Right(Test("test")), deserializer[Test](registry).value(bytes))
+  }
 
-    it("should error for values missing after the schema id") {
-      val registry = new Registry
-      val id = registry.register(Codec[Int].schema.value)
-      assert {
-        deserializer[Int](registry).value(frame(id, ByteVector.empty)).swap.value.message ==
-          "Unexpected end of input at position 0"
-      }
-    }
+  pureTest("deserializer should decode values with a decoder compiled once for each writer schema") {
+    val registry = new Registry
+    val deserialize = deserializer[Test](registry).value
+    val bytes = List("a", "b", "c").map(name => serialize(registry, Test2(name, 1)).value)
 
-    it("should decode values the Java Avro library writes") {
-      val registry = new Registry
-      val schema = Codec[Test2].schema.value
-      val javaSchema = JavaAvro.schema(schema)
-      val value = Codec[Test2].encoder.value.encode(Test2("test", 42)).value
-      val datum = JavaAvro.toJava(value, schema, javaSchema)
-      val bytes = frame(registry.register(schema), JavaAvro.writeBinary(javaSchema, datum))
-      assert(deserializer[Test](registry).value(bytes) == Right(Test("test")))
-    }
+    expect.same(Right(List(Test("a"), Test("b"), Test("c"))), bytes.traverse(deserialize)) &&
+    expect.eql(1, registry.lookups)
+  }
 
-    it("should decode values with a decoder compiled once for each writer schema") {
-      val registry = new Registry
-      val deserialize = deserializer[Test](registry).value
-      val bytes = List("a", "b", "c").map(name => serialize(registry, Test2(name, 1)).value)
+  pureTest("schemas should be the same after printing and parsing") {
+    val schemas = List(
+      Codec[Test].schema,
+      Codec[Test2].schema,
+      Codec[Either[Test, Int]].schema,
+      Codec[Instant].schema,
+      Codec.decimal(10, 2).schema
+    )
 
-      assert(bytes.traverse(deserialize) == Right(List(Test("a"), Test("b"), Test("c"))))
-      assert(registry.lookups == 1)
+    forEach(schemas) { schema =>
+      expect.same(Right(schema.value), Schema.fromJson(schema.value.toJson)) &&
+      expect.eql(schema.value.toString, JavaAvro.schema(schema.value).toString)
     }
   }
 
-  describe("schemas") {
-    it("should be the same after printing and parsing") {
-      val schemas = List(
-        Codec[Test].schema,
-        Codec[Test2].schema,
-        Codec[Either[Test, Int]].schema,
-        Codec[Instant].schema,
-        Codec.decimal(10, 2).schema
-      )
+  pureTest("schemas should decode using schemas with features from other libraries") {
+    // Includes properties written by the Java Avro library for generated classes
+    val json =
+      """{"type":"record","name":"Test","namespace":"fs2.kafka.vulcan","fields":[{"name":"name","type":{"type":"string","avro.java.string":"String"}},{"name":"id","type":{"type":"string","logicalType":"custom-id"},"default":"none"},{"name":"next","type":["null","Test"],"default":null}],"aliases":["Other"]}"""
 
-      schemas.foreach { schema =>
-        assert(Schema.fromJson(schema.value.toJson) == Right(schema.value))
-        assert(JavaAvro.schema(schema.value).toString == schema.value.toString)
-      }
-    }
+    val writerSchema = Schema.parse(json).value
+    val javaSchema = JavaAvro.schema(writerSchema)
 
-    it("should decode using schemas with features from other libraries") {
-      // Includes properties written by the Java Avro library for generated classes
-      val json =
-        """{"type":"record","name":"Test","namespace":"fs2.kafka.vulcan","fields":[{"name":"name","type":{"type":"string","avro.java.string":"String"}},{"name":"id","type":{"type":"string","logicalType":"custom-id"},"default":"none"},{"name":"next","type":["null","Test"],"default":null}],"aliases":["Other"]}"""
+    val record = new GenericData.Record(javaSchema)
+    record.put("name", "test")
+    record.put("id", "1")
+    record.put("next", null)
 
-      val writerSchema = Schema.parse(json).value
-      assert(writerSchema.toString == json)
-
-      val javaSchema = JavaAvro.schema(writerSchema)
-      assert(javaSchema.toString == json)
-
-      val record = new GenericData.Record(javaSchema)
-      record.put("name", "test")
-      record.put("id", "1")
-      record.put("next", null)
-
-      val bytes = JavaAvro.writeBinary(javaSchema, record)
-      assert(Codec[Test].binaryDecoder(writerSchema).flatMap(_.decode(bytes)) == Right(Test("test")))
-    }
+    val bytes = JavaAvro.writeBinary(javaSchema, record)
+    expect.eql(json, writerSchema.toString) &&
+    expect.eql(json, javaSchema.toString) &&
+    expect.same(Right(Test("test")), Codec[Test].binaryDecoder(writerSchema).flatMap(_.decode(bytes)))
   }
-}
 
-object Fs2KafkaSpec {
   final case class Test(name: String)
 
   object Test {
