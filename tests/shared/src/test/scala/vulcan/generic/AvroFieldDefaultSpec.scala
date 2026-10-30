@@ -7,56 +7,52 @@
 package vulcan.generic
 
 import io.circe.Json
-import vulcan.BaseSpec
+import vulcan.BaseSuite
 import vulcan.Codec
 import vulcan.CodecSpecHelpers
 import vulcan.Schema
 import vulcan.generic.examples.AvroRecordDefault.*
 
-final class AvroFieldDefaultSpec extends BaseSpec with CodecSpecHelpers {
-  describe("AvroFieldDefault") {
-    it("should create a schema with a default for a field") {
-      assert(fieldDefault[Foo]("a") == Some(Json.fromInt(1)))
-      assert(fieldDefault[Foo]("b") == Some(Json.fromString("foo")))
-      assert(fieldDefault[Foo]("c") == Some(Json.Null))
-    }
-
-    it("should succeed when annotating an Option") {
-      assertSchemaIs[HasOptionDefault](
-        """{"type":"record","name":"HasOptionDefault","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"a","type":["null","string"],"default":"foo"}]}"""
-      )
-    }
-
-    it("should succeed when annotating an enum first element") {
-      assert(fieldDefault[HasSFirst]("s") == Some(Json.fromString("A")))
-    }
-
-    it("should succeed when annotating an enum second element") {
-      assert(fieldDefault[HasSSecond]("s") == Some(Json.fromString("B")))
-    }
-
-    it("should succeed with the first member of a union") {
-      assertSchemaIs[HasUnion](
-        """{"type":"record","name":"HasUnion","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"u","type":[{"type":"record","name":"A","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"a","type":"int"}]},{"type":"record","name":"B","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"b","type":"string"}]}],"default":{"a":1}}]}"""
-      )
-      val decoder = Codec[HasUnion].decoder(unsafeSchema[Empty]).value
-      val result = decoder.decode(unsafeEncode(Empty()))
-      assert(result.value == HasUnion(Union.A(1)))
-    }
-
-    it("should succeed with the second member of a union") {
-      assertSchemaIs[HasUnionSecond](
-        """{"type":"record","name":"HasUnionSecond","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"u","type":[{"type":"record","name":"A","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"a","type":"int"}]},{"type":"record","name":"B","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"b","type":"string"}]}],"default":{"b":"foo"}}]}"""
-      )
-      val decoder = Codec[HasUnionSecond].decoder(unsafeSchema[Empty]).value
-      val result = decoder.decode(unsafeEncode(Empty()))
-      assert(result.value == HasUnionSecond(Union.B("foo")))
-    }
-  }
-
-  def fieldDefault[A](name: String)(implicit codec: Codec[A]): Option[Json] =
+object AvroFieldDefaultSpec extends BaseSuite with CodecSpecHelpers {
+  private def fieldDefault[A](name: String)(implicit codec: Codec[A]): Option[Json] =
     unsafeSchema[A] match {
       case record: Schema.Record => record.fields.find(_.name == name).flatMap(_.default)
       case _ => None
     }
+
+  pureTest("AvroFieldDefault should create a schema with a default for a field") {
+    expect.eql(Some(Json.fromInt(1)), fieldDefault[Foo]("a")) &&
+    expect.eql(Some(Json.fromString("foo")), fieldDefault[Foo]("b")) &&
+    expect.eql(Some(Json.Null), fieldDefault[Foo]("c"))
+  }
+
+  pureTest("AvroFieldDefault should succeed when annotating an Option") {
+    expectSchemaIs[HasOptionDefault](
+      """{"type":"record","name":"HasOptionDefault","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"a","type":["null","string"],"default":"foo"}]}"""
+    )
+  }
+
+  pureTest("AvroFieldDefault should succeed when annotating an enum first element") {
+    expect.eql(Some(Json.fromString("A")), fieldDefault[HasSFirst]("s"))
+  }
+
+  pureTest("AvroFieldDefault should succeed when annotating an enum second element") {
+    expect.eql(Some(Json.fromString("B")), fieldDefault[HasSSecond]("s"))
+  }
+
+  pureTest("AvroFieldDefault should succeed with the first member of a union") {
+    val decoder = Codec[HasUnion].decoder(unsafeSchema[Empty]).value
+    expectSchemaIs[HasUnion](
+      """{"type":"record","name":"HasUnion","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"u","type":[{"type":"record","name":"A","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"a","type":"int"}]},{"type":"record","name":"B","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"b","type":"string"}]}],"default":{"a":1}}]}"""
+    ) &&
+    expect.same(Right(HasUnion(Union.A(1))), decoder.decode(unsafeEncode(Empty())))
+  }
+
+  pureTest("AvroFieldDefault should succeed with the second member of a union") {
+    val decoder = Codec[HasUnionSecond].decoder(unsafeSchema[Empty]).value
+    expectSchemaIs[HasUnionSecond](
+      """{"type":"record","name":"HasUnionSecond","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"u","type":[{"type":"record","name":"A","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"a","type":"int"}]},{"type":"record","name":"B","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"b","type":"string"}]}],"default":{"b":"foo"}}]}"""
+    ) &&
+    expect.same(Right(HasUnionSecond(Union.B("foo"))), decoder.decode(unsafeEncode(Empty())))
+  }
 }

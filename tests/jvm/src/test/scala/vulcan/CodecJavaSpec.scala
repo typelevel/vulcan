@@ -6,6 +6,7 @@
 
 package vulcan
 
+import cats.Show
 import cats.syntax.all.*
 import java.io.EOFException
 import java.nio.ByteBuffer
@@ -21,16 +22,30 @@ import org.apache.avro.generic.GenericFixed
 import org.apache.avro.generic.GenericRecord
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
-import org.scalatest.Assertion
 import scala.jdk.CollectionConverters.*
 import scala.util.Try
 import scodec.bits.ByteVector
 import vulcan.Codec.InstantMicros
-import vulcan.CodecJavaSpec.Reader
-import vulcan.CodecJavaSpec.same
+import weaver.Expectations
+import weaver.SourceLocation
 
 /** Checks codecs against schema resolution and logical types in the Java Avro library. */
-final class CodecJavaSpec extends BaseSpec {
+object CodecJavaSpec extends BaseSuite {
+  implicit val instantShow: Show[Instant] =
+    Show.fromToString
+
+  implicit val instantMicrosShow: Show[InstantMicros] =
+    Show.fromToString
+
+  implicit val localDateShow: Show[LocalDate] =
+    Show.fromToString
+
+  implicit val localDateTimeShow: Show[LocalDateTime] =
+    Show.fromToString
+
+  implicit val localTimeShow: Show[LocalTime] =
+    Show.fromToString
+
   private val primitiveReaders: List[Reader[_]] =
     List(
       Reader[Unit](Codec.unit, _ => ()),
@@ -55,308 +70,334 @@ final class CodecJavaSpec extends BaseSpec {
       Schema.String
     )
 
-  describe("Codec") {
-    it("should decode primitives the same as the Java Avro library resolves schemas") {
-      primitiveSchemas.foreach { writerSchema =>
-        primitiveReaders.foreach { reader =>
-          forAll(AvroValueGenerators.genValue(writerSchema)) { value =>
-            assertSameAsJava(reader, writerSchema, value)
+  test("Codec should decode primitives the same as the Java Avro library resolves schemas") {
+    primitiveSchemas
+      .flatTraverse { writerSchema =>
+        primitiveReaders.traverse { reader =>
+          forall(AvroValueGenerators.genValue(writerSchema)) { value =>
+            expectSameAsJava(reader, writerSchema, value)
           }
         }
       }
-    }
-
-    it("should decode arrays the same as the Java Avro library resolves schemas") {
-      primitiveSchemas.foreach { items =>
-        primitiveReaders.foreach { reader =>
-          val writerSchema = Schema.Array(items)
-          forAll(AvroValueGenerators.genValue(writerSchema)) { value =>
-            assertSameAsJava(Reader.vector(reader), writerSchema, value)
-          }
-        }
-      }
-    }
-
-    it("should decode maps the same as the Java Avro library resolves schemas") {
-      primitiveSchemas.foreach { values =>
-        primitiveReaders.foreach { reader =>
-          val writerSchema = Schema.Map(values)
-          forAll(AvroValueGenerators.genValue(writerSchema)) { value =>
-            assertSameAsJava(Reader.map(reader), writerSchema, value)
-          }
-        }
-      }
-    }
-
-    it("should decode enums the same as the Java Avro library resolves schemas") {
-      def reader(default: Option[String]): Reader[String] =
-        Reader(
-          Codec.enumeration[String](
-            name = "Suit",
-            namespace = "",
-            symbols = List("Hearts", "Spades"),
-            encode = identity,
-            decode = Right(_),
-            default = default
-          ),
-          _.toString
-        )
-
-      val writerSymbols =
-        List(
-          Vector("Hearts", "Spades"),
-          Vector("Spades", "Hearts"),
-          Vector("Clubs", "Hearts", "Spades")
-        )
-
-      writerSymbols.foreach { symbols =>
-        List(reader(Some("Hearts")), reader(None)).foreach { reader =>
-          val writerSchema = Schema.Enum(Schema.Name("Suit"), symbols)
-          forAll(AvroValueGenerators.genValue(writerSchema)) { value =>
-            assertSameAsJava(reader, writerSchema, value)
-          }
-        }
-      }
-    }
-
-    it("should decode unions the same as the Java Avro library resolves schemas") {
-      val either =
-        Reader[Either[Long, String]](
-          Codec.either[Long, String],
-          {
-            case long: java.lang.Long => Left(long.longValue)
-            case string => Right(string.toString)
-          }
-        )
-
-      val option =
-        Reader[Option[Long]](
-          Codec.option[Long],
-          value => Option(value).map(_.asInstanceOf[java.lang.Long].longValue)
-        )
-
-      val writerSchemas =
-        primitiveSchemas ++ List(
-          Schema.Union(Vector(Schema.Int, Schema.String)),
-          Schema.Union(Vector(Schema.String, Schema.Long)),
-          Schema.Union(Vector(Schema.Null, Schema.Int)),
-          Schema.Union(Vector(Schema.Bytes, Schema.Null)),
-          Schema.Union(Vector(Schema.Float, Schema.Int))
-        )
-
-      writerSchemas.foreach { writerSchema =>
-        List(either, option).foreach { reader =>
-          forAll(AvroValueGenerators.genValue(writerSchema)) { value =>
-            assertSameAsJava(reader, writerSchema, value)
-          }
-        }
-      }
-    }
-
-    it("should decode records the same as the Java Avro library resolves schemas") {
-      val reader =
-        Reader[(Int, String)](
-          Codec.record[(Int, String)]("Person", "") { field =>
-            (field("a", _._1), field("b", _._2, default = Some("x"), aliases = List("c"))).tupled
-          },
-          value => {
-            val record = value.asInstanceOf[GenericRecord]
-            (record.get("a").asInstanceOf[java.lang.Integer].intValue, record.get("b").toString)
-          }
-        )
-
-      def person(fields: (String, Schema)*): Schema =
-        Schema.Record(
-          Schema.Name("Person"),
-          fields.toVector.map { case (name, schema) => Schema.Field(name, schema) }
-        )
-
-      val writerSchemas =
-        List(
-          person("a" -> Schema.Int, "b" -> Schema.String),
-          person("b" -> Schema.String, "a" -> Schema.Int),
-          person("a" -> Schema.Int),
-          person("a" -> Schema.Int, "c" -> Schema.String),
-          person("a" -> Schema.Int, "b" -> Schema.String, "d" -> Schema.Double),
-          person("b" -> Schema.String),
-          person("a" -> Schema.Long, "b" -> Schema.String),
-          person("a" -> Schema.Int, "b" -> Schema.Bytes)
-        )
-
-      writerSchemas.foreach { writerSchema =>
-        forAll(AvroValueGenerators.genValue(writerSchema)) { value =>
-          assertSameAsJava(reader, writerSchema, value)
-        }
-      }
-    }
-
-    it("should decode fixed the same as the Java Avro library resolves schemas") {
-      val reader =
-        Reader[ByteVector](
-          Codec.fixed[ByteVector](
-            name = "Id",
-            namespace = "",
-            size = 2,
-            encode = identity,
-            decode = Right(_)
-          ),
-          fixed => ByteVector(fixed.asInstanceOf[GenericFixed].bytes)
-        )
-
-      List(1, 2, 3).foreach { size =>
-        val writerSchema = Schema.Fixed(Schema.Name("Id"), size)
-        forAll(AvroValueGenerators.genValue(writerSchema)) { value =>
-          assertSameAsJava(reader, writerSchema, value)
-        }
-      }
-    }
+      .map(_.combineAll)
   }
 
-  describe("logical types") {
-    it("should encode and decode decimal the same as the Java Avro library") {
-      val codec = Codec.decimal(precision = 10, scale = 5)
-      val schema = JavaAvro.schema(codec.schema.value)
-      val conversion = new Conversions.DecimalConversion
-      val genUnscaled = Gen.chooseNum(-9999999999L, 9999999999L)
+  test("Codec should decode arrays the same as the Java Avro library resolves schemas") {
+    primitiveSchemas
+      .flatTraverse { items =>
+        primitiveReaders.traverse { reader =>
+          val writerSchema = Schema.Array(items)
+          forall(AvroValueGenerators.genValue(writerSchema)) { value =>
+            expectSameAsJava(Reader.vector(reader), writerSchema, value)
+          }
+        }
+      }
+      .map(_.combineAll)
+  }
 
-      forAll(genUnscaled.map(BigDecimal(_, 5))) { decimal =>
-        assertEncodeSameAsJava(codec, decimal) { decimal =>
+  test("Codec should decode maps the same as the Java Avro library resolves schemas") {
+    primitiveSchemas
+      .flatTraverse { values =>
+        primitiveReaders.traverse { reader =>
+          val writerSchema = Schema.Map(values)
+          forall(AvroValueGenerators.genValue(writerSchema)) { value =>
+            expectSameAsJava(Reader.map(reader), writerSchema, value)
+          }
+        }
+      }
+      .map(_.combineAll)
+  }
+
+  test("Codec should decode enums the same as the Java Avro library resolves schemas") {
+    def reader(default: Option[String]): Reader[String] =
+      Reader(
+        Codec.enumeration[String](
+          name = "Suit",
+          namespace = "",
+          symbols = List("Hearts", "Spades"),
+          encode = identity,
+          decode = Right(_),
+          default = default
+        ),
+        _.toString
+      )
+
+    val writerSymbols =
+      List(
+        Vector("Hearts", "Spades"),
+        Vector("Spades", "Hearts"),
+        Vector("Clubs", "Hearts", "Spades")
+      )
+
+    writerSymbols
+      .flatTraverse { symbols =>
+        List(reader(Some("Hearts")), reader(None)).traverse { reader =>
+          val writerSchema = Schema.Enum(Schema.Name("Suit"), symbols)
+          forall(AvroValueGenerators.genValue(writerSchema)) { value =>
+            expectSameAsJava(reader, writerSchema, value)
+          }
+        }
+      }
+      .map(_.combineAll)
+  }
+
+  test("Codec should decode unions the same as the Java Avro library resolves schemas") {
+    val either =
+      Reader[Either[Long, String]](
+        Codec.either[Long, String],
+        {
+          case long: java.lang.Long => Left(long.longValue)
+          case string => Right(string.toString)
+        }
+      )
+
+    val option =
+      Reader[Option[Long]](
+        Codec.option[Long],
+        value => Option(value).map(_.asInstanceOf[java.lang.Long].longValue)
+      )
+
+    val writerSchemas =
+      primitiveSchemas ++ List(
+        Schema.Union(Vector(Schema.Int, Schema.String)),
+        Schema.Union(Vector(Schema.String, Schema.Long)),
+        Schema.Union(Vector(Schema.Null, Schema.Int)),
+        Schema.Union(Vector(Schema.Bytes, Schema.Null)),
+        Schema.Union(Vector(Schema.Float, Schema.Int))
+      )
+
+    writerSchemas
+      .flatTraverse { writerSchema =>
+        List(either, option).traverse { reader =>
+          forall(AvroValueGenerators.genValue(writerSchema)) { value =>
+            expectSameAsJava(reader, writerSchema, value)
+          }
+        }
+      }
+      .map(_.combineAll)
+  }
+
+  test("Codec should decode records the same as the Java Avro library resolves schemas") {
+    val reader =
+      Reader[(Int, String)](
+        Codec.record[(Int, String)]("Person", "") { field =>
+          (field("a", _._1), field("b", _._2, default = Some("x"), aliases = List("c"))).tupled
+        },
+        value => {
+          val record = value.asInstanceOf[GenericRecord]
+          (record.get("a").asInstanceOf[java.lang.Integer].intValue, record.get("b").toString)
+        }
+      )
+
+    def person(fields: (String, Schema)*): Schema =
+      Schema.Record(
+        Schema.Name("Person"),
+        fields.toVector.map { case (name, schema) => Schema.Field(name, schema) }
+      )
+
+    val writerSchemas =
+      List(
+        person("a" -> Schema.Int, "b" -> Schema.String),
+        person("b" -> Schema.String, "a" -> Schema.Int),
+        person("a" -> Schema.Int),
+        person("a" -> Schema.Int, "c" -> Schema.String),
+        person("a" -> Schema.Int, "b" -> Schema.String, "d" -> Schema.Double),
+        person("b" -> Schema.String),
+        person("a" -> Schema.Long, "b" -> Schema.String),
+        person("a" -> Schema.Int, "b" -> Schema.Bytes)
+      )
+
+    writerSchemas
+      .traverse { writerSchema =>
+        forall(AvroValueGenerators.genValue(writerSchema)) { value =>
+          expectSameAsJava(reader, writerSchema, value)
+        }
+      }
+      .map(_.combineAll)
+  }
+
+  test("Codec should decode fixed the same as the Java Avro library resolves schemas") {
+    val reader =
+      Reader[ByteVector](
+        Codec.fixed[ByteVector](
+          name = "Id",
+          namespace = "",
+          size = 2,
+          encode = identity,
+          decode = Right(_)
+        ),
+        fixed => ByteVector(fixed.asInstanceOf[GenericFixed].bytes)
+      )
+
+    List(1, 2, 3)
+      .traverse { size =>
+        val writerSchema = Schema.Fixed(Schema.Name("Id"), size)
+        forall(AvroValueGenerators.genValue(writerSchema)) { value =>
+          expectSameAsJava(reader, writerSchema, value)
+        }
+      }
+      .map(_.combineAll)
+  }
+
+  test("logical types should encode and decode decimal the same as the Java Avro library") {
+    val codec = Codec.decimal(precision = 10, scale = 5)
+    val schema = JavaAvro.schema(codec.schema.value)
+    val conversion = new Conversions.DecimalConversion
+    val genUnscaled = Gen.chooseNum(-9999999999L, 9999999999L)
+
+    for {
+      encode <- forall(genUnscaled.map(BigDecimal(_, 5))) { decimal =>
+        expectEncodeSameAsJava(codec, decimal) { decimal =>
           val bytes = conversion.toBytes(decimal.underlying, schema, schema.getLogicalType)
           AvroValue.Bytes(ByteVector(bytes))
         }
       }
 
-      forAll(genUnscaled.map(unscaled => ByteVector(BigInt(unscaled).toByteArray))) { bytes =>
-        assertDecodeSameAsJava(codec, AvroValue.Bytes(bytes)) { _ =>
+      decode <- forall(genUnscaled.map(unscaled => ByteVector(BigInt(unscaled).toByteArray))) { bytes =>
+        expectDecodeSameAsJava(codec, AvroValue.Bytes(bytes)) { _ =>
           BigDecimal(conversion.fromBytes(bytes.toByteBuffer, schema, schema.getLogicalType))
         }
       }
-    }
+    } yield encode && decode
+  }
 
-    it("should encode and decode timestamp-millis the same as the Java Avro library") {
-      val conversion = new TimeConversions.TimestampMillisConversion
+  test("logical types should encode and decode timestamp-millis the same as the Java Avro library") {
+    val conversion = new TimeConversions.TimestampMillisConversion
 
-      forAll(genInstant) { instant =>
-        assertEncodeSameAsJava(Codec.instant, instant) { instant =>
+    for {
+      encode <- forall(genInstant) { instant =>
+        expectEncodeSameAsJava(Codec.instant, instant) { instant =>
           AvroValue.Long(conversion.toLong(instant, null, null))
         }
       }
 
-      forAll(arbitrary[Long]) { millis =>
-        assertDecodeSameAsJava(Codec.instant, AvroValue.Long(millis)) { _ =>
+      decode <- forall(arbitrary[Long]) { millis =>
+        expectDecodeSameAsJava(Codec.instant, AvroValue.Long(millis)) { _ =>
           conversion.fromLong(millis, null, null)
         }
       }
-    }
+    } yield encode && decode
+  }
 
-    it("should encode and decode timestamp-micros the same as the Java Avro library") {
-      val conversion = new TimeConversions.TimestampMicrosConversion
+  test("logical types should encode and decode timestamp-micros the same as the Java Avro library") {
+    val conversion = new TimeConversions.TimestampMicrosConversion
 
-      forAll(genInstant.map(InstantMicros(_))) { instantMicros =>
-        assertEncodeSameAsJava(Codec.instantMicros, instantMicros) { instantMicros =>
+    for {
+      encode <- forall(genInstant.map(InstantMicros(_))) { instantMicros =>
+        expectEncodeSameAsJava(Codec.instantMicros, instantMicros) { instantMicros =>
           AvroValue.Long(conversion.toLong(instantMicros.value, null, null))
         }
       }
 
-      forAll(arbitrary[Long]) { micros =>
-        assertDecodeSameAsJava(Codec.instantMicros, AvroValue.Long(micros)) { _ =>
+      decode <- forall(arbitrary[Long]) { micros =>
+        expectDecodeSameAsJava(Codec.instantMicros, AvroValue.Long(micros)) { _ =>
           InstantMicros(conversion.fromLong(micros, null, null))
         }
       }
-    }
+    } yield encode && decode
+  }
 
-    it("should encode and decode local-timestamp-millis the same as the Java Avro library") {
-      val conversion = new TimeConversions.LocalTimestampMillisConversion
-      val genLocalDateTime =
-        for {
-          seconds <- Gen.chooseNum(
-            LocalDateTime.MIN.toEpochSecond(ZoneOffset.UTC),
-            LocalDateTime.MAX.toEpochSecond(ZoneOffset.UTC)
-          )
-          nanos <- Gen.chooseNum(0, 999999999)
-        } yield LocalDateTime.ofEpochSecond(seconds, nanos, ZoneOffset.UTC)
+  test("logical types should encode and decode local-timestamp-millis the same as the Java Avro library") {
+    val conversion = new TimeConversions.LocalTimestampMillisConversion
+    val genLocalDateTime =
+      for {
+        seconds <- Gen.chooseNum(
+          LocalDateTime.MIN.toEpochSecond(ZoneOffset.UTC),
+          LocalDateTime.MAX.toEpochSecond(ZoneOffset.UTC)
+        )
+        nanos <- Gen.chooseNum(0, 999999999)
+      } yield LocalDateTime.ofEpochSecond(seconds, nanos, ZoneOffset.UTC)
 
-      forAll(genLocalDateTime) { dateTime =>
-        assertEncodeSameAsJava(Codec.localDateTime, dateTime) { dateTime =>
+    for {
+      encode <- forall(genLocalDateTime) { dateTime =>
+        expectEncodeSameAsJava(Codec.localDateTime, dateTime) { dateTime =>
           AvroValue.Long(conversion.toLong(dateTime, null, null))
         }
       }
 
-      forAll(arbitrary[Long]) { millis =>
-        assertDecodeSameAsJava(Codec.localDateTime, AvroValue.Long(millis)) { _ =>
+      decode <- forall(arbitrary[Long]) { millis =>
+        expectDecodeSameAsJava(Codec.localDateTime, AvroValue.Long(millis)) { _ =>
           conversion.fromLong(millis, null, null)
         }
       }
-    }
+    } yield encode && decode
+  }
 
-    it("should encode and decode date the same as the Java Avro library") {
-      val conversion = new TimeConversions.DateConversion
-      val genLocalDate =
-        Gen.chooseNum(Int.MinValue.toLong, Int.MaxValue.toLong).map(LocalDate.ofEpochDay)
+  test("logical types should encode and decode date the same as the Java Avro library") {
+    val conversion = new TimeConversions.DateConversion
+    val genLocalDate =
+      Gen.chooseNum(Int.MinValue.toLong, Int.MaxValue.toLong).map(LocalDate.ofEpochDay)
 
-      forAll(genLocalDate) { date =>
-        assertEncodeSameAsJava(Codec.localDate, date) { date =>
+    for {
+      encode <- forall(genLocalDate) { date =>
+        expectEncodeSameAsJava(Codec.localDate, date) { date =>
           AvroValue.Int(conversion.toInt(date, null, null))
         }
       }
 
-      forAll(arbitrary[Int]) { days =>
-        assertDecodeSameAsJava(Codec.localDate, AvroValue.Int(days)) { _ =>
+      decode <- forall(arbitrary[Int]) { days =>
+        expectDecodeSameAsJava(Codec.localDate, AvroValue.Int(days)) { _ =>
           conversion.fromInt(days, null, null)
         }
       }
-    }
+    } yield encode && decode
+  }
 
-    it("should encode and decode time-millis the same as the Java Avro library") {
-      val conversion = new TimeConversions.TimeMillisConversion
+  test("logical types should encode and decode time-millis the same as the Java Avro library") {
+    val conversion = new TimeConversions.TimeMillisConversion
 
-      forAll(genLocalTime) { time =>
-        assertEncodeSameAsJava(Codec.localTimeMillis, time) { time =>
+    for {
+      encode <- forall(genLocalTime) { time =>
+        expectEncodeSameAsJava(Codec.localTimeMillis, time) { time =>
           AvroValue.Int(conversion.toInt(time, null, null))
         }
       }
 
-      forAll(Gen.oneOf(Gen.chooseNum(0, 86399999), arbitrary[Int])) { millis =>
-        assertDecodeSameAsJava(Codec.localTimeMillis, AvroValue.Int(millis)) { _ =>
+      decode <- forall(Gen.oneOf(Gen.chooseNum(0, 86399999), arbitrary[Int])) { millis =>
+        expectDecodeSameAsJava(Codec.localTimeMillis, AvroValue.Int(millis)) { _ =>
           conversion.fromInt(millis, null, null)
         }
       }
-    }
+    } yield encode && decode
+  }
 
-    it("should encode and decode time-micros the same as the Java Avro library") {
-      val conversion = new TimeConversions.TimeMicrosConversion
+  test("logical types should encode and decode time-micros the same as the Java Avro library") {
+    val conversion = new TimeConversions.TimeMicrosConversion
 
-      forAll(genLocalTime) { time =>
-        assertEncodeSameAsJava(Codec.localTimeMicros, time) { time =>
+    for {
+      encode <- forall(genLocalTime) { time =>
+        expectEncodeSameAsJava(Codec.localTimeMicros, time) { time =>
           AvroValue.Long(conversion.toLong(time, null, null))
         }
       }
 
-      forAll(Gen.oneOf(Gen.chooseNum(0L, 86399999999L), arbitrary[Long])) { micros =>
-        assertDecodeSameAsJava(Codec.localTimeMicros, AvroValue.Long(micros)) { _ =>
+      decode <- forall(Gen.oneOf(Gen.chooseNum(0L, 86399999999L), arbitrary[Long])) { micros =>
+        expectDecodeSameAsJava(Codec.localTimeMicros, AvroValue.Long(micros)) { _ =>
           conversion.fromLong(micros, null, null)
         }
       }
+    } yield encode && decode
+  }
+
+  test("logical types should encode and decode uuid the same as the Java Avro library") {
+    val conversion = new Conversions.UUIDConversion
+    val genUuid = Gen.zip(arbitrary[Long], arbitrary[Long]).map { case (most, least) =>
+      new UUID(most, least)
     }
 
-    it("should encode and decode uuid the same as the Java Avro library") {
-      val conversion = new Conversions.UUIDConversion
-      val genUuid = Gen.zip(arbitrary[Long], arbitrary[Long]).map { case (most, least) =>
-        new UUID(most, least)
-      }
-
-      forAll(genUuid) { uuid =>
-        assertEncodeSameAsJava(Codec.uuid, uuid) { uuid =>
+    for {
+      encode <- forall(genUuid) { uuid =>
+        expectEncodeSameAsJava(Codec.uuid, uuid) { uuid =>
           AvroValue.String(conversion.toCharSequence(uuid, null, null).toString)
         }
       }
 
-      forAll(Gen.oneOf(genUuid.map(_.toString), arbitrary[String])) { string =>
-        assertDecodeSameAsJava(Codec.uuid, AvroValue.String(string)) { _ =>
+      decode <- forall(Gen.oneOf(genUuid.map(_.toString), arbitrary[String])) { string =>
+        expectDecodeSameAsJava(Codec.uuid, AvroValue.String(string)) { _ =>
           conversion.fromCharSequence(string, null, null)
         }
       }
-    }
+    } yield encode && decode
   }
 
   /** Instants across the whole range, including ones exceeding the range of epoch milliseconds. */
@@ -373,33 +414,33 @@ final class CodecJavaSpec extends BaseSpec {
     Gen.chooseNum(0L, 86399999999999L).map(LocalTime.ofNanoOfDay)
 
   /** Checks that encoding succeeds and fails the same way as for the Java Avro library. */
-  private def assertEncodeSameAsJava[A](codec: Codec[A], value: A)(
+  private def expectEncodeSameAsJava[A](codec: Codec[A], value: A)(
     javaEncode: A => AvroValue
-  ): Assertion =
+  )(implicit loc: SourceLocation): Expectations =
     (codec.encode(value), Try(javaEncode(value)).toEither) match {
-      case (Right(encoded), Right(javaEncoded)) => assert(encoded == javaEncoded)
-      case (Left(_), Left(_)) => succeed
+      case (Right(encoded), Right(javaEncoded)) => expect.same(javaEncoded, encoded)
+      case (Left(_), Left(_)) => success
       case (encoded, javaEncoded) =>
-        fail(s"Encoded $value as $encoded, Java Avro encoded $javaEncoded")
+        failure(s"Encoded $value as $encoded, Java Avro encoded $javaEncoded")
     }
 
   /** Checks that decoding succeeds and fails the same way as for the Java Avro library. */
-  private def assertDecodeSameAsJava[A](codec: Codec[A], value: AvroValue)(
+  private def expectDecodeSameAsJava[A](codec: Codec[A], value: AvroValue)(
     javaDecode: AvroValue => A
-  ): Assertion =
+  )(implicit loc: SourceLocation): Expectations =
     (codec.decoder(codec.schema.value).flatMap(_.decode(value)), Try(javaDecode(value)).toEither) match {
-      case (Right(decoded), Right(javaDecoded)) => assert(decoded == javaDecoded)
-      case (Left(_), Left(_)) => succeed
+      case (Right(decoded), Right(javaDecoded)) => expect.same(javaDecoded, decoded)
+      case (Left(_), Left(_)) => success
       case (decoded, javaDecoded) =>
-        fail(s"Decoded $value as $decoded, Java Avro decoded $javaDecoded")
+        failure(s"Decoded $value as $decoded, Java Avro decoded $javaDecoded")
     }
 
   /** Checks that decoding succeeds and fails the same way as for the Java Avro library. */
-  private def assertSameAsJava[A](
+  private def expectSameAsJava[A](
     reader: Reader[A],
     writerSchema: Schema,
     value: AvroValue
-  ): Assertion = {
+  )(implicit loc: SourceLocation): Expectations = {
     val javaWriterSchema = JavaAvro.schema(writerSchema)
     val javaReaderSchema = JavaAvro.schema(reader.codec.schema.value)
     val bytes =
@@ -411,20 +452,17 @@ final class CodecJavaSpec extends BaseSpec {
         .map(reader.fromJava)
 
     (decoded, javaDecoded) match {
-      case (Right(a), Right(javaA)) => assert(same(a, javaA))
-      case (Left(_), Left(_)) => succeed
+      case (Right(a), Right(javaA)) => expect(same(a, javaA))
+      case (Left(_), Left(_)) => success
       // The Java Avro library checks the remaining bytes using the minimum size of reader items,
       // so rejects collections of items promoted to larger types, for example from int to float
-      case (Right(_), Left(error: EOFException)) if isReaderItemSizeCheck(error) => succeed
-      case _ => fail(s"Decoded $decoded from $writerSchema, Java Avro decoded $javaDecoded")
+      case (Right(_), Left(error: EOFException)) if isReaderItemSizeCheck(error) => success
+      case _ => failure(s"Decoded $decoded from $writerSchema, Java Avro decoded $javaDecoded")
     }
   }
 
   private def isReaderItemSizeCheck(error: EOFException): Boolean =
     error.getMessage.startsWith("Collection claims") || error.getMessage.startsWith("Map claims")
-}
-
-object CodecJavaSpec {
 
   /** A codec, together with a conversion from values read by the Java Avro library. */
   final case class Reader[A](codec: Codec[A], fromJava: Any => A)

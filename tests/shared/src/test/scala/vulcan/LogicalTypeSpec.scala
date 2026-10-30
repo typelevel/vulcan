@@ -9,70 +9,63 @@ package vulcan
 import io.circe.Json
 import io.circe.JsonObject
 
-final class LogicalTypeSpec extends BaseSpec {
-  describe("LogicalType") {
-    it("should use the names from the specification") {
-      assert(LogicalType.bigDecimal.name == "big-decimal")
-      assert(LogicalType.date.name == "date")
-      assert(LogicalType.decimal(10, 2).name == "decimal")
-      assert(LogicalType.duration.name == "duration")
-      assert(LogicalType.localTimestampMicros.name == "local-timestamp-micros")
-      assert(LogicalType.localTimestampMillis.name == "local-timestamp-millis")
-      assert(LogicalType.localTimestampNanos.name == "local-timestamp-nanos")
-      assert(LogicalType.timeMicros.name == "time-micros")
-      assert(LogicalType.timeMillis.name == "time-millis")
-      assert(LogicalType.timestampMicros.name == "timestamp-micros")
-      assert(LogicalType.timestampMillis.name == "timestamp-millis")
-      assert(LogicalType.timestampNanos.name == "timestamp-nanos")
-      assert(LogicalType.uuid.name == "uuid")
+object LogicalTypeSpec extends BaseSuite {
+  pureTest("LogicalType should use the names from the specification") {
+    expect.eql("big-decimal", LogicalType.bigDecimal.name) &&
+    expect.eql("date", LogicalType.date.name) &&
+    expect.eql("decimal", LogicalType.decimal(10, 2).name) &&
+    expect.eql("duration", LogicalType.duration.name) &&
+    expect.eql("local-timestamp-micros", LogicalType.localTimestampMicros.name) &&
+    expect.eql("local-timestamp-millis", LogicalType.localTimestampMillis.name) &&
+    expect.eql("local-timestamp-nanos", LogicalType.localTimestampNanos.name) &&
+    expect.eql("time-micros", LogicalType.timeMicros.name) &&
+    expect.eql("time-millis", LogicalType.timeMillis.name) &&
+    expect.eql("timestamp-micros", LogicalType.timestampMicros.name) &&
+    expect.eql("timestamp-millis", LogicalType.timestampMillis.name) &&
+    expect.eql("timestamp-nanos", LogicalType.timestampNanos.name) &&
+    expect.eql("uuid", LogicalType.uuid.name)
+  }
+
+  pureTest("LogicalType should be equal when names and parameters are equal") {
+    expect.same(LogicalType("custom", JsonObject.empty), LogicalType("custom")) &&
+    expect.same(LogicalType.decimal(10, 2), LogicalType.decimal(10, 2)) &&
+    expect(LogicalType.decimal(10, 2) != LogicalType.decimal(10, 3))
+  }
+
+  pureTest("LogicalType should include the parameters in toString") {
+    expect.eql("LogicalType(date)", LogicalType.date.toString) &&
+    expect.eql(
+      """LogicalType(decimal, {"precision":10,"scale":2})""",
+      LogicalType.decimal(10, 2).toString
+    )
+  }
+
+  pureTest("LogicalType decimal should have precision and scale parameters") {
+    expect.eql(
+      JsonObject("precision" -> Json.fromInt(10), "scale" -> Json.fromInt(2)),
+      LogicalType.decimal(10, 2).params
+    )
+  }
+
+  pureTest("LogicalType decimal should extract the precision and scale") {
+    matches(LogicalType.decimal(10, 2)) { case LogicalType.Decimal(precision, scale) =>
+      expect.eql((10, 2), (precision, scale))
     }
+  }
 
-    it("should be equal when names and parameters are equal") {
-      assert(LogicalType("custom") == LogicalType("custom", JsonObject.empty))
-      assert(LogicalType.decimal(10, 2) == LogicalType.decimal(10, 2))
-      assert(LogicalType.decimal(10, 2) != LogicalType.decimal(10, 3))
-    }
+  pureTest("LogicalType decimal should not extract other logical types") {
+    expect(LogicalType.Decimal.unapply(LogicalType.date).isEmpty)
+  }
 
-    it("should include the parameters in toString") {
-      assert(LogicalType.date.toString == "LogicalType(date)")
-      assert {
-        LogicalType
-          .decimal(10, 2)
-          .toString == """LogicalType(decimal, {"precision":10,"scale":2})"""
-      }
-    }
+  pureTest(
+    "LogicalType decimal should only use integers without fraction and exponent, same as the Java Avro library"
+  ) {
+    def logicalType(params: String): Option[LogicalType] =
+      Schema.parse(s"""{"type":"bytes","logicalType":"decimal",$params}""").value.logicalType
 
-    describe("decimal") {
-      it("should have precision and scale parameters") {
-        assert {
-          LogicalType.decimal(10, 2).params ==
-            JsonObject("precision" -> Json.fromInt(10), "scale" -> Json.fromInt(2))
-        }
-      }
-
-      it("should extract the precision and scale") {
-        val extracted =
-          LogicalType.decimal(10, 2) match {
-            case LogicalType.Decimal(precision, scale) => Some((precision, scale))
-            case _ => None
-          }
-
-        assert(extracted == Some((10, 2)))
-      }
-
-      it("should not extract other logical types") {
-        assert(LogicalType.Decimal.unapply(LogicalType.date).isEmpty)
-      }
-
-      it("should only use integers without fraction and exponent, same as the Java Avro library") {
-        def logicalType(params: String): Option[LogicalType] =
-          Schema.parse(s"""{"type":"bytes","logicalType":"decimal",$params}""").value.logicalType
-
-        assert(logicalType(""""precision":4,"scale":2""") == Some(LogicalType.decimal(4, 2)))
-        assert(logicalType(""""precision":4.0,"scale":2""").isEmpty)
-        assert(logicalType(""""precision":4e0,"scale":2""").isEmpty)
-        assert(logicalType(""""precision":4,"scale":2.0""").isEmpty)
-      }
-    }
+    expect.same(Some(LogicalType.decimal(4, 2)), logicalType(""""precision":4,"scale":2""")) &&
+    expect(logicalType(""""precision":4.0,"scale":2""").isEmpty) &&
+    expect(logicalType(""""precision":4e0,"scale":2""").isEmpty) &&
+    expect(logicalType(""""precision":4,"scale":2.0""").isEmpty)
   }
 }

@@ -10,24 +10,32 @@ import org.scalacheck.Gen
 import scodec.bits.*
 import vulcan.internal.BinaryReader
 import vulcan.internal.BinaryWriter
+import weaver.Expectations
+import weaver.SourceLocation
 
-final class BinarySpec extends BaseSpec {
+object BinarySpec extends BaseSuite {
   private def write(f: BinaryWriter => Unit): ByteVector = {
     val writer = new BinaryWriter(0)
     f(writer)
     writer.toByteVector
   }
 
-  /** Reads the value, checking that all bytes were read. */
-  private def read[A](bytes: ByteVector)(f: BinaryReader => A): A = {
+  /** Reads the bytes, expecting all bytes to be read. */
+  private def read(bytes: ByteVector)(f: BinaryReader => Expectations)(implicit
+    loc: SourceLocation
+  ): Expectations = {
     val reader = BinaryReader(bytes)
-    val value = f(reader)
-    assert(reader.remaining == 0)
-    value
+    f(reader) && expect.eql(0, reader.remaining)
   }
 
-  private def readError(bytes: ByteVector)(f: BinaryReader => Any): String =
-    intercept[AvroException](f(BinaryReader(bytes))).getMessage
+  /** Reads the bytes, returning the message of the exception if reading fails. */
+  private def readError(bytes: ByteVector)(f: BinaryReader => Any): Option[String] =
+    try {
+      f(BinaryReader(bytes))
+      None
+    } catch {
+      case error: AvroException => Some(error.getMessage)
+    }
 
   private def string(codePoints: Int*): String =
     codePoints.map(codePoint => new String(Character.toChars(codePoint))).mkString
@@ -47,76 +55,75 @@ final class BinarySpec extends BaseSpec {
   private val genBytes: Gen[ByteVector] =
     Gen.listOf(Gen.choose(Byte.MinValue, Byte.MaxValue)).map(bytes => ByteVector(bytes.toArray))
 
-  describe("BinaryWriter") {
-    it("should write booleans as a single byte") {
-      assert(write(_.writeBoolean(false)) == hex"00")
-      assert(write(_.writeBoolean(true)) == hex"01")
-    }
-
-    it("should write ints with zig-zag variable-length encoding") {
-      assert(write(_.writeInt(0)) == hex"00")
-      assert(write(_.writeInt(-1)) == hex"01")
-      assert(write(_.writeInt(1)) == hex"02")
-      assert(write(_.writeInt(-2)) == hex"03")
-      assert(write(_.writeInt(2)) == hex"04")
-      assert(write(_.writeInt(-64)) == hex"7f")
-      assert(write(_.writeInt(64)) == hex"8001")
-      assert(write(_.writeInt(Int.MaxValue)) == hex"feffffff0f")
-      assert(write(_.writeInt(Int.MinValue)) == hex"ffffffff0f")
-    }
-
-    it("should write longs with zig-zag variable-length encoding") {
-      assert(write(_.writeLong(0L)) == hex"00")
-      assert(write(_.writeLong(-1L)) == hex"01")
-      assert(write(_.writeLong(1L)) == hex"02")
-      assert(write(_.writeLong(-64L)) == hex"7f")
-      assert(write(_.writeLong(64L)) == hex"8001")
-      assert(write(_.writeLong(Long.MaxValue)) == hex"feffffffffffffffff01")
-      assert(write(_.writeLong(Long.MinValue)) == hex"ffffffffffffffffff01")
-    }
-
-    it("should write floats and doubles in little-endian order") {
-      assert(write(_.writeFloat(1.0f)) == hex"0000803f")
-      assert(write(_.writeDouble(1.0)) == hex"000000000000f03f")
-    }
-
-    it("should write bytes prefixed by their length") {
-      assert(write(_.writeBytes(ByteVector.empty)) == hex"00")
-      assert(write(_.writeBytes(hex"0102")) == hex"040102")
-    }
-
-    it("should write fixed without their length") {
-      assert(write(_.writeFixed(hex"0102")) == hex"0102")
-    }
-
-    it("should write strings as UTF-8 prefixed by the length in bytes") {
-      assert(write(_.writeString("")) == hex"00")
-      assert(write(_.writeString("foo")) == hex"06666f6f")
-      assert(write(_.writeString(string(0xe9))) == hex"04c3a9")
-      assert(write(_.writeString(string(0x20ac))) == hex"06e282ac")
-      assert(write(_.writeString(string(0x1f600))) == hex"08f09f9880")
-    }
-
-    it("should write unpaired surrogates as question marks") {
-      val high = 0xd83d.toChar.toString
-      val low = 0xde00.toChar.toString
-      assert(write(_.writeString(high)) == hex"023f")
-      assert(write(_.writeString(low + high)) == hex"043f3f")
-      assert(write(_.writeString(s"a${high}b")) == hex"06613f62")
-      assert(write(_.writeString(high + high + low)) == hex"0a3ff09f9880")
-    }
-
-    it("should grow the buffer as needed") {
-      val bytes = ByteVector.fill(1000L)(1)
-      assert(
-        write(writer => (1 to 3).foreach(_ => writer.writeFixed(bytes))) == bytes ++ bytes ++ bytes
-      )
-    }
+  pureTest("BinaryWriter should write booleans as a single byte") {
+    expect.same(hex"00", write(_.writeBoolean(false))) &&
+    expect.same(hex"01", write(_.writeBoolean(true)))
   }
 
-  describe("BinaryReader") {
-    it("should read written values") {
-      forAll(minSuccessful(1000)) { (boolean: Boolean, int: Int, long: Long, float: Float, double: Double) =>
+  pureTest("BinaryWriter should write ints with zig-zag variable-length encoding") {
+    expect.same(hex"00", write(_.writeInt(0))) &&
+    expect.same(hex"01", write(_.writeInt(-1))) &&
+    expect.same(hex"02", write(_.writeInt(1))) &&
+    expect.same(hex"03", write(_.writeInt(-2))) &&
+    expect.same(hex"04", write(_.writeInt(2))) &&
+    expect.same(hex"7f", write(_.writeInt(-64))) &&
+    expect.same(hex"8001", write(_.writeInt(64))) &&
+    expect.same(hex"feffffff0f", write(_.writeInt(Int.MaxValue))) &&
+    expect.same(hex"ffffffff0f", write(_.writeInt(Int.MinValue)))
+  }
+
+  pureTest("BinaryWriter should write longs with zig-zag variable-length encoding") {
+    expect.same(hex"00", write(_.writeLong(0L))) &&
+    expect.same(hex"01", write(_.writeLong(-1L))) &&
+    expect.same(hex"02", write(_.writeLong(1L))) &&
+    expect.same(hex"7f", write(_.writeLong(-64L))) &&
+    expect.same(hex"8001", write(_.writeLong(64L))) &&
+    expect.same(hex"feffffffffffffffff01", write(_.writeLong(Long.MaxValue))) &&
+    expect.same(hex"ffffffffffffffffff01", write(_.writeLong(Long.MinValue)))
+  }
+
+  pureTest("BinaryWriter should write floats and doubles in little-endian order") {
+    expect.same(hex"0000803f", write(_.writeFloat(1.0f))) &&
+    expect.same(hex"000000000000f03f", write(_.writeDouble(1.0)))
+  }
+
+  pureTest("BinaryWriter should write bytes prefixed by their length") {
+    expect.same(hex"00", write(_.writeBytes(ByteVector.empty))) &&
+    expect.same(hex"040102", write(_.writeBytes(hex"0102")))
+  }
+
+  pureTest("BinaryWriter should write fixed without their length") {
+    expect.same(hex"0102", write(_.writeFixed(hex"0102")))
+  }
+
+  pureTest("BinaryWriter should write strings as UTF-8 prefixed by the length in bytes") {
+    expect.same(hex"00", write(_.writeString(""))) &&
+    expect.same(hex"06666f6f", write(_.writeString("foo"))) &&
+    expect.same(hex"04c3a9", write(_.writeString(string(0xe9)))) &&
+    expect.same(hex"06e282ac", write(_.writeString(string(0x20ac)))) &&
+    expect.same(hex"08f09f9880", write(_.writeString(string(0x1f600))))
+  }
+
+  pureTest("BinaryWriter should write unpaired surrogates as question marks") {
+    val high = 0xd83d.toChar.toString
+    val low = 0xde00.toChar.toString
+    expect.same(hex"023f", write(_.writeString(high))) &&
+    expect.same(hex"043f3f", write(_.writeString(low + high))) &&
+    expect.same(hex"06613f62", write(_.writeString(s"a${high}b"))) &&
+    expect.same(hex"0a3ff09f9880", write(_.writeString(high + high + low)))
+  }
+
+  pureTest("BinaryWriter should grow the buffer as needed") {
+    val bytes = ByteVector.fill(1000L)(1)
+    expect.same(
+      bytes ++ bytes ++ bytes,
+      write(writer => (1 to 3).foreach(_ => writer.writeFixed(bytes)))
+    )
+  }
+
+  test("BinaryReader should read written values") {
+    forall.withConfig(checkConfig.withMinimumSuccessful(1000)) {
+      (boolean: Boolean, int: Int, long: Long, float: Float, double: Double) =>
         val bytes =
           write { writer =>
             writer.writeBoolean(boolean)
@@ -127,17 +134,18 @@ final class BinarySpec extends BaseSpec {
           }
 
         read(bytes) { reader =>
-          assert(reader.readBoolean() == boolean)
-          assert(reader.readInt() == int)
-          assert(reader.readLong() == long)
-          assert(java.lang.Float.compare(reader.readFloat(), float) == 0)
-          assert(java.lang.Double.compare(reader.readDouble(), double) == 0)
+          expect.eql(boolean, reader.readBoolean()) &&
+          expect.eql(int, reader.readInt()) &&
+          expect.eql(long, reader.readLong()) &&
+          expect(java.lang.Float.compare(reader.readFloat(), float) == 0) &&
+          expect(java.lang.Double.compare(reader.readDouble(), double) == 0)
         }
-      }
     }
+  }
 
-    it("should read written bytes, fixed, and strings") {
-      forAll(genBytes, genBytes, genString, minSuccessful(1000)) { (bytes, fixed, string) =>
+  test("BinaryReader should read written bytes, fixed, and strings") {
+    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(Gen.zip(genBytes, genBytes, genString)) {
+      case (bytes, fixed, string) =>
         val written =
           write { writer =>
             writer.writeBytes(bytes)
@@ -146,92 +154,93 @@ final class BinarySpec extends BaseSpec {
           }
 
         read(written) { reader =>
-          assert(reader.readBytes() == bytes)
-          assert(reader.readFixed(fixed.size.toInt) == fixed)
-          assert(reader.readString() == string)
+          expect.same(bytes, reader.readBytes()) &&
+          expect.same(fixed, reader.readFixed(fixed.size.toInt)) &&
+          expect.eql(string, reader.readString())
         }
-      }
     }
+  }
 
-    it("should track the position") {
-      val reader = BinaryReader(hex"8001ff")
-      assert(reader.readInt() == 64)
-      assert(reader.position == 2)
-      assert(reader.remaining == 1)
-    }
+  pureTest("BinaryReader should track the position") {
+    val reader = BinaryReader(hex"8001ff")
+    expect.eql(64, reader.readInt()) &&
+    expect.eql(2, reader.position) &&
+    expect.eql(1, reader.remaining)
+  }
 
-    it("should read slices and concatenations") {
-      assert(read(hex"ffff06666f6f".drop(2))(_.readString()) == "foo")
-      assert(read(hex"06" ++ hex"666f6f")(_.readString()) == "foo")
-    }
+  pureTest("BinaryReader should read slices and concatenations") {
+    read(hex"ffff06666f6f".drop(2))(reader => expect.eql("foo", reader.readString())) &&
+    read(hex"06" ++ hex"666f6f")(reader => expect.eql("foo", reader.readString()))
+  }
 
-    it("should read ints and longs using more bytes than needed") {
-      assert(read(hex"8000")(_.readInt()) == 0)
-      assert(read(hex"8180808000")(_.readInt()) == -1)
-      assert(read(hex"80808080808080808000")(_.readLong()) == 0L)
-    }
+  pureTest("BinaryReader should read ints and longs using more bytes than needed") {
+    read(hex"8000")(reader => expect.eql(0, reader.readInt())) &&
+    read(hex"8180808000")(reader => expect.eql(-1, reader.readInt())) &&
+    read(hex"80808080808080808000")(reader => expect.eql(0L, reader.readLong()))
+  }
 
-    it("should not read ints and longs using too many bytes") {
-      assert(
-        readError(hex"8080808080")(
-          _.readInt()
-        ) == "Invalid int with more than 5 bytes at position 0"
-      )
+  pureTest("BinaryReader should not read ints and longs using too many bytes") {
+    expect.eql(
+      Some("Invalid int with more than 5 bytes at position 0"),
+      readError(hex"8080808080")(_.readInt())
+    ) &&
+    expect.eql(
+      Some("Invalid long with more than 10 bytes at position 0"),
+      readError(hex"80808080808080808080")(_.readLong())
+    )
+  }
 
-      assert {
-        readError(hex"80808080808080808080")(_.readLong()) ==
-          "Invalid long with more than 10 bytes at position 0"
-      }
-    }
+  pureTest("BinaryReader should only read booleans which are 0 or 1") {
+    expect.eql(Some("Invalid boolean 2 at position 0"), readError(hex"02")(_.readBoolean())) &&
+    expect.eql(Some("Invalid boolean 255 at position 0"), readError(hex"ff")(_.readBoolean()))
+  }
 
-    it("should only read booleans which are 0 or 1") {
-      assert(readError(hex"02")(_.readBoolean()) == "Invalid boolean 2 at position 0")
-      assert(readError(hex"ff")(_.readBoolean()) == "Invalid boolean 255 at position 0")
-    }
+  pureTest("BinaryReader should read strings with invalid UTF-8 using replacement characters") {
+    val replacement = 0xfffd.toChar.toString
+    read(hex"02ff")(reader => expect.eql(replacement, reader.readString())) &&
+    read(hex"0661ff62")(reader => expect.eql(s"a${replacement}b", reader.readString()))
+  }
 
-    it("should read strings with invalid UTF-8 using replacement characters") {
-      val replacement = 0xfffd.toChar.toString
-      assert(read(hex"02ff")(_.readString()) == replacement)
-      assert(read(hex"0661ff62")(_.readString()) == s"a${replacement}b")
-    }
+  pureTest("BinaryReader should read the number of items in blocks") {
+    read(hex"00")(reader => expect.eql(0L, reader.readBlockCount())) &&
+    read(hex"06")(reader => expect.eql(3L, reader.readBlockCount())) &&
+    read(hex"050a")(reader => expect.eql(3L, reader.readBlockCount()))
+  }
 
-    it("should read the number of items in blocks") {
-      assert(read(hex"00")(_.readBlockCount()) == 0L)
-      assert(read(hex"06")(_.readBlockCount()) == 3L)
-      assert(read(hex"050a")(_.readBlockCount()) == 3L)
-    }
+  pureTest("BinaryReader should not read invalid block counts") {
+    expect.eql(
+      Some("Invalid block count -9223372036854775808 at position 0"),
+      readError(hex"ffffffffffffffffff01")(_.readBlockCount())
+    ) &&
+    expect.eql(
+      Some("Invalid negative block size -1 at position 1"),
+      readError(hex"0501")(_.readBlockCount())
+    )
+  }
 
-    it("should not read invalid block counts") {
-      assert {
-        readError(hex"ffffffffffffffffff01")(_.readBlockCount()) ==
-          "Invalid block count -9223372036854775808 at position 0"
-      }
-
-      assert(
-        readError(hex"0501")(_.readBlockCount()) == "Invalid negative block size -1 at position 1"
-      )
-    }
-
-    it("should not read negative lengths") {
-      assert(readError(hex"01")(_.readBytes()) == "Invalid negative length -1 at position 0")
-      assert(readError(hex"0003")(r => {
+  pureTest("BinaryReader should not read negative lengths") {
+    expect.eql(Some("Invalid negative length -1 at position 0"), readError(hex"01")(_.readBytes())) &&
+    expect.eql(
+      Some("Invalid negative length -2 at position 1"),
+      readError(hex"0003")(r => {
         r.readInt(); r.readString()
-      }) == "Invalid negative length -2 at position 1")
-    }
+      })
+    )
+  }
 
-    it("should not read lengths exceeding the remaining input") {
-      assert {
-        readError(hex"0601")(_.readBytes()) ==
-          "Invalid length 3 at position 0, exceeding the remaining input"
-      }
+  pureTest("BinaryReader should not read lengths exceeding the remaining input") {
+    expect.eql(
+      Some("Invalid length 3 at position 0, exceeding the remaining input"),
+      readError(hex"0601")(_.readBytes())
+    ) &&
+    expect.eql(
+      Some("Invalid length 9223372036854775807 at position 0, exceeding the remaining input"),
+      readError(hex"feffffffffffffffff01")(_.readString())
+    )
+  }
 
-      assert {
-        readError(hex"feffffffffffffffff01")(_.readString()) ==
-          "Invalid length 9223372036854775807 at position 0, exceeding the remaining input"
-      }
-    }
-
-    it("should not read past the end of the input") {
+  pureTest("BinaryReader should not read past the end of the input") {
+    forEach(
       List[BinaryReader => Any](
         _.readBoolean(),
         _.readInt(),
@@ -239,13 +248,12 @@ final class BinarySpec extends BaseSpec {
         _.readFloat(),
         _.readDouble(),
         _.readFixed(1)
-      ).foreach { f =>
-        assert(readError(ByteVector.empty)(f) == "Unexpected end of input at position 0")
-      }
-
-      assert(readError(hex"80")(_.readInt()) == "Unexpected end of input at position 1")
-      assert(readError(hex"000000")(_.readFloat()) == "Unexpected end of input at position 0")
-      assert(readError(hex"05")(_.readBlockCount()) == "Unexpected end of input at position 1")
-    }
+      )
+    ) { f =>
+      expect.eql(Some("Unexpected end of input at position 0"), readError(ByteVector.empty)(f))
+    } &&
+    expect.eql(Some("Unexpected end of input at position 1"), readError(hex"80")(_.readInt())) &&
+    expect.eql(Some("Unexpected end of input at position 0"), readError(hex"000000")(_.readFloat())) &&
+    expect.eql(Some("Unexpected end of input at position 1"), readError(hex"05")(_.readBlockCount()))
   }
 }

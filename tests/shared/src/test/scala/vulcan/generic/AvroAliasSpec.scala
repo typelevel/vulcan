@@ -6,28 +6,25 @@
 
 package vulcan.generic
 
-import vulcan.BaseSpec
+import vulcan.BaseSuite
 
-final class AvroAliasSpec extends BaseSpec {
-  describe("AvroAlias") {
-    it("should provide alias via alias") {
-      forAll { (s: String) =>
-        assert(new AvroAlias(s).alias == s)
-      }
+object AvroAliasSpec extends BaseSuite {
+  test("AvroAlias should provide alias via alias") {
+    forall { (s: String) =>
+      expect.eql(s, new AvroAlias(s).alias)
     }
+  }
 
-    it("should include alias in toString") {
-      forAll { (s: String) =>
-        assert(new AvroAlias(s).toString.contains(s))
-      }
+  test("AvroAlias should include alias in toString") {
+    forall { (s: String) =>
+      expect(new AvroAlias(s).toString.contains(s))
     }
+  }
 
-    it("should provide an extractor for alias") {
-      forAll { (s1: String) =>
-        assert(new AvroAlias(s1) match {
-          case AvroAlias(`s1`) => true
-          case AvroAlias(s2) => fail(s2)
-        })
+  test("AvroAlias should provide an extractor for alias") {
+    forall { (s1: String) =>
+      matches(new AvroAlias(s1)) { case AvroAlias(s2) =>
+        expect.eql(s1, s2)
       }
     }
   }

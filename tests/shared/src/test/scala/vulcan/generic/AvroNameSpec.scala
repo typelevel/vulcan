@@ -6,27 +6,25 @@
 
 package vulcan.generic
 
-import vulcan.BaseSpec
-final class AvroNameSpec extends BaseSpec {
-  describe("AvroName") {
-    it("should provide name via name") {
-      forAll { (s: String) =>
-        assert(new AvroName(s).name == s)
-      }
-    }
+import vulcan.BaseSuite
 
-    it("should include name in toString") {
-      forAll { (s: String) =>
-        assert(new AvroName(s).toString.contains(s))
-      }
+object AvroNameSpec extends BaseSuite {
+  test("AvroName should provide name via name") {
+    forall { (s: String) =>
+      expect.eql(s, new AvroName(s).name)
     }
+  }
 
-    it("should provide an extractor for documentation") {
-      forAll { (s1: String) =>
-        assert(new AvroName(s1) match {
-          case AvroName(`s1`) => true
-          case AvroName(s2) => fail(s2)
-        })
+  test("AvroName should include name in toString") {
+    forall { (s: String) =>
+      expect(new AvroName(s).toString.contains(s))
+    }
+  }
+
+  test("AvroName should provide an extractor for documentation") {
+    forall { (s1: String) =>
+      matches(new AvroName(s1)) { case AvroName(s2) =>
+        expect.eql(s1, s2)
       }
     }
   }

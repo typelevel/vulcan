@@ -7,16 +7,13 @@
 package enumeratum
 
 import enumeratum.EnumEntry.Lowercase
-import enumeratum.VulcanEnumSpec.Suit
-import org.scalacheck.Gen
-import org.scalatest.funspec.AnyFunSpec
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import vulcan.AvroException
+import vulcan.BaseSuite
 import vulcan.Codec
 import vulcan.generic.AvroDoc
 import vulcan.generic.AvroNamespace
 
-final class VulcanEnumSpec extends AnyFunSpec with ScalaCheckPropertyChecks with EitherValues {
+object VulcanEnumSpec extends BaseSuite {
 
   /** Encodes the value, and decodes it using the schema of the codec as the writer schema. */
   private def encodeAndDecode[A](a: A)(implicit codec: Codec[A]): Either[AvroException, A] =
@@ -28,39 +25,29 @@ final class VulcanEnumSpec extends AnyFunSpec with ScalaCheckPropertyChecks with
       decoded <- decoder.decode(value)
     } yield decoded
 
-  describe("VulcanEnum") {
-    describe("schema") {
-      it("should use an enum schema") {
-        assert {
-          Codec[Suit].schema.value.toString ===
-            """{"type":"enum","name":"Suit","namespace":"com.example","doc":"The different card suits","symbols":["clubs","diamonds","hearts","spades"]}"""
-        }
-      }
-    }
+  pureTest("VulcanEnum schema should use an enum schema") {
+    expect.eql(
+      """{"type":"enum","name":"Suit","namespace":"com.example","doc":"The different card suits","symbols":["clubs","diamonds","hearts","spades"]}""",
+      Codec[Suit].schema.value.toString
+    )
+  }
 
-    it("should provide the codec as vulcanCodec") {
-      assert(Suit.vulcanCodec.schema === Codec[Suit].schema)
-    }
+  pureTest("VulcanEnum should provide the codec as vulcanCodec") {
+    expect.same(Codec[Suit].schema, Suit.vulcanCodec.schema)
+  }
 
-    it("should roundtrip enum values") {
-      val gen = Gen.oneOf[Suit](Suit.Diamonds, Suit.Hearts, Suit.Spades)
-      forAll(gen) { suit =>
-        val roundtrip = encodeAndDecode(suit)
-        assert(roundtrip.value === suit)
-      }
-    }
-
-    it("should error if withNameOption does not handle schema symbol") {
-      val roundtrip = encodeAndDecode[Suit](Suit.Clubs)
-      assert {
-        roundtrip.swap.value.message ===
-          "Error decoding com.example.Suit: clubs is not a member of Suit (clubs, diamonds, hearts, spades)"
-      }
+  pureTest("VulcanEnum should roundtrip enum values") {
+    forEach(List[Suit](Suit.Diamonds, Suit.Hearts, Suit.Spades)) { suit =>
+      expect.same(suit, encodeAndDecode(suit).value)
     }
   }
-}
 
-object VulcanEnumSpec {
+  pureTest("VulcanEnum should error if withNameOption does not handle schema symbol") {
+    expect.eql(
+      "Error decoding com.example.Suit: clubs is not a member of Suit (clubs, diamonds, hearts, spades)",
+      encodeAndDecode[Suit](Suit.Clubs).swap.value.message
+    )
+  }
 
   @AvroNamespace("com.example")
   @AvroDoc("The different card suits")

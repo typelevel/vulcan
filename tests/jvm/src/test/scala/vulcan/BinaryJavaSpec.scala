@@ -18,7 +18,7 @@ import vulcan.internal.BinaryReader
 import vulcan.internal.BinaryWriter
 
 /** Checks the binary encoding against the Java Avro library. */
-final class BinaryJavaSpec extends BaseSpec {
+object BinaryJavaSpec extends BaseSuite {
   private def write(f: BinaryWriter => Unit): ByteVector = {
     val writer = new BinaryWriter(0)
     f(writer)
@@ -73,37 +73,37 @@ final class BinaryJavaSpec extends BaseSpec {
   private val genString: Gen[String] =
     Gen.listOf(Gen.choose(Char.MinValue, Char.MaxValue)).map(_.mkString)
 
-  describe("BinaryWriter") {
-    it("should write the same as the Java Avro library") {
-      forAll(minSuccessful(1000)) {
-        (boolean: Boolean, int: Int, long: Long, floatBits: Int, doubleBits: Long) =>
-          val float = java.lang.Float.intBitsToFloat(floatBits)
-          val double = java.lang.Double.longBitsToDouble(doubleBits)
+  test("BinaryWriter should write the same as the Java Avro library") {
+    forall.withConfig(checkConfig.withMinimumSuccessful(1000)) {
+      (boolean: Boolean, int: Int, long: Long, floatBits: Int, doubleBits: Long) =>
+        val float = java.lang.Float.intBitsToFloat(floatBits)
+        val double = java.lang.Double.longBitsToDouble(doubleBits)
 
-          val bytes =
-            write { writer =>
-              writer.writeBoolean(boolean)
-              writer.writeInt(int)
-              writer.writeLong(long)
-              writer.writeFloat(float)
-              writer.writeDouble(double)
-            }
+        val bytes =
+          write { writer =>
+            writer.writeBoolean(boolean)
+            writer.writeInt(int)
+            writer.writeLong(long)
+            writer.writeFloat(float)
+            writer.writeDouble(double)
+          }
 
-          val javaBytes =
-            javaWrite { encoder =>
-              encoder.writeBoolean(boolean)
-              encoder.writeInt(int)
-              encoder.writeLong(long)
-              encoder.writeFloat(float)
-              encoder.writeDouble(double)
-            }
+        val javaBytes =
+          javaWrite { encoder =>
+            encoder.writeBoolean(boolean)
+            encoder.writeInt(int)
+            encoder.writeLong(long)
+            encoder.writeFloat(float)
+            encoder.writeDouble(double)
+          }
 
-          assert(bytes == javaBytes)
-      }
+        expect.same(javaBytes, bytes)
     }
+  }
 
-    it("should write bytes, fixed, and strings the same as the Java Avro library") {
-      forAll(genBytes, genBytes, genString, minSuccessful(1000)) { (bytes, fixed, string) =>
+  test("BinaryWriter should write bytes, fixed, and strings the same as the Java Avro library") {
+    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(Gen.zip(genBytes, genBytes, genString)) {
+      case (bytes, fixed, string) =>
         val written =
           write { writer =>
             writer.writeBytes(bytes)
@@ -118,89 +118,83 @@ final class BinaryJavaSpec extends BaseSpec {
             encoder.writeString(string)
           }
 
-        assert(written == javaWritten)
-      }
+        expect.same(javaWritten, written)
     }
   }
 
-  describe("BinaryReader") {
-    it("should read ints and longs the same as the Java Avro library") {
-      forAll(genVarBytes, minSuccessful(1000)) { bytes =>
-        val (int, javaInt) = readBoth(bytes)(_.readInt(), _.readInt())
-        assert(int == javaInt)
-
-        val (long, javaLong) = readBoth(bytes)(_.readLong(), _.readLong())
-        assert(long == javaLong)
-      }
+  test("BinaryReader should read ints and longs the same as the Java Avro library") {
+    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(genVarBytes) { bytes =>
+      val (int, javaInt) = readBoth(bytes)(_.readInt(), _.readInt())
+      val (long, javaLong) = readBoth(bytes)(_.readLong(), _.readLong())
+      expect.eql(javaInt, int) && expect.eql(javaLong, long)
     }
+  }
 
-    it("should read floats and doubles the same as the Java Avro library") {
-      forAll(genVarBytes, minSuccessful(1000)) { bytes =>
-        val (float, javaFloat) =
-          readBoth(bytes)(
-            reader => java.lang.Float.floatToRawIntBits(reader.readFloat()),
-            decoder => java.lang.Float.floatToRawIntBits(decoder.readFloat())
-          )
+  test("BinaryReader should read floats and doubles the same as the Java Avro library") {
+    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(genVarBytes) { bytes =>
+      val (float, javaFloat) =
+        readBoth(bytes)(
+          reader => java.lang.Float.floatToRawIntBits(reader.readFloat()),
+          decoder => java.lang.Float.floatToRawIntBits(decoder.readFloat())
+        )
 
-        assert(float == javaFloat)
+      val (double, javaDouble) =
+        readBoth(bytes)(
+          reader => java.lang.Double.doubleToRawLongBits(reader.readDouble()),
+          decoder => java.lang.Double.doubleToRawLongBits(decoder.readDouble())
+        )
 
-        val (double, javaDouble) =
-          readBoth(bytes)(
-            reader => java.lang.Double.doubleToRawLongBits(reader.readDouble()),
-            decoder => java.lang.Double.doubleToRawLongBits(decoder.readDouble())
-          )
-
-        assert(double == javaDouble)
-      }
+      expect.eql(javaFloat, float) && expect.eql(javaDouble, double)
     }
+  }
 
-    it("should read booleans the same as the Java Avro library, except for invalid booleans") {
-      forAll(genVarBytes, minSuccessful(1000)) { bytes =>
-        val (boolean, javaBoolean) = readBoth(bytes)(_.readBoolean(), _.readBoolean())
-        if (bytes.headOption.exists(byte => byte == 0 || byte == 1)) assert(boolean == javaBoolean)
-        else assert(boolean.isEmpty)
-      }
+  test("BinaryReader should read booleans the same as the Java Avro library, except for invalid booleans") {
+    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(genVarBytes) { bytes =>
+      val (boolean, javaBoolean) = readBoth(bytes)(_.readBoolean(), _.readBoolean())
+      if (bytes.headOption.exists(byte => byte == 0 || byte == 1)) expect.eql(javaBoolean, boolean)
+      else expect(boolean.isEmpty)
     }
+  }
 
-    it("should read bytes and strings the same as the Java Avro library") {
-      forAll(genVarBytes, genBytes, minSuccessful(1000)) { (prefix, payload) =>
+  test("BinaryReader should read bytes and strings the same as the Java Avro library") {
+    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(Gen.zip(genVarBytes, genBytes)) {
+      case (prefix, payload) =>
         val bytes = prefix ++ payload
 
         val (read, javaRead) =
           readBoth(bytes)(_.readBytes(), decoder => ByteVector(decoder.readBytes(null)))
 
-        assert(read == javaRead)
-
         val (string, javaString) = readBoth(bytes)(_.readString(), _.readString())
-        assert(string == javaString)
-      }
+        expect.same(javaRead, read) && expect.eql(javaString, string)
     }
+  }
 
-    it("should read strings with invalid UTF-8 the same as the Java Avro library") {
-      forAll(genBytes, minSuccessful(1000)) { payload =>
-        val bytes = write(_.writeBytes(payload))
-        assert(BinaryReader(bytes).readString() == javaDecoder(bytes).readString())
-      }
+  test("BinaryReader should read strings with invalid UTF-8 the same as the Java Avro library") {
+    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(genBytes) { payload =>
+      val bytes = write(_.writeBytes(payload))
+      expect.eql(javaDecoder(bytes).readString(), BinaryReader(bytes).readString())
     }
+  }
 
-    it("should read blocks written by the Java Avro library") {
-      val factory = new EncoderFactory().configureBlockSize(64)
+  test("BinaryReader should read blocks written by the Java Avro library") {
+    val factory = new EncoderFactory().configureBlockSize(64)
 
-      def javaWriteArray(values: List[Long]): ByteVector =
-        javaWriteWith(factory.blockingBinaryEncoder(_, null)) { encoder =>
-          encoder.writeArrayStart()
-          encoder.setItemCount(values.size.toLong)
-          values.foreach { value =>
-            encoder.startItem()
-            encoder.writeLong(value)
-          }
-          encoder.writeArrayEnd()
+    def javaWriteArray(values: List[Long]): ByteVector =
+      javaWriteWith(factory.blockingBinaryEncoder(_, null)) { encoder =>
+        encoder.writeArrayStart()
+        encoder.setItemCount(values.size.toLong)
+        values.foreach { value =>
+          encoder.startItem()
+          encoder.writeLong(value)
         }
+        encoder.writeArrayEnd()
+      }
 
-      // Blocks are written with negative counts followed by their size in bytes
-      assert(BinaryReader(javaWriteArray(List.fill(100)(Long.MaxValue))).readLong() < 0)
+    // Blocks are written with negative counts followed by their size in bytes
+    val negativeCount = expect(BinaryReader(javaWriteArray(List.fill(100)(Long.MaxValue))).readLong() < 0)
 
-      forAll(minSuccessful(1000)) { (values: List[Long]) =>
+    forall
+      .withConfig(checkConfig.withMinimumSuccessful(1000)) { (values: List[Long]) =>
         val bytes = javaWriteArray(values)
         val reader = BinaryReader(bytes)
         val read = List.newBuilder[Long]
@@ -210,9 +204,8 @@ final class BinaryJavaSpec extends BaseSpec {
           count = reader.readBlockCount()
         }
 
-        assert(read.result() == values)
-        assert(reader.remaining == 0)
+        expect.eql(values, read.result()) && expect.eql(0, reader.remaining)
       }
-    }
+      .map(negativeCount && _)
   }
 }

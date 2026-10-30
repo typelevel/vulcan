@@ -6,14 +6,11 @@
 
 package enumeratum.values
 
-import enumeratum.EitherValues
-import org.scalacheck.Gen
-import org.scalatest.funspec.AnyFunSpec
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import vulcan.AvroException
+import vulcan.BaseSuite
 import vulcan.Codec
 
-final class VulcanValueEnumSpec extends AnyFunSpec with ScalaCheckPropertyChecks with EitherValues {
+object VulcanValueEnumSpec extends BaseSuite {
 
   /** Encodes the value, and decodes it using the schema of the codec as the writer schema. */
   private def encodeAndDecode[A](a: A)(implicit codec: Codec[A]): Either[AvroException, A] =
@@ -25,159 +22,108 @@ final class VulcanValueEnumSpec extends AnyFunSpec with ScalaCheckPropertyChecks
       decoded <- decoder.decode(value)
     } yield decoded
 
-  describe("ByteVulcanEnum") {
+  pureTest("ByteVulcanEnum schema should be same as for underlying type") {
+    expect.eql(Codec[Byte].schema.value.toString, Codec[CustomByteEnum].schema.value.toString)
+  }
 
-    it("schema should be same as for underlying type") {
-      assert {
-        Codec[CustomByteEnum].schema.value.toString ===
-          Codec[Byte].schema.value.toString
-      }
-    }
-
-    it("should roundtrip enumeration values") {
-      val gen = Gen.oneOf[CustomByteEnum](CustomByteEnum.First, CustomByteEnum.Second)
-      forAll(gen) { customEnum =>
-        val roundtrip = encodeAndDecode(customEnum)
-        assert(roundtrip.value === customEnum)
-      }
-    }
-
-    it("should error if withValueOpt does not handle schema value") {
-      val roundtrip = encodeAndDecode[CustomByteEnum](CustomByteEnum.Third)
-      assert {
-        roundtrip.swap.value.message ===
-          """3 is not a member of CustomByteEnum (1, 2, 3)"""
-      }
+  pureTest("ByteVulcanEnum should roundtrip enumeration values") {
+    forEach(List[CustomByteEnum](CustomByteEnum.First, CustomByteEnum.Second)) { customEnum =>
+      expect.same(customEnum, encodeAndDecode(customEnum).value)
     }
   }
 
-  describe("CharVulcanEnum") {
+  pureTest("ByteVulcanEnum should error if withValueOpt does not handle schema value") {
+    expect.eql(
+      "3 is not a member of CustomByteEnum (1, 2, 3)",
+      encodeAndDecode[CustomByteEnum](CustomByteEnum.Third).swap.value.message
+    )
+  }
 
-    it("schema should be same as for underlying type") {
-      assert {
-        Codec[CustomCharEnum].schema.value.toString ===
-          Codec[Char].schema.value.toString
-      }
-    }
+  pureTest("CharVulcanEnum schema should be same as for underlying type") {
+    expect.eql(Codec[Char].schema.value.toString, Codec[CustomCharEnum].schema.value.toString)
+  }
 
-    it("should roundtrip enumeration values") {
-      val gen = Gen.oneOf[CustomCharEnum](CustomCharEnum.First, CustomCharEnum.Second)
-      forAll(gen) { customEnum =>
-        val roundtrip = encodeAndDecode(customEnum)
-        assert(roundtrip.value === customEnum)
-      }
-    }
-
-    it("should error if withValueOpt does not handle schema value") {
-      val roundtrip = encodeAndDecode[CustomCharEnum](CustomCharEnum.Third)
-      assert {
-        roundtrip.swap.value.message ===
-          """3 is not a member of CustomCharEnum (1, 2, 3)"""
-      }
+  pureTest("CharVulcanEnum should roundtrip enumeration values") {
+    forEach(List[CustomCharEnum](CustomCharEnum.First, CustomCharEnum.Second)) { customEnum =>
+      expect.same(customEnum, encodeAndDecode(customEnum).value)
     }
   }
 
-  describe("IntVulcanEnum") {
+  pureTest("CharVulcanEnum should error if withValueOpt does not handle schema value") {
+    expect.eql(
+      "3 is not a member of CustomCharEnum (1, 2, 3)",
+      encodeAndDecode[CustomCharEnum](CustomCharEnum.Third).swap.value.message
+    )
+  }
 
-    it("schema should be same as for underlying type") {
-      assert {
-        Codec[CustomIntEnum].schema.value.toString ===
-          Codec[Int].schema.value.toString
-      }
-    }
+  pureTest("IntVulcanEnum schema should be same as for underlying type") {
+    expect.eql(Codec[Int].schema.value.toString, Codec[CustomIntEnum].schema.value.toString)
+  }
 
-    it("should roundtrip enumeration values") {
-      val gen = Gen.oneOf[CustomIntEnum](CustomIntEnum.First, CustomIntEnum.Second)
-      forAll(gen) { customEnum =>
-        val roundtrip = encodeAndDecode(customEnum)
-        assert(roundtrip.value === customEnum)
-      }
-    }
-
-    it("should error if withValueOpt does not handle schema value") {
-      val roundtrip = encodeAndDecode[CustomIntEnum](CustomIntEnum.Third)
-      assert {
-        roundtrip.swap.value.message ===
-          """3 is not a member of CustomIntEnum (1, 2, 3)"""
-      }
+  pureTest("IntVulcanEnum should roundtrip enumeration values") {
+    forEach(List[CustomIntEnum](CustomIntEnum.First, CustomIntEnum.Second)) { customEnum =>
+      expect.same(customEnum, encodeAndDecode(customEnum).value)
     }
   }
 
-  describe("LongVulcanEnum") {
+  pureTest("IntVulcanEnum should error if withValueOpt does not handle schema value") {
+    expect.eql(
+      "3 is not a member of CustomIntEnum (1, 2, 3)",
+      encodeAndDecode[CustomIntEnum](CustomIntEnum.Third).swap.value.message
+    )
+  }
 
-    it("schema should be same as for underlying type") {
-      assert {
-        Codec[CustomLongEnum].schema.value.toString ===
-          Codec[Long].schema.value.toString
-      }
-    }
+  pureTest("LongVulcanEnum schema should be same as for underlying type") {
+    expect.eql(Codec[Long].schema.value.toString, Codec[CustomLongEnum].schema.value.toString)
+  }
 
-    it("should roundtrip enumeration values") {
-      val gen = Gen.oneOf[CustomLongEnum](CustomLongEnum.First, CustomLongEnum.Second)
-      forAll(gen) { customEnum =>
-        val roundtrip = encodeAndDecode(customEnum)
-        assert(roundtrip.value === customEnum)
-      }
-    }
-
-    it("should error if withValueOpt does not handle schema value") {
-      val roundtrip = encodeAndDecode[CustomLongEnum](CustomLongEnum.Third)
-      assert {
-        roundtrip.swap.value.message ===
-          """3 is not a member of CustomLongEnum (1, 2, 3)"""
-      }
+  pureTest("LongVulcanEnum should roundtrip enumeration values") {
+    forEach(List[CustomLongEnum](CustomLongEnum.First, CustomLongEnum.Second)) { customEnum =>
+      expect.same(customEnum, encodeAndDecode(customEnum).value)
     }
   }
 
-  describe("ShortVulcanEnum") {
+  pureTest("LongVulcanEnum should error if withValueOpt does not handle schema value") {
+    expect.eql(
+      "3 is not a member of CustomLongEnum (1, 2, 3)",
+      encodeAndDecode[CustomLongEnum](CustomLongEnum.Third).swap.value.message
+    )
+  }
 
-    it("schema should be same as for underlying type") {
-      assert {
-        Codec[CustomShortEnum].schema.value.toString ===
-          Codec[Short].schema.value.toString
-      }
-    }
+  pureTest("ShortVulcanEnum schema should be same as for underlying type") {
+    expect.eql(Codec[Short].schema.value.toString, Codec[CustomShortEnum].schema.value.toString)
+  }
 
-    it("should roundtrip enumeration values") {
-      val gen = Gen.oneOf[CustomShortEnum](CustomShortEnum.First, CustomShortEnum.Second)
-      forAll(gen) { customEnum =>
-        val roundtrip = encodeAndDecode(customEnum)
-        assert(roundtrip.value === customEnum)
-      }
-    }
-
-    it("should error if withValueOpt does not handle schema value") {
-      val roundtrip = encodeAndDecode[CustomShortEnum](CustomShortEnum.Third)
-      assert {
-        roundtrip.swap.value.message ===
-          """3 is not a member of CustomShortEnum (1, 2, 3)"""
-      }
+  pureTest("ShortVulcanEnum should roundtrip enumeration values") {
+    forEach(List[CustomShortEnum](CustomShortEnum.First, CustomShortEnum.Second)) { customEnum =>
+      expect.same(customEnum, encodeAndDecode(customEnum).value)
     }
   }
 
-  describe("StringVulcanEnum") {
+  pureTest("ShortVulcanEnum should error if withValueOpt does not handle schema value") {
+    expect.eql(
+      "3 is not a member of CustomShortEnum (1, 2, 3)",
+      encodeAndDecode[CustomShortEnum](CustomShortEnum.Third).swap.value.message
+    )
+  }
 
-    it("schema should be enum") {
-      assert {
-        Codec[CustomStringEnum].schema.value.toString ===
-          """{"type":"enum","name":"CustomStringEnum","namespace":"com.example","doc":"Custom enumeration","symbols":["first","second","third"]}"""
-      }
-    }
+  pureTest("StringVulcanEnum schema should be enum") {
+    expect.eql(
+      """{"type":"enum","name":"CustomStringEnum","namespace":"com.example","doc":"Custom enumeration","symbols":["first","second","third"]}""",
+      Codec[CustomStringEnum].schema.value.toString
+    )
+  }
 
-    it("should roundtrip enumeration values") {
-      val gen = Gen.oneOf[CustomStringEnum](CustomStringEnum.First, CustomStringEnum.Second)
-      forAll(gen) { customEnum =>
-        val roundtrip = encodeAndDecode(customEnum)
-        assert(roundtrip.value === customEnum)
-      }
+  pureTest("StringVulcanEnum should roundtrip enumeration values") {
+    forEach(List[CustomStringEnum](CustomStringEnum.First, CustomStringEnum.Second)) { customEnum =>
+      expect.same(customEnum, encodeAndDecode(customEnum).value)
     }
+  }
 
-    it("should error if withValueOpt does not handle schema value") {
-      val roundtrip = encodeAndDecode[CustomStringEnum](CustomStringEnum.Third)
-      assert {
-        roundtrip.swap.value.message ===
-          """Error decoding com.example.CustomStringEnum: third is not a member of CustomStringEnum (first, second, third)"""
-      }
-    }
+  pureTest("StringVulcanEnum should error if withValueOpt does not handle schema value") {
+    expect.eql(
+      "Error decoding com.example.CustomStringEnum: third is not a member of CustomStringEnum (first, second, third)",
+      encodeAndDecode[CustomStringEnum](CustomStringEnum.Third).swap.value.message
+    )
   }
 }

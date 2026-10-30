@@ -11,29 +11,25 @@ import java.nio.charset.StandardCharsets
 import scodec.bits.*
 import vulcan.internal.ByteVectors
 
-final class ByteVectorsSpec extends BaseSpec {
+object ByteVectorsSpec extends BaseSuite {
   private def decode(bytes: ByteVector): String =
     ByteVectors.decodeString(bytes, StandardCharsets.UTF_8)
 
-  describe("ByteVectors") {
-    describe("decodeString") {
-      it("should decode bytes backed by an array") {
-        assert(decode(hex"616263") == "abc")
-      }
+  pureTest("ByteVectors decodeString should decode bytes backed by an array") {
+    expect.eql("abc", decode(hex"616263"))
+  }
 
-      it("should decode a slice of bytes backed by an array") {
-        assert(decode(hex"78616263".drop(1)) == "abc")
-      }
+  pureTest("ByteVectors decodeString should decode a slice of bytes backed by an array") {
+    expect.eql("abc", decode(hex"78616263".drop(1)))
+  }
 
-      it("should decode bytes of multiple chunks") {
-        assert(decode(hex"61" ++ hex"6263") == "abc")
-      }
+  pureTest("ByteVectors decodeString should decode bytes of multiple chunks") {
+    expect.eql("abc", decode(hex"61" ++ hex"6263"))
+  }
 
-      it("should decode bytes without an accessible array") {
-        val bytes = ByteVector.view(ByteBuffer.wrap(hex"616263".toArray).asReadOnlyBuffer)
-        assert(!bytes.toByteBufferUnsafe.hasArray)
-        assert(decode(bytes) == "abc")
-      }
-    }
+  pureTest("ByteVectors decodeString should decode bytes without an accessible array") {
+    val bytes = ByteVector.view(ByteBuffer.wrap(hex"616263".toArray).asReadOnlyBuffer)
+    expect(!bytes.toByteBufferUnsafe.hasArray) &&
+    expect.eql("abc", decode(bytes))
   }
 }

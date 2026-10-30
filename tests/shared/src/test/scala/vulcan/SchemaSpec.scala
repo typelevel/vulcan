@@ -9,223 +9,199 @@ package vulcan
 import io.circe.Json
 import io.circe.JsonObject
 
-final class SchemaSpec extends BaseSpec {
-  describe("Schema") {
-    describe("Name") {
-      it("should include the namespace in the full name") {
-        assert(Schema.Name("Person", Some("com.example")).fullName == "com.example.Person")
-      }
+object SchemaSpec extends BaseSuite {
+  private val props: JsonObject =
+    JsonObject("avro.java.string" -> Json.fromString("String"))
 
-      it("should use the name as full name in the null namespace") {
-        assert(Schema.Name("Person").fullName == "Person")
-      }
+  private def fixed(size: Int): Schema.Fixed =
+    Schema.Fixed(Schema.Name("Fixed"), size)
 
-      it("should treat an empty namespace as the null namespace") {
-        assert(Schema.Name("Person", Some("")) == Schema.Name("Person", None))
-      }
+  private def withLogicalTypeProp(name: String): JsonObject =
+    JsonObject("logicalType" -> Json.fromString(name))
 
-      it("should treat names with dots as full names, ignoring the namespace") {
-        val name = Schema.Name("com.example.Person", Some("other"))
-        assert(name.name == "Person")
-        assert(name.namespace == Some("com.example"))
-        assert(Schema.Name("com.example.Person") == name)
-        assert(Schema.Name(".Person", Some("other")) == Schema.Name("Person"))
-      }
+  pureTest("Schema Name should include the namespace in the full name") {
+    expect.eql("com.example.Person", Schema.Name("Person", Some("com.example")).fullName)
+  }
 
-      it("should allow full names for named schemas") {
-        assert {
-          Schema.Record(Schema.Name("com.example.Person"), Vector.empty).toString ==
-            """{"type":"record","name":"Person","namespace":"com.example","fields":[]}"""
-        }
-      }
+  pureTest("Schema Name should use the name as full name in the null namespace") {
+    expect.eql("Person", Schema.Name("Person").fullName)
+  }
+
+  pureTest("Schema Name should treat an empty namespace as the null namespace") {
+    expect.same(Schema.Name("Person", None), Schema.Name("Person", Some("")))
+  }
+
+  pureTest("Schema Name should treat names with dots as full names, ignoring the namespace") {
+    val name = Schema.Name("com.example.Person", Some("other"))
+    expect.eql("Person", name.name) &&
+    expect.eql(Some("com.example"), name.namespace) &&
+    expect.same(name, Schema.Name("com.example.Person")) &&
+    expect.same(Schema.Name("Person"), Schema.Name(".Person", Some("other")))
+  }
+
+  pureTest("Schema Name should allow full names for named schemas") {
+    expect.eql(
+      """{"type":"record","name":"Person","namespace":"com.example","fields":[]}""",
+      Schema.Record(Schema.Name("com.example.Person"), Vector.empty).toString
+    )
+  }
+
+  pureTest("Schema Record should not have optional attributes by default") {
+    val record = Schema.Record(Schema.Name("Person"), Vector.empty)
+    expect(record.doc.isEmpty) &&
+    expect(record.aliases.isEmpty) &&
+    expect(record.props.isEmpty)
+  }
+
+  pureTest("Schema Record should replace attributes using modifiers") {
+    val field = Schema.Field("name", Schema.String)
+    val record =
+      Schema
+        .Record(Schema.Name("Person", Some("com.example")), Vector.empty)
+        .withFields(Vector(field))
+        .withDoc(Some("documentation"))
+        .withAliases(Vector("Human"))
+        .withProps(JsonObject("custom" -> Json.True))
+
+    expect.eql("com.example.Person", record.fullName) &&
+    expect.same(Vector(field), record.fields) &&
+    expect.eql(Some("documentation"), record.doc) &&
+    expect.eql(Vector("Human"), record.aliases) &&
+    expect.eql(JsonObject("custom" -> Json.True), record.props)
+  }
+
+  pureTest("Schema Field should have ascending order and no default by default") {
+    val field = Schema.Field("name", Schema.String)
+    expect.same(Schema.Field.Order.Ascending, field.order) &&
+    expect(field.default.isEmpty)
+  }
+
+  pureTest("Schema Field should distinguish a null default from no default") {
+    val field = Schema.Field("name", Schema.Union(Vector(Schema.Null, Schema.String)))
+    val withNullDefault = field.withDefault(Some(Json.Null))
+    expect.eql(Some(Json.Null), withNullDefault.default) &&
+    expect(withNullDefault != field)
+  }
+
+  pureTest("Schema equality should be structural") {
+    expect.same(Schema.Array(Schema.Int), Schema.Array(Schema.Int)) &&
+    expect(Schema.Array(Schema.Int) != Schema.Array(Schema.Long)) &&
+    expect(Schema.Int.withProps(JsonObject("custom" -> Json.True)) != Schema.Int)
+  }
+
+  pureTest("Schema primitive should be the companion object without props") {
+    expect(Schema.String.props.isEmpty) &&
+    expect(Schema.String.withProps(JsonObject.empty) eq Schema.String) &&
+    expect(Schema.String.withProps(props).withProps(JsonObject.empty) eq Schema.String)
+  }
+
+  pureTest("Schema primitive should be equal with equal props") {
+    expect.same(Schema.String.withProps(props), Schema.String.withProps(props)) &&
+    expect(Schema.String.withProps(props) != Schema.String)
+  }
+
+  pureTest("Schema primitive should match on the type regardless of props") {
+    val schema: Schema = Schema.String.withProps(props)
+
+    matches(schema) { case _: Schema.String =>
+      success
     }
+  }
 
-    describe("Record") {
-      it("should not have optional attributes by default") {
-        val record = Schema.Record(Schema.Name("Person"), Vector.empty)
-        assert(record.doc.isEmpty)
-        assert(record.aliases.isEmpty)
-        assert(record.props.isEmpty)
-      }
+  pureTest("Schema isNullable should be true for null") {
+    expect(Schema.Null.isNullable)
+  }
 
-      it("should replace attributes using modifiers") {
-        val field = Schema.Field("name", Schema.String)
-        val record =
-          Schema
-            .Record(Schema.Name("Person", Some("com.example")), Vector.empty)
-            .withFields(Vector(field))
-            .withDoc(Some("documentation"))
-            .withAliases(Vector("Human"))
-            .withProps(JsonObject("custom" -> Json.True))
+  pureTest("Schema isNullable should be true for unions including null") {
+    expect(Schema.Union(Vector(Schema.Int, Schema.Null)).isNullable)
+  }
 
-        assert(record.fullName == "com.example.Person")
-        assert(record.fields == Vector(field))
-        assert(record.doc == Some("documentation"))
-        assert(record.aliases == Vector("Human"))
-        assert(record.props == JsonObject("custom" -> Json.True))
-      }
-    }
+  pureTest("Schema isNullable should be false for unions without null") {
+    expect(!Schema.Union(Vector(Schema.Int, Schema.String)).isNullable)
+  }
 
-    describe("Field") {
-      it("should have ascending order and no default by default") {
-        val field = Schema.Field("name", Schema.String)
-        assert(field.order == Schema.Field.Order.Ascending)
-        assert(field.default.isEmpty)
-      }
+  pureTest("Schema isNullable should be false for other schemas") {
+    expect(!Schema.Int.isNullable) &&
+    expect(!Schema.Array(Schema.Null).isNullable)
+  }
 
-      it("should distinguish a null default from no default") {
-        val field = Schema.Field("name", Schema.Union(Vector(Schema.Null, Schema.String)))
-        val withNullDefault = field.withDefault(Some(Json.Null))
-        assert(withNullDefault.default == Some(Json.Null))
-        assert(withNullDefault != field)
-      }
-    }
+  pureTest("Schema logicalType should add the logical type followed by its parameters to the props") {
+    val bytes = Schema.Bytes.withLogicalType(LogicalType.decimal(10, 2))
+    expect.eql(List("logicalType", "precision", "scale"), bytes.props.keys.toList) &&
+    expect.eql(Some(Json.fromString("decimal")), bytes.props("logicalType"))
+  }
 
-    describe("equality") {
-      it("should be structural") {
-        assert(Schema.Array(Schema.Int) == Schema.Array(Schema.Int))
-        assert(Schema.Array(Schema.Int) != Schema.Array(Schema.Long))
-        assert(Schema.Int.withProps(JsonObject("custom" -> Json.True)) != Schema.Int)
-      }
-    }
+  pureTest("Schema logicalType should be empty without a logical type") {
+    expect(Schema.Long.logicalType.isEmpty)
+  }
 
-    describe("primitive") {
-      val props = JsonObject("avro.java.string" -> Json.fromString("String"))
+  pureTest("Schema logicalType should return logical types which are valid for the underlying type") {
+    forEach(List(LogicalType.date, LogicalType.timeMillis)) { logicalType =>
+      expect.same(Some(logicalType), Schema.Int.withLogicalType(logicalType).logicalType)
+    } &&
+    forEach(
+      List(
+        LogicalType.timeMicros,
+        LogicalType.timestampMillis,
+        LogicalType.timestampMicros,
+        LogicalType.timestampNanos,
+        LogicalType.localTimestampMillis,
+        LogicalType.localTimestampMicros,
+        LogicalType.localTimestampNanos
+      )
+    ) { logicalType =>
+      expect.same(Some(logicalType), Schema.Long.withLogicalType(logicalType).logicalType)
+    } &&
+    forEach(List(LogicalType.decimal(10, 2), LogicalType.bigDecimal)) { logicalType =>
+      expect.same(Some(logicalType), Schema.Bytes.withLogicalType(logicalType).logicalType)
+    } &&
+    expect.same(Some(LogicalType.uuid), Schema.String.withLogicalType(LogicalType.uuid).logicalType) &&
+    expect.same(Some(LogicalType.uuid), fixed(16).withLogicalType(LogicalType.uuid).logicalType) &&
+    expect.same(Some(LogicalType.duration), fixed(12).withLogicalType(LogicalType.duration).logicalType) &&
+    expect.same(
+      Some(LogicalType.decimal(9, 2)),
+      fixed(4).withLogicalType(LogicalType.decimal(9, 2)).logicalType
+    )
+  }
 
-      it("should be the companion object without props") {
-        assert(Schema.String.props.isEmpty)
-        assert(Schema.String.withProps(JsonObject.empty) eq Schema.String)
-        assert(Schema.String.withProps(props).withProps(JsonObject.empty) eq Schema.String)
-      }
+  pureTest("Schema logicalType should ignore logical types which are invalid for the underlying type") {
+    expect(Schema.String.withProps(withLogicalTypeProp("timestamp-millis")).logicalType.isEmpty) &&
+    expect(Schema.Int.withProps(withLogicalTypeProp("timestamp-millis")).logicalType.isEmpty) &&
+    expect(Schema.Long.withProps(withLogicalTypeProp("date")).logicalType.isEmpty) &&
+    expect(Schema.Bytes.withProps(withLogicalTypeProp("uuid")).logicalType.isEmpty) &&
+    expect(fixed(8).withLogicalType(LogicalType.uuid).logicalType.isEmpty) &&
+    expect(fixed(11).withLogicalType(LogicalType.duration).logicalType.isEmpty)
+  }
 
-      it("should be equal with equal props") {
-        assert(Schema.String.withProps(props) == Schema.String.withProps(props))
-        assert(Schema.String.withProps(props) != Schema.String)
-      }
+  pureTest("Schema logicalType should ignore decimals with invalid precision or scale") {
+    expect(Schema.Bytes.withLogicalType(LogicalType.decimal(0, 0)).logicalType.isEmpty) &&
+    expect(Schema.Bytes.withLogicalType(LogicalType.decimal(2, 3)).logicalType.isEmpty) &&
+    expect(Schema.Bytes.withLogicalType(LogicalType.decimal(2, -1)).logicalType.isEmpty) &&
+    expect(Schema.Bytes.withProps(withLogicalTypeProp("decimal")).logicalType.isEmpty) &&
+    expect(fixed(4).withLogicalType(LogicalType.decimal(10, 2)).logicalType.isEmpty)
+  }
 
-      it("should match on the type regardless of props") {
-        val schema: Schema = Schema.String.withProps(props)
+  pureTest("Schema logicalType should default the decimal scale to zero") {
+    val bytes =
+      Schema.Bytes.withProps(withLogicalTypeProp("decimal").add("precision", Json.fromInt(4)))
 
-        assert(schema match {
-          case _: Schema.String => true
-          case _ => false
-        })
-      }
-    }
+    expect.same(Some(LogicalType.decimal(4, 0)), bytes.logicalType)
+  }
 
-    describe("isNullable") {
-      it("should be true for null") {
-        assert(Schema.Null.isNullable)
-      }
+  pureTest("Schema logicalType should return logical types without built-in support") {
+    val custom = LogicalType("custom")
+    expect.same(Some(custom), Schema.Long.withLogicalType(custom).logicalType) &&
+    expect.same(
+      Some(custom),
+      Schema
+        .Record(Schema.Name("Record"), Vector.empty)
+        .withProps(withLogicalTypeProp("custom"))
+        .logicalType
+    )
+  }
 
-      it("should be true for unions including null") {
-        assert(Schema.Union(Vector(Schema.Int, Schema.Null)).isNullable)
-      }
-
-      it("should be false for unions without null") {
-        assert(!Schema.Union(Vector(Schema.Int, Schema.String)).isNullable)
-      }
-
-      it("should be false for other schemas") {
-        assert(!Schema.Int.isNullable)
-        assert(!Schema.Array(Schema.Null).isNullable)
-      }
-    }
-
-    describe("logicalType") {
-      def fixed(size: Int): Schema.Fixed =
-        Schema.Fixed(Schema.Name("Fixed"), size)
-
-      def withLogicalTypeProp(name: String): JsonObject =
-        JsonObject("logicalType" -> Json.fromString(name))
-
-      it("should add the logical type followed by its parameters to the props") {
-        val bytes = Schema.Bytes.withLogicalType(LogicalType.decimal(10, 2))
-        assert(bytes.props.keys.toList == List("logicalType", "precision", "scale"))
-        assert(bytes.props("logicalType") == Some(Json.fromString("decimal")))
-      }
-
-      it("should be empty without a logical type") {
-        assert(Schema.Long.logicalType.isEmpty)
-      }
-
-      it("should return logical types which are valid for the underlying type") {
-        List(LogicalType.date, LogicalType.timeMillis).foreach { logicalType =>
-          assert(Schema.Int.withLogicalType(logicalType).logicalType == Some(logicalType))
-        }
-
-        List(
-          LogicalType.timeMicros,
-          LogicalType.timestampMillis,
-          LogicalType.timestampMicros,
-          LogicalType.timestampNanos,
-          LogicalType.localTimestampMillis,
-          LogicalType.localTimestampMicros,
-          LogicalType.localTimestampNanos
-        ).foreach { logicalType =>
-          assert(Schema.Long.withLogicalType(logicalType).logicalType == Some(logicalType))
-        }
-
-        List(LogicalType.decimal(10, 2), LogicalType.bigDecimal).foreach { logicalType =>
-          assert(Schema.Bytes.withLogicalType(logicalType).logicalType == Some(logicalType))
-        }
-
-        assert {
-          Schema.String.withLogicalType(LogicalType.uuid).logicalType == Some(LogicalType.uuid)
-        }
-
-        assert(fixed(16).withLogicalType(LogicalType.uuid).logicalType == Some(LogicalType.uuid))
-
-        assert {
-          fixed(12).withLogicalType(LogicalType.duration).logicalType == Some(LogicalType.duration)
-        }
-
-        assert {
-          fixed(4).withLogicalType(LogicalType.decimal(9, 2)).logicalType ==
-            Some(LogicalType.decimal(9, 2))
-        }
-      }
-
-      it("should ignore logical types which are invalid for the underlying type") {
-        assert(Schema.String.withProps(withLogicalTypeProp("timestamp-millis")).logicalType.isEmpty)
-        assert(Schema.Int.withProps(withLogicalTypeProp("timestamp-millis")).logicalType.isEmpty)
-        assert(Schema.Long.withProps(withLogicalTypeProp("date")).logicalType.isEmpty)
-        assert(Schema.Bytes.withProps(withLogicalTypeProp("uuid")).logicalType.isEmpty)
-        assert(fixed(8).withLogicalType(LogicalType.uuid).logicalType.isEmpty)
-        assert(fixed(11).withLogicalType(LogicalType.duration).logicalType.isEmpty)
-      }
-
-      it("should ignore decimals with invalid precision or scale") {
-        assert(Schema.Bytes.withLogicalType(LogicalType.decimal(0, 0)).logicalType.isEmpty)
-        assert(Schema.Bytes.withLogicalType(LogicalType.decimal(2, 3)).logicalType.isEmpty)
-        assert(Schema.Bytes.withLogicalType(LogicalType.decimal(2, -1)).logicalType.isEmpty)
-        assert(Schema.Bytes.withProps(withLogicalTypeProp("decimal")).logicalType.isEmpty)
-        assert(fixed(4).withLogicalType(LogicalType.decimal(10, 2)).logicalType.isEmpty)
-      }
-
-      it("should default the decimal scale to zero") {
-        val bytes =
-          Schema.Bytes.withProps(withLogicalTypeProp("decimal").add("precision", Json.fromInt(4)))
-
-        assert(bytes.logicalType == Some(LogicalType.decimal(4, 0)))
-      }
-
-      it("should return logical types without built-in support") {
-        val custom = LogicalType("custom")
-        assert(Schema.Long.withLogicalType(custom).logicalType == Some(custom))
-
-        assert {
-          Schema
-            .Record(Schema.Name("Record"), Vector.empty)
-            .withProps(withLogicalTypeProp("custom"))
-            .logicalType == Some(custom)
-        }
-      }
-
-      it("should be empty for unions and references") {
-        assert(Schema.Union(Vector(Schema.Int)).logicalType.isEmpty)
-        assert(Schema.Ref(Schema.Name("Record")).logicalType.isEmpty)
-      }
-    }
+  pureTest("Schema logicalType should be empty for unions and references") {
+    expect(Schema.Union(Vector(Schema.Int)).logicalType.isEmpty) &&
+    expect(Schema.Ref(Schema.Name("Record")).logicalType.isEmpty)
   }
 }

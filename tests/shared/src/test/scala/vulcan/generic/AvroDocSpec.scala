@@ -6,27 +6,25 @@
 
 package vulcan.generic
 
-import vulcan.BaseSpec
-final class AvroDocSpec extends BaseSpec {
-  describe("AvroDoc") {
-    it("should provide documentation via doc") {
-      forAll { (s: String) =>
-        assert(new AvroDoc(s).doc == s)
-      }
-    }
+import vulcan.BaseSuite
 
-    it("should include documentation in toString") {
-      forAll { (s: String) =>
-        assert(new AvroDoc(s).toString.contains(s))
-      }
+object AvroDocSpec extends BaseSuite {
+  test("AvroDoc should provide documentation via doc") {
+    forall { (s: String) =>
+      expect.eql(s, new AvroDoc(s).doc)
     }
+  }
 
-    it("should provide an extractor for documentation") {
-      forAll { (s1: String) =>
-        assert(new AvroDoc(s1) match {
-          case AvroDoc(`s1`) => true
-          case AvroDoc(s2) => fail(s2)
-        })
+  test("AvroDoc should include documentation in toString") {
+    forall { (s: String) =>
+      expect(new AvroDoc(s).toString.contains(s))
+    }
+  }
+
+  test("AvroDoc should provide an extractor for documentation") {
+    forall { (s1: String) =>
+      matches(new AvroDoc(s1)) { case AvroDoc(s2) =>
+        expect.eql(s1, s2)
       }
     }
   }
