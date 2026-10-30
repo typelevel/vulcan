@@ -26,7 +26,7 @@ object Names {
     override val aliases: Seq[String]
   ) extends Names[A]
 
-  private[internal] def apply[A](
+  def apply[A](
     typeName: String,
     namespace: String,
     doc: Option[String],

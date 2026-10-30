@@ -170,7 +170,12 @@ sealed abstract class Codec[A] {
     definitions: Definitions
   ): AvroValue => Either[AvroException, A]
 
-  /** The value encoded as `null`, if there is one, used as the default of nullable fields. */
+  /**
+    * The value encoded as `null`, if there is one, used as the default of nullable fields.
+    *
+    * The generic module calls this, so changing the signature breaks binary compatibility
+    * between modules, which MiMa does not check for package-private members.
+    */
   private[vulcan] def nullValue: Option[A] =
     None
 
@@ -193,6 +198,12 @@ sealed abstract class Codec[A] {
         resolve(writerSchema, definitions)
     }
 
+  /**
+    * Returns a codec which includes the type name in errors when encoding and decoding.
+    *
+    * The generic module calls this, so changing the signature breaks binary compatibility
+    * between modules, which MiMa does not check for package-private members.
+    */
   private[vulcan] final def withTypeName(typeName: String): Codec[A] =
     new Codec.WithTypeName(this, typeName)
 
