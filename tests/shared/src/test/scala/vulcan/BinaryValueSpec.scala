@@ -122,6 +122,15 @@ final class BinaryValueSpec extends BaseSpec {
       }
     }
 
+    it("should encode values of different sizes using the same encoder") {
+      val encoder = BinaryEncoder(Schema.String).value
+
+      List("a" * 1000, "b", "c" * 100, "", "d" * 10000).foreach { string =>
+        val bytes = encoder.encode(AvroValue.String(string)).value
+        assert(decode(Schema.String, bytes) == AvroValue.String(string))
+      }
+    }
+
     it("should encode null using zero bytes") {
       assert(encode(Schema.Null, AvroValue.Null) == ByteVector.empty)
       assert(decode(Schema.Null, ByteVector.empty) == AvroValue.Null)
@@ -246,6 +255,29 @@ final class BinaryValueSpec extends BaseSpec {
         decodeError(nulls, blockCounts(Long.MaxValue)) ==
           s"Invalid block count ${Long.MaxValue} at position 0, exceeding the limit of $limit zero byte items"
       }
+    }
+
+    it("should limit the number of nested values of recursive schemas") {
+      val limit = BinaryDecoder.MaxDepth
+
+      def nodes(count: Int): ByteVector = {
+        val writer = new BinaryWriter(0)
+        (1 until count).foreach { _ =>
+          writer.writeInt(0)
+          writer.writeInt(1)
+        }
+        writer.writeInt(0)
+        writer.writeInt(0)
+        writer.toByteVector
+      }
+
+      assert(BinaryDecoder(node).value.decode(nodes(limit + 1)).isRight)
+
+      val error =
+        s"Invalid depth ${limit + 1} at position ${2 * (limit + 1)}, exceeding the limit of $limit nested values of recursive schemas"
+
+      assert(decodeError(node, nodes(limit + 2)) == error)
+      assert(decodeError(node, nodes(100000)) == error)
     }
 
     it("should not decode records which always contain themselves") {

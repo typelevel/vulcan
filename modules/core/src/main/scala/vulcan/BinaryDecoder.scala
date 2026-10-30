@@ -34,6 +34,10 @@ object BinaryDecoder {
   private[vulcan] val MaxZeroByteItems: Long =
     1000000L
 
+  /** The limit for the number of nested values of recursive schemas, to avoid stack overflows. */
+  private[vulcan] val MaxDepth: Int =
+    512
+
   /** Returns a decoder for values written using the writer schema, if the schema is valid. */
   private[vulcan] def apply(writerSchema: Schema): Either[AvroException, BinaryDecoder[AvroValue]] =
     reader(writerSchema).map { read =>
@@ -68,9 +72,14 @@ object BinaryDecoder {
       }
     }
 
-  /** The state of reading a value, including the number of zero byte items read so far. */
+  /**
+    * The state of reading a value, including the number of zero byte items
+    * read so far, and the number of nested values read for recursive schemas.
+    */
   private final class Input(val reader: BinaryReader) {
     var zeroByteItems: Long = 0L
+
+    var depth: Int = 0
   }
 
   private sealed abstract class Node {
@@ -122,15 +131,27 @@ object BinaryDecoder {
     }
   }
 
-  /** A named schema, which is being compiled if references are recursive. */
+  /**
+    * A named schema, which is being compiled if references are recursive. Since references
+    * are only used for recursive schemas, reading them limits the depth of nested values.
+    */
   private final class Reference extends Node {
     var node: Node = null
 
     def resolved: Node =
       if (node != null) node else this
 
-    override def read(input: Input): AvroValue =
-      node.read(input)
+    override def read(input: Input): AvroValue = {
+      if (input.depth == MaxDepth)
+        throw new InvalidBinary(
+          s"Invalid depth ${MaxDepth + 1} at position ${input.reader.position}, exceeding the limit of $MaxDepth nested values of recursive schemas"
+        )
+
+      input.depth += 1
+      val value = node.read(input)
+      input.depth -= 1
+      value
+    }
   }
 
   private object NullNode extends Node {

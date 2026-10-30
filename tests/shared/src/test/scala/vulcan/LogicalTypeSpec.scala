@@ -63,6 +63,16 @@ final class LogicalTypeSpec extends BaseSpec {
       it("should not extract other logical types") {
         assert(LogicalType.Decimal.unapply(LogicalType.date).isEmpty)
       }
+
+      it("should only use integers without fraction and exponent, same as the Java Avro library") {
+        def logicalType(params: String): Option[LogicalType] =
+          Schema.parse(s"""{"type":"bytes","logicalType":"decimal",$params}""").value.logicalType
+
+        assert(logicalType(""""precision":4,"scale":2""") == Some(LogicalType.decimal(4, 2)))
+        assert(logicalType(""""precision":4.0,"scale":2""").isEmpty)
+        assert(logicalType(""""precision":4e0,"scale":2""").isEmpty)
+        assert(logicalType(""""precision":4,"scale":2.0""").isEmpty)
+      }
     }
   }
 }

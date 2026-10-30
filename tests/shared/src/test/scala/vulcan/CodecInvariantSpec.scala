@@ -41,9 +41,12 @@ final class CodecInvariantSpec extends CatsSuite with EitherValues {
               schema,
               s => Right(AvroValue.Bytes(ByteVector.view(s.getBytes(charset)))),
               {
-                case (AvroValue.Bytes(bytes), _: Schema.String) =>
-                  Right(new String(bytes.toArray, charset))
-                case (_, schema) =>
+                case _: Schema.String =>
+                  Right {
+                    case AvroValue.Bytes(bytes) => Right(new String(bytes.toArray, charset))
+                    case value => Left(AvroException(s"Got unexpected value $value"))
+                  }
+                case schema =>
                   Left(AvroException(s"Got unexpected schema $schema"))
               }
             )

@@ -60,6 +60,31 @@ object Order {
     )
 }
 
+/** An order written with an additional field, for decoding as an [[Order]] which skips the field. */
+final case class WriterOrder(order: Order, source: String)
+
+object WriterOrder {
+  implicit val codec: Codec[WriterOrder] =
+    Codec.record("Order", "vulcan.benchmarks") { field =>
+      (
+        field("id", _.order.id),
+        field("customer", _.order.customer),
+        field("items", _.order.items),
+        field("tags", _.order.tags),
+        field("status", _.order.status),
+        field("payment", _.order.payment),
+        field("createdAt", _.order.createdAt),
+        field("total", _.order.total),
+        field("notes", _.order.notes),
+        field("source", _.source)
+      ).mapN { (id, customer, items, tags, status, payment, createdAt, total, notes, source) =>
+        WriterOrder(Order(id, customer, items, tags, status, payment, createdAt, total, notes), source)
+      }
+    }
+
+  val example: WriterOrder =
+    WriterOrder(Order.example, "web")
+}
 final case class Customer(id: Long, name: String, email: Option[String])
 
 object Customer {

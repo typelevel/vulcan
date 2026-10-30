@@ -51,9 +51,9 @@ final class DerivationSpec extends BaseSpec with RoundtripHelpers with CodecSpec
           }
         }
 
-        it("should use alias annotation") {
+        it("should use alias annotations") {
           assertSchemaIs[FixedAvroAlias] {
-            """{"type":"fixed","name":"FixedAvroAlias","namespace":"vulcan.generic.examples","size":1,"aliases":["FixedOtherAlias"]}"""
+            """{"type":"fixed","name":"FixedAvroAlias","namespace":"vulcan.generic.examples","size":1,"aliases":["FixedOtherAlias","FixedSecondAlias"]}"""
           }
         }
 

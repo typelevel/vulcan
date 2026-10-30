@@ -342,14 +342,20 @@ object AvroException {
     extends AvroException(s"Got unexpected fixed size $size, expected fixed size $expectedSize")
 
   /**
-    * Exception raised when decoding with a codec for a logical type, where
-    * the writer schema has a different logical type, or no logical type.
+    * Exception raised when decoding with a codec for a logical type, where the writer
+    * schema has a different logical type, an invalid logical type, or no logical type.
     */
-  final class UnexpectedLogicalType private[vulcan] (logicalType: Option[LogicalType])
-    extends AvroException(logicalType match {
-      case Some(logicalType) => s"Got unexpected logical type ${logicalType.name}"
-      case None => "Got unexpected missing logical type"
-    })
+  final class UnexpectedLogicalType private[vulcan] (writerSchema: Schema)
+    extends AvroException(
+      (writerSchema.logicalType, writerSchema.props("logicalType").flatMap(_.asString)) match {
+        case (Some(logicalType), _) =>
+          s"Got unexpected logical type ${logicalType.name}"
+        case (None, Some(name)) =>
+          s"Got invalid logical type $name for ${SchemaNames.typeName(writerSchema)}"
+        case (None, None) =>
+          "Got unexpected missing logical type"
+      }
+    )
 
   /**
     * Exception raised when decoding with a codec, where the

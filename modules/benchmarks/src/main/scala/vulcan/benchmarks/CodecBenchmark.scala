@@ -18,6 +18,9 @@ import vulcan.Schema
   * Encodes and decodes an order with its codec, for comparing with
   * the same benchmark for version 1.x in the `benchmarks1x` module.
   *
+  * Also encodes and decodes with derived codecs, and decodes an order
+  * written using a writer schema with an additional field.
+  *
   * Run using `sbt "benchmarks/Jmh/run -prof gc CodecBenchmark"`.
   */
 @State(Scope.Benchmark)
@@ -39,6 +42,31 @@ class CodecBenchmark {
   private val bytes: ByteVector =
     encoder.encode(Order.example).fold(error => throw error, identity)
 
+  private val derivedEncoder: BinaryEncoder[Order] =
+    DerivedOrder.codec.binaryEncoder.fold(error => throw error, identity)
+
+  private val derivedDecoder: BinaryDecoder[Order] =
+    DerivedOrder.codec.schema
+      .flatMap(DerivedOrder.codec.binaryDecoder)
+      .fold(error => throw error, identity)
+
+  private val derivedBytes: ByteVector =
+    derivedEncoder.encode(Order.example).fold(error => throw error, identity)
+
+  private val evolvedDecoder: BinaryDecoder[Order] =
+    WriterOrder.codec.schema.flatMap(Order.codec.binaryDecoder).fold(error => throw error, identity)
+
+  private val writerBytes: ByteVector =
+    WriterOrder.codec.binaryEncoder
+      .flatMap(_.encode(WriterOrder.example))
+      .fold(error => throw error, identity)
+
+  /** Checks the decoders decode the example, so the benchmarks do not measure errors. */
+  @Setup
+  def check(): Unit =
+    List(decoder.decode(bytes), derivedDecoder.decode(derivedBytes), evolvedDecoder.decode(writerBytes))
+      .foreach(decoded => require(decoded == Right(Order.example), decoded))
+
   /** Encodes with an encoder compiled once for the schema. */
   @Benchmark
   def binaryEncoder(): Either[AvroException, ByteVector] =
@@ -48,4 +76,19 @@ class CodecBenchmark {
   @Benchmark
   def binaryDecoder(): Either[AvroException, Order] =
     decoder.decode(bytes)
+
+  /** Encodes with an encoder of the derived codec. */
+  @Benchmark
+  def derivedBinaryEncoder(): Either[AvroException, ByteVector] =
+    derivedEncoder.encode(Order.example)
+
+  /** Decodes with a decoder of the derived codec. */
+  @Benchmark
+  def derivedBinaryDecoder(): Either[AvroException, Order] =
+    derivedDecoder.decode(derivedBytes)
+
+  /** Decodes with a decoder for a writer schema with an additional field. */
+  @Benchmark
+  def evolvedBinaryDecoder(): Either[AvroException, Order] =
+    evolvedDecoder.decode(writerBytes)
 }

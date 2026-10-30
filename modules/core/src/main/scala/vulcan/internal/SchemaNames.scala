@@ -34,13 +34,6 @@ private[vulcan] object SchemaNames {
     definitions
   }
 
-  /** Resolve as full name if it includes a dot, otherwise relative to the namespace. */
-  def resolve(name: String, namespace: Option[String]): Schema.Name =
-    name.lastIndexOf('.') match {
-      case -1 => Schema.Name(name, namespace)
-      case lastDot => Schema.Name(name.substring(lastDot + 1), Some(name.substring(0, lastDot)))
-    }
-
   /** The reason the name is invalid, if it is invalid, matching the Java Avro library. */
   def invalid(name: String): Option[String] =
     if (name.isEmpty) Some("cannot be empty")

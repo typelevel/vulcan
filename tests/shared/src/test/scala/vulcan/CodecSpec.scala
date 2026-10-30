@@ -59,6 +59,11 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
         assert(result.swap.value.message == """Duplicate int in union ["int","int"]""")
       }
 
+      it("should error if the schema is invalid") {
+        val result = Codec.decimal(precision = -1, scale = -1).binaryDecoder(Schema.Bytes)
+        assert(result.swap.value.message == "Invalid decimal precision -1: must be positive")
+      }
+
       it("should error if the binary does not match the writer schema") {
         val decoder = Codec[Int].binaryDecoder(unsafeSchema[Int]).value
         assert {
@@ -455,6 +460,16 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           )
         }
 
+        it("should error if logical type is invalid") {
+          val params = JsonObject("precision" -> Json.fromInt(2), "scale" -> Json.fromInt(3))
+
+          assertDecodeError[BigDecimal](
+            unsafeEncode(BigDecimal("123.45678")),
+            Schema.Bytes.withLogicalType(LogicalType("decimal", params)),
+            "Error decoding BigDecimal: Got invalid logical type decimal for bytes"
+          )
+        }
+
         it("should error if precision exceeds schema precision") {
           assertDecodeError[BigDecimal](
             unsafeEncode(BigDecimal("123.45678")),
@@ -500,6 +515,11 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       it("should error if the writer schema is invalid") {
         val result = Codec[Int].decoder(Schema.Union(Vector(Schema.Int, Schema.Int)))
         assert(result.swap.value.message == """Duplicate int in union ["int","int"]""")
+      }
+
+      it("should error if the schema is invalid") {
+        val result = Codec.decimal(precision = -1, scale = -1).decoder(Schema.Bytes)
+        assert(result.swap.value.message == "Invalid decimal precision -1: must be positive")
       }
 
       it("should decode values of unions using the written type") {
@@ -1072,8 +1092,14 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           Right(Schema.Int),
           int => Right(AvroValue.Long(int.toLong)),
           {
-            case (AvroValue.Int(int), _: Schema.Int) => Right(int)
-            case (value, schema) => Left(AvroException(s"Got value $value with schema $schema"))
+            case _: Schema.Int =>
+              Right {
+                case AvroValue.Int(int) => Right(int)
+                case value => Left(AvroException(s"Got value $value"))
+              }
+
+            case schema =>
+              Left(AvroException(s"Got schema $schema"))
           }
         )
 
@@ -1087,7 +1113,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
             Codec.instance[Int](
               Right(Schema.Fixed(Schema.Name("1Invalid"), 1)),
               int => Right(AvroValue.Int(int)),
-              (_, _) => Left(AvroException("error"))
+              _ => Left(AvroException("error"))
             )
 
           assert {
@@ -1098,13 +1124,13 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       }
 
       describe("encode") {
-        it("should encode using the encode function") {
+        it("should encode using the encoder") {
           assert(codec.encode(1) == Right(AvroValue.Long(1L)))
         }
       }
 
       describe("decode") {
-        it("should decode using the decode function") {
+        it("should decode using the decoder function") {
           assert(codec.decoder(Schema.Int).flatMap(_.decode(AvroValue.Int(1))) == Right(1))
         }
 
@@ -1113,6 +1139,45 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
             codec
               .decoder(Schema.Union(Vector(Schema.Null, Schema.Int)))
               .flatMap(_.decode(AvroValue.Union(1, AvroValue.Int(1)))) == Right(1)
+          }
+        }
+
+        it("should call the decoder function once for each writer schema") {
+          var calls = 0
+          val counting =
+            Codec.instance[Int](
+              Right(Schema.Int),
+              int => Right(AvroValue.Int(int)),
+              _ => {
+                calls += 1
+                Right(_ => Right(1))
+              }
+            )
+
+          val decoder = counting.decoder(Schema.Int).value
+          assert(decoder.decode(AvroValue.Int(1)) == Right(1))
+          assert(decoder.decode(AvroValue.Int(2)) == Right(1))
+          assert(calls == 1)
+        }
+
+        it("should include the definitions of referenced names in writer schemas") {
+          val inner = Schema.Fixed(Schema.Name("Inner"), 1)
+
+          def outer(innerSchema: Schema): Schema =
+            Schema.Record(Schema.Name("Outer"), Vector(Schema.Field("inner", innerSchema)))
+
+          val delegating =
+            Codec.instance[Int](Right(Schema.Int), int => Right(AvroValue.Int(int)), codec.decoder)
+
+          val decoder = delegating.decoder(Schema.Union(Vector(inner, outer(Schema.Ref(inner.name))))).value
+          val value = AvroValue.Union(1, AvroValue.Record(Vector(AvroValue.Fixed(hex"00"))))
+          assert(decoder.decode(value).swap.value.message == s"Got schema ${outer(inner)}")
+        }
+
+        it("should error if the decoder function errors") {
+          assert {
+            codec.decoder(Schema.String).flatMap(_.decode(AvroValue.String("a"))).swap.value.message ==
+              s"Got schema ${Schema.String}"
           }
         }
       }
@@ -1166,6 +1231,14 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
             unsafeEncode(Instant.now()),
             Schema.Long.withLogicalType(LogicalType.timestampMicros),
             "Error decoding Instant: Got unexpected logical type timestamp-micros"
+          )
+        }
+
+        it("should error if logical type is invalid") {
+          assertDecodeError[Instant](
+            AvroValue.Int(1),
+            Schema.Int.withLogicalType(LogicalType.timestampMillis),
+            "Error decoding Instant: Got invalid logical type timestamp-millis for int"
           )
         }
 
@@ -1337,6 +1410,11 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
       it("should error if the writer schema is invalid") {
         val result = Codec[Int].jsonDecoder(Schema.Union(Vector(Schema.Int, Schema.Int)))
         assert(result.swap.value.message == """Duplicate int in union ["int","int"]""")
+      }
+
+      it("should error if the schema is invalid") {
+        val result = Codec.decimal(precision = -1, scale = -1).jsonDecoder(Schema.Bytes)
+        assert(result.swap.value.message == "Invalid decimal precision -1: must be positive")
       }
 
       it("should error if the json does not match the writer schema") {
@@ -3040,7 +3118,7 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           Codec.instance[Int](
             Left(AvroException("error")),
             int => Right(AvroValue.Int(int)),
-            (_, _) => Left(AvroException("error"))
+            _ => Left(AvroException("error"))
           )
 
         assert {

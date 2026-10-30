@@ -11,6 +11,7 @@ import vulcan.Codec
 import vulcan.generic.*
 
 @AvroAlias("FixedOtherAlias")
+@AvroAlias("FixedSecondAlias")
 final case class FixedAvroAlias(bytes: ByteVector)
 
 object FixedAvroAlias {

@@ -175,6 +175,14 @@ final class JsonValueSpec extends BaseSpec {
           "Unknown fields c, d for record test"
       }
 
+      val colliding =
+        Schema.Record(
+          name("test"),
+          Vector(Schema.Field("a", Schema.Long).withAliases(Vector("b")), Schema.Field("b", Schema.Long))
+        )
+
+      assert(decodeError(colliding, """{"b":1,"c":2}""") == "Unknown fields c for record test")
+
       assert(decodeError(enumeration, "\"E\"") == "Invalid symbol E for enum Foo")
 
       assert {
@@ -190,6 +198,24 @@ final class JsonValueSpec extends BaseSpec {
       }
 
       assert(decodeError(Schema.Union(Vector(Schema.Int)), "null") == "Invalid null for union")
+    }
+
+    it("should limit the number of nested values of recursive schemas") {
+      val limit = JsonDecoder.MaxDepth
+
+      def nodes(count: Int): Json =
+        (1 until count).foldLeft(Json.obj("value" -> Json.fromInt(0), "next" -> Json.Null)) { (next, _) =>
+          Json.obj("value" -> Json.fromInt(0), "next" -> Json.obj("Node" -> next))
+        }
+
+      val decoder = JsonDecoder(node).value
+      assert(decoder.decode(nodes(limit + 1)).isRight)
+
+      val error =
+        s"Invalid depth ${limit + 1}, exceeding the limit of $limit nested values of recursive schemas"
+
+      assert(decoder.decode(nodes(limit + 2)).swap.value.message == error)
+      assert(decoder.decode(nodes(100000)).swap.value.message == error)
     }
 
     it("should not compile invalid schemas") {

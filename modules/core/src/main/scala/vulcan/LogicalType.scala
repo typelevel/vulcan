@@ -8,6 +8,7 @@ package vulcan
 
 import io.circe.Json
 import io.circe.JsonObject
+import vulcan.internal.SchemaValidator
 
 /** Logical type annotating an underlying Avro type. */
 sealed abstract class LogicalType {
@@ -150,8 +151,8 @@ object LogicalType {
 
   private def decimalParams(params: JsonObject): Option[(Int, Int)] =
     for {
-      precision <- params("precision").flatMap(_.asNumber).flatMap(_.toInt)
-      scale <- params("scale").fold(Option(0))(_.asNumber.flatMap(_.toInt))
+      precision <- params("precision").flatMap(SchemaValidator.intValue)
+      scale <- params("scale").fold(Option(0))(SchemaValidator.intValue)
       if precision > 0 && scale >= 0 && scale <= precision
     } yield (precision, scale)
 

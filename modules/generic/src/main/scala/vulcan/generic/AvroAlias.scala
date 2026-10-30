@@ -9,7 +9,8 @@ package vulcan.generic
 import scala.annotation.StaticAnnotation
 
 /**
-  * Annotation which can be used to include the record alias in derived schemas.
+  * Annotation which can be used to include aliases in derived schemas,
+  * using the annotation once for each alias.
   *
   * The annotation can be used in the following situations.<br>
   *   - Annotate a type for enum alias when using [[deriveEnum]].<br>

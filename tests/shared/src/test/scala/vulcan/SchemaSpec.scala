@@ -23,6 +23,21 @@ final class SchemaSpec extends BaseSpec {
       it("should treat an empty namespace as the null namespace") {
         assert(Schema.Name("Person", Some("")) == Schema.Name("Person", None))
       }
+
+      it("should treat names with dots as full names, ignoring the namespace") {
+        val name = Schema.Name("com.example.Person", Some("other"))
+        assert(name.name == "Person")
+        assert(name.namespace == Some("com.example"))
+        assert(Schema.Name("com.example.Person") == name)
+        assert(Schema.Name(".Person", Some("other")) == Schema.Name("Person"))
+      }
+
+      it("should allow full names for named schemas") {
+        assert {
+          Schema.Record(Schema.Name("com.example.Person"), Vector.empty).toString ==
+            """{"type":"record","name":"Person","namespace":"com.example","fields":[]}"""
+        }
+      }
     }
 
     describe("Record") {
