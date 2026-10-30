@@ -460,6 +460,16 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
           )
         }
 
+        it("should error if logical type is invalid") {
+          val params = JsonObject("precision" -> Json.fromInt(2), "scale" -> Json.fromInt(3))
+
+          assertDecodeError[BigDecimal](
+            unsafeEncode(BigDecimal("123.45678")),
+            Schema.Bytes.withLogicalType(LogicalType("decimal", params)),
+            "Error decoding BigDecimal: Got invalid logical type decimal for bytes"
+          )
+        }
+
         it("should error if precision exceeds schema precision") {
           assertDecodeError[BigDecimal](
             unsafeEncode(BigDecimal("123.45678")),
@@ -1221,6 +1231,14 @@ final class CodecSpec extends BaseSpec with CodecSpecHelpers {
             unsafeEncode(Instant.now()),
             Schema.Long.withLogicalType(LogicalType.timestampMicros),
             "Error decoding Instant: Got unexpected logical type timestamp-micros"
+          )
+        }
+
+        it("should error if logical type is invalid") {
+          assertDecodeError[Instant](
+            AvroValue.Int(1),
+            Schema.Int.withLogicalType(LogicalType.timestampMillis),
+            "Error decoding Instant: Got invalid logical type timestamp-millis for int"
           )
         }
 

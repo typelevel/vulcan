@@ -1331,8 +1331,8 @@ object Codec {
               case value => Left(invalidValue(value, writerSchema))
             }
 
-            case writerLogicalType =>
-              failing(new UnexpectedLogicalType(writerLogicalType))
+            case _ =>
+              failing(new UnexpectedLogicalType(writerSchema))
           }
 
         case (Right(_), _) =>
@@ -1360,8 +1360,8 @@ object Codec {
       writerSchema.logicalType match {
         case Some(writerLogicalType) if writerLogicalType == logicalType =>
           decode
-        case writerLogicalType =>
-          decode(_) >> Left(new UnexpectedLogicalType(writerLogicalType))
+        case _ =>
+          decode(_) >> Left(new UnexpectedLogicalType(writerSchema))
       }
     }
   }
