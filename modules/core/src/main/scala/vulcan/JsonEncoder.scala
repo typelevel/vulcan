@@ -6,9 +6,9 @@
 
 package vulcan
 
-import cats.syntax.all.*
 import io.circe.Json
 import java.nio.charset.StandardCharsets
+import scala.annotation.tailrec
 import scala.collection.mutable
 import scodec.bits.ByteVector
 import vulcan.AvroException.InvalidEnumValue
@@ -104,7 +104,8 @@ object JsonEncoder {
           case record: Schema.Record =>
             new RecordNode(
               record.fullName,
-              record.fields.map(field => (field.name, compile(field.schema)))
+              record.fields.map(_.name).toArray,
+              record.fields.map(field => compile(field.schema)).toArray
             )
           case enumeration: Schema.Enum =>
             new EnumNode(enumeration.fullName, enumeration.symbols.toSet)
@@ -192,19 +193,29 @@ object JsonEncoder {
       }
   }
 
-  private final class RecordNode(fullName: String, fields: Vector[(String, Node)]) extends Node {
+  private final class RecordNode(fullName: String, names: Array[String], nodes: Array[Node]) extends Node {
     override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
-        case AvroValue.Record(values) if values.size == fields.size =>
-          values
-            .zip(fields)
-            .traverse { case (fieldValue, (name, node)) =>
-              node.encode(fieldValue).map(name -> _)
-            }
-            .map(Json.fromFields)
+        case AvroValue.Record(values) if values.size == nodes.length =>
+          val builder = Codec.vectorBuilder[(String, Json)](nodes.length)
+
+          // Encodes values in a loop, so nested values use few stack frames
+          @tailrec def loop(index: Int): Either[AvroException, Json] =
+            if (index < nodes.length)
+              nodes(index).encode(values(index)) match {
+                case Right(json) =>
+                  builder += ((names(index), json))
+                  loop(index + 1)
+
+                case Left(error) =>
+                  Left(error)
+              }
+            else Right(Json.fromFields(builder.result()))
+
+          loop(0)
 
         case AvroValue.Record(values) =>
-          Left(new InvalidRecordValue(values.size, fullName, fields.size))
+          Left(new InvalidRecordValue(values.size, fullName, nodes.length))
 
         case _ =>
           invalid(value, s"record $fullName")
@@ -242,8 +253,27 @@ object JsonEncoder {
   private final class ArrayNode(items: Node) extends Node {
     override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
-        case AvroValue.Array(values) => values.traverse(items.encode).map(Json.fromValues)
-        case _ => invalid(value, "array")
+        case AvroValue.Array(values) =>
+          val iterator = values.iterator
+          val builder = Codec.vectorBuilder[Json](values.size)
+
+          // Encodes values in a loop, so nested values use few stack frames
+          @tailrec def loop(): Either[AvroException, Json] =
+            if (iterator.hasNext)
+              items.encode(iterator.next()) match {
+                case Right(json) =>
+                  builder += json
+                  loop()
+
+                case Left(error) =>
+                  Left(error)
+              }
+            else Right(Json.fromValues(builder.result()))
+
+          loop()
+
+        case _ =>
+          invalid(value, "array")
       }
   }
 
@@ -251,9 +281,24 @@ object JsonEncoder {
     override def encode(value: AvroValue): Either[AvroException, Json] =
       value match {
         case AvroValue.Map(entries) =>
-          entries
-            .traverse { case (key, entryValue) => values.encode(entryValue).map(key -> _) }
-            .map(Json.fromFields)
+          val iterator = entries.iterator
+          val builder = Codec.vectorBuilder[(String, Json)](entries.size)
+
+          // Encodes values in a loop, so nested values use few stack frames
+          @tailrec def loop(): Either[AvroException, Json] =
+            if (iterator.hasNext) {
+              val entry = iterator.next()
+              values.encode(entry._2) match {
+                case Right(json) =>
+                  builder += ((entry._1, json))
+                  loop()
+
+                case Left(error) =>
+                  Left(error)
+              }
+            } else Right(Json.fromFields(builder.result()))
+
+          loop()
 
         case _ =>
           invalid(value, "map")
