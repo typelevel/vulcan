@@ -84,7 +84,7 @@ object SchemaSpec extends BaseSuite {
   }
 
   pureTest("Schema equality should be structural") {
-    expect.same(Schema.Array(Schema.Int), Schema.Array(Schema.Int)) &&
+    expect.eql[Schema](Schema.Array(Schema.Int), Schema.Array(Schema.Int)) &&
     expect(clue(Schema.Array(Schema.Int)) != clue(Schema.Array(Schema.Long))) &&
     expect(clue(Schema.Int.withProps(JsonObject("custom" -> Json.True))) != clue(Schema.Int))
   }
@@ -96,7 +96,7 @@ object SchemaSpec extends BaseSuite {
   }
 
   pureTest("Schema primitive should be equal with equal props") {
-    expect.same(Schema.String.withProps(props), Schema.String.withProps(props)) &&
+    expect.eql[Schema](Schema.String.withProps(props), Schema.String.withProps(props)) &&
     expect(clue(Schema.String.withProps(props)) != clue(Schema.String))
   }
 
@@ -115,12 +115,12 @@ object SchemaSpec extends BaseSuite {
   }
 
   pureTest("Schema logicalType should be empty without a logical type") {
-    expect.same(None, Schema.Long.logicalType)
+    expect.eql(None, Schema.Long.logicalType)
   }
 
   pureTest("Schema logicalType should return logical types which are valid for the underlying type") {
     forEach(List(LogicalType.date, LogicalType.timeMillis)) { logicalType =>
-      expect.same(Some(logicalType), Schema.Int.withLogicalType(logicalType).logicalType)
+      expect.eql(Some(logicalType), Schema.Int.withLogicalType(logicalType).logicalType)
     } &&
     forEach(
       List(
@@ -133,48 +133,48 @@ object SchemaSpec extends BaseSuite {
         LogicalType.localTimestampNanos
       )
     ) { logicalType =>
-      expect.same(Some(logicalType), Schema.Long.withLogicalType(logicalType).logicalType)
+      expect.eql(Some(logicalType), Schema.Long.withLogicalType(logicalType).logicalType)
     } &&
     forEach(List(LogicalType.decimal(10, 2), LogicalType.bigDecimal)) { logicalType =>
-      expect.same(Some(logicalType), Schema.Bytes.withLogicalType(logicalType).logicalType)
+      expect.eql(Some(logicalType), Schema.Bytes.withLogicalType(logicalType).logicalType)
     } &&
-    expect.same(Some(LogicalType.uuid), Schema.String.withLogicalType(LogicalType.uuid).logicalType) &&
-    expect.same(Some(LogicalType.uuid), fixed(16).withLogicalType(LogicalType.uuid).logicalType) &&
-    expect.same(Some(LogicalType.duration), fixed(12).withLogicalType(LogicalType.duration).logicalType) &&
-    expect.same(
+    expect.eql(Some(LogicalType.uuid), Schema.String.withLogicalType(LogicalType.uuid).logicalType) &&
+    expect.eql(Some(LogicalType.uuid), fixed(16).withLogicalType(LogicalType.uuid).logicalType) &&
+    expect.eql(Some(LogicalType.duration), fixed(12).withLogicalType(LogicalType.duration).logicalType) &&
+    expect.eql(
       Some(LogicalType.decimal(9, 2)),
       fixed(4).withLogicalType(LogicalType.decimal(9, 2)).logicalType
     )
   }
 
   pureTest("Schema logicalType should ignore logical types which are invalid for the underlying type") {
-    expect.same(None, Schema.String.withProps(withLogicalTypeProp("timestamp-millis")).logicalType) &&
-    expect.same(None, Schema.Int.withProps(withLogicalTypeProp("timestamp-millis")).logicalType) &&
-    expect.same(None, Schema.Long.withProps(withLogicalTypeProp("date")).logicalType) &&
-    expect.same(None, Schema.Bytes.withProps(withLogicalTypeProp("uuid")).logicalType) &&
-    expect.same(None, fixed(8).withLogicalType(LogicalType.uuid).logicalType) &&
-    expect.same(None, fixed(11).withLogicalType(LogicalType.duration).logicalType)
+    expect.eql(None, Schema.String.withProps(withLogicalTypeProp("timestamp-millis")).logicalType) &&
+    expect.eql(None, Schema.Int.withProps(withLogicalTypeProp("timestamp-millis")).logicalType) &&
+    expect.eql(None, Schema.Long.withProps(withLogicalTypeProp("date")).logicalType) &&
+    expect.eql(None, Schema.Bytes.withProps(withLogicalTypeProp("uuid")).logicalType) &&
+    expect.eql(None, fixed(8).withLogicalType(LogicalType.uuid).logicalType) &&
+    expect.eql(None, fixed(11).withLogicalType(LogicalType.duration).logicalType)
   }
 
   pureTest("Schema logicalType should ignore decimals with invalid precision or scale") {
-    expect.same(None, Schema.Bytes.withLogicalType(LogicalType.decimal(0, 0)).logicalType) &&
-    expect.same(None, Schema.Bytes.withLogicalType(LogicalType.decimal(2, 3)).logicalType) &&
-    expect.same(None, Schema.Bytes.withLogicalType(LogicalType.decimal(2, -1)).logicalType) &&
-    expect.same(None, Schema.Bytes.withProps(withLogicalTypeProp("decimal")).logicalType) &&
-    expect.same(None, fixed(4).withLogicalType(LogicalType.decimal(10, 2)).logicalType)
+    expect.eql(None, Schema.Bytes.withLogicalType(LogicalType.decimal(0, 0)).logicalType) &&
+    expect.eql(None, Schema.Bytes.withLogicalType(LogicalType.decimal(2, 3)).logicalType) &&
+    expect.eql(None, Schema.Bytes.withLogicalType(LogicalType.decimal(2, -1)).logicalType) &&
+    expect.eql(None, Schema.Bytes.withProps(withLogicalTypeProp("decimal")).logicalType) &&
+    expect.eql(None, fixed(4).withLogicalType(LogicalType.decimal(10, 2)).logicalType)
   }
 
   pureTest("Schema logicalType should default the decimal scale to zero") {
     val bytes =
       Schema.Bytes.withProps(withLogicalTypeProp("decimal").add("precision", Json.fromInt(4)))
 
-    expect.same(Some(LogicalType.decimal(4, 0)), bytes.logicalType)
+    expect.eql(Some(LogicalType.decimal(4, 0)), bytes.logicalType)
   }
 
   pureTest("Schema logicalType should return logical types without built-in support") {
     val custom = LogicalType("custom")
-    expect.same(Some(custom), Schema.Long.withLogicalType(custom).logicalType) &&
-    expect.same(
+    expect.eql(Some(custom), Schema.Long.withLogicalType(custom).logicalType) &&
+    expect.eql(
       Some(custom),
       Schema
         .Record(Schema.Name("Record"), Vector.empty)
@@ -184,7 +184,7 @@ object SchemaSpec extends BaseSuite {
   }
 
   pureTest("Schema logicalType should be empty for unions and references") {
-    expect.same(None, Schema.Union(Vector(Schema.Int)).logicalType) &&
-    expect.same(None, Schema.Ref(Schema.Name("Record")).logicalType)
+    expect.eql(None, Schema.Union(Vector(Schema.Int)).logicalType) &&
+    expect.eql(None, Schema.Ref(Schema.Name("Record")).logicalType)
   }
 }

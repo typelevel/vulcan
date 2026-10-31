@@ -421,7 +421,7 @@ object RegressionSpec extends BaseSuite {
     pureTest("#538: named schemas defined more than once should error for conflicting definitions") {
       val codec = pairCodec(elementCodec("value"), elementCodec("other"))
 
-      expect.same(
+      expect.eql(
         Left("Conflicting definitions of named schema com.example.Element"),
         codec.schema.left.map(_.message)
       )

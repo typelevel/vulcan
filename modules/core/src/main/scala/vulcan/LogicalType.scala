@@ -6,6 +6,8 @@
 
 package vulcan
 
+import cats.Hash
+import cats.Show
 import io.circe.Json
 import io.circe.JsonObject
 import vulcan.internal.SchemaValidator
@@ -73,6 +75,12 @@ object LogicalType {
         decimalParams(logicalType.params)
       else None
   }
+
+  implicit final val logicalTypeHash: Hash[LogicalType] =
+    Hash.fromUniversalHashCode
+
+  implicit final val logicalTypeShow: Show[LogicalType] =
+    Show.fromToString
 
   private val knownNames: Set[String] =
     Set(

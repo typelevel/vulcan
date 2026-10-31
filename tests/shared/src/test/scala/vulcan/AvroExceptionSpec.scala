@@ -6,6 +6,7 @@
 
 package vulcan
 
+import cats.syntax.all.*
 import io.circe.Json
 import io.circe.ParsingFailure
 import scodec.bits.ByteVector
@@ -40,6 +41,13 @@ object AvroExceptionSpec extends BaseSuite {
     forall { (message: String) =>
       expect.eql(s"vulcan.AvroException: $message", AvroException(message).toString())
     }
+  }
+
+  pureTest("AvroException show should have a Show instance consistent with toString") {
+    val exception = AvroException("message")
+    val subclass: AvroException = new AvroException.EmptyCollection()
+    expect.eql(exception.toString, exception.show) &&
+    expect.eql(subclass.toString, subclass.show)
   }
 
   pureTest("AvroException should not have a stack trace") {

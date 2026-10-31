@@ -6,6 +6,7 @@
 
 package vulcan
 
+import cats.syntax.all.*
 import io.circe.Json
 import io.circe.JsonObject
 
@@ -27,8 +28,8 @@ object LogicalTypeSpec extends BaseSuite {
   }
 
   pureTest("LogicalType should be equal when names and parameters are equal") {
-    expect.same(LogicalType("custom", JsonObject.empty), LogicalType("custom")) &&
-    expect.same(LogicalType.decimal(10, 2), LogicalType.decimal(10, 2)) &&
+    expect.eql(LogicalType("custom", JsonObject.empty), LogicalType("custom")) &&
+    expect.eql(LogicalType.decimal(10, 2), LogicalType.decimal(10, 2)) &&
     expect(clue(LogicalType.decimal(10, 2)) != clue(LogicalType.decimal(10, 3)))
   }
 
@@ -38,6 +39,11 @@ object LogicalTypeSpec extends BaseSuite {
       """LogicalType(decimal, {"precision":10,"scale":2})""",
       LogicalType.decimal(10, 2).toString
     )
+  }
+
+  pureTest("LogicalType show should have a Show instance consistent with toString") {
+    val logicalType = LogicalType.decimal(10, 2)
+    expect.eql(logicalType.toString, logicalType.show)
   }
 
   pureTest("LogicalType decimal should have precision and scale parameters") {

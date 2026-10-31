@@ -7,10 +7,12 @@
 package vulcan
 
 import cats.Eq
+import cats.kernel.laws.discipline.HashTests
 import cats.laws.discipline.InvariantTests
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 import org.scalacheck.Arbitrary
+import org.scalacheck.Cogen
 import org.scalacheck.Gen
 import org.scalacheck.Prop
 import org.scalacheck.Test
@@ -18,7 +20,15 @@ import scodec.bits.ByteVector
 import weaver.FunSuite
 import weaver.discipline.Discipline
 
-object CodecInvariantSpec extends FunSuite with Discipline {
+object LawsSpec extends FunSuite with Discipline {
+  implicit val avroValueArbitrary: Arbitrary[AvroValue] =
+    Arbitrary(AvroValueGenerators.genSchemaAndValue.map(_._2))
+
+  implicit val avroValueCogen: Cogen[AvroValue] =
+    Cogen[String].contramap(_.toString)
+
+  checkAll("AvroValue", HashTests[AvroValue].hash)
+
   val schemaGen: Gen[Either[AvroException, Schema]] =
     Gen.oneOf(
       Left(AvroException("error")),
@@ -70,4 +80,29 @@ object CodecInvariantSpec extends FunSuite with Discipline {
     }
 
   checkAll("Codec", InvariantTests[Codec].invariant[String, String, String])
+
+  /** Few distinct logical types, so equal ones are generated often. */
+  implicit val logicalTypeArbitrary: Arbitrary[LogicalType] =
+    Arbitrary {
+      Gen.oneOf(
+        Gen.oneOf(LogicalType.date, LogicalType.timestampMillis, LogicalType.uuid),
+        Gen.zip(Gen.choose(1, 2), Gen.choose(0, 1)).map { case (precision, scale) =>
+          LogicalType.decimal(precision, scale)
+        },
+        Gen.oneOf("custom", "other").map(LogicalType(_))
+      )
+    }
+
+  implicit val logicalTypeCogen: Cogen[LogicalType] =
+    Cogen[String].contramap(_.toString)
+
+  checkAll("LogicalType", HashTests[LogicalType].hash)
+
+  implicit val schemaArbitrary: Arbitrary[Schema] =
+    Arbitrary(SchemaGenerators.genSchema)
+
+  implicit val schemaCogen: Cogen[Schema] =
+    Cogen[String].contramap(_.toString)
+
+  checkAll("Schema", HashTests[Schema].hash)
 }

@@ -31,11 +31,11 @@ object SchemaParseSpec extends BaseSuite {
   }
 
   pureTest("Schema parse should keep props of primitives, including logical types") {
-    expect.same(
+    expect.eql(
       Right(Schema.String.withProps(JsonObject("avro.java.string" -> Json.fromString("String")))),
       parse("""{"type":"string","avro.java.string":"String"}""")
     ) &&
-    expect.same(
+    expect.eql(
       Right(Schema.Bytes.withLogicalType(LogicalType.decimal(10, 2))),
       parse("""{"type":"bytes","logicalType":"decimal","precision":10,"scale":2}""")
     )
@@ -60,7 +60,7 @@ object SchemaParseSpec extends BaseSuite {
         .withAliases(Vector("fullName"))
         .withProps(JsonObject("custom" -> Json.True))
 
-    expect.same(
+    expect.eql(
       Right(
         record(Schema.Name("Person", Some("com.example")), field)
           .withDoc(Some("A person"))
@@ -75,7 +75,7 @@ object SchemaParseSpec extends BaseSuite {
     val json =
       """{"type":"enum","name":"Suit","doc":"A suit","symbols":["Hearts","Spades"],"default":"Spades","aliases":["Color"],"custom":true}"""
 
-    expect.same(
+    expect.eql(
       Right(
         Schema
           .Enum(Schema.Name("Suit"), Vector("Hearts", "Spades"))
@@ -92,7 +92,7 @@ object SchemaParseSpec extends BaseSuite {
     val json =
       """{"type":"fixed","name":"Id","doc":"An id","size":16,"logicalType":"uuid","aliases":["Key"]}"""
 
-    expect.same(
+    expect.eql(
       Right(
         Schema
           .Fixed(Schema.Name("Id"), 16)
@@ -105,12 +105,12 @@ object SchemaParseSpec extends BaseSuite {
   }
 
   pureTest("Schema parse should parse arrays, maps, and unions") {
-    expect.same(
+    expect.eql(
       Right(Schema.Array(Schema.Int).withProps(JsonObject("custom" -> Json.True))),
       parse("""{"type":"array","items":"int","custom":true}""")
     ) &&
-    expect.same(Right(Schema.Map(Schema.Long)), parse("""{"type":"map","values":"long"}""")) &&
-    expect.same(
+    expect.eql(Right(Schema.Map(Schema.Long)), parse("""{"type":"map","values":"long"}""")) &&
+    expect.eql(
       Right(Schema.Union(Vector(Schema.Null, Schema.String))),
       parse("""["null","string"]""")
     )
@@ -120,14 +120,14 @@ object SchemaParseSpec extends BaseSuite {
     val json =
       """{"type":"enum","name":"Suit","namespace":1,"doc":true,"symbols":["Hearts"],"default":null}"""
 
-    expect.same(Right(Schema.Enum(Schema.Name("Suit"), Vector("Hearts"))), parse(json))
+    expect.eql(Right(Schema.Enum(Schema.Name("Suit"), Vector("Hearts"))), parse(json))
   }
 
   pureTest("Schema parse should inherit the namespace of the enclosing named schema") {
     val json =
       """{"type":"record","name":"Person","namespace":"com.example","fields":[{"name":"id","type":{"type":"fixed","name":"Id","size":1}}]}"""
 
-    expect.same(
+    expect.eql(
       Right(
         record(
           Schema.Name("Person", Some("com.example")),
@@ -140,14 +140,14 @@ object SchemaParseSpec extends BaseSuite {
 
   pureTest("Schema parse should use the namespace of full names") {
     val json = """{"type":"fixed","name":"com.example.Id","namespace":"other","size":1}"""
-    expect.same(Right(fixed(Schema.Name("Id", Some("com.example")))), parse(json))
+    expect.eql(Right(fixed(Schema.Name("Id", Some("com.example")))), parse(json))
   }
 
   pureTest("Schema parse should use the null namespace for empty namespaces") {
     val json =
       """{"type":"record","name":"Person","namespace":"com.example","fields":[{"name":"id","type":{"type":"fixed","name":"Id","namespace":"","size":1}}]}"""
 
-    expect.same(
+    expect.eql(
       Right(
         record(
           Schema.Name("Person", Some("com.example")),
@@ -164,7 +164,7 @@ object SchemaParseSpec extends BaseSuite {
 
     val name = Schema.Name("Node", Some("com.example"))
 
-    expect.same(
+    expect.eql(
       Right(record(name, Schema.Field("next", Schema.Union(Vector(Schema.Null, Schema.Ref(name)))))),
       parse(json)
     )
@@ -177,7 +177,7 @@ object SchemaParseSpec extends BaseSuite {
     val name = fixed(Schema.Name("Name"))
     val schema = parse(json)
 
-    expect.same(
+    expect.eql(
       Right(
         record(
           Schema.Name("Person"),
@@ -204,7 +204,7 @@ object SchemaParseSpec extends BaseSuite {
     val id = fixed(Schema.Name("Id"))
     val namespacedId = Schema.Fixed(Schema.Name("Id", Some("com.example")), 2)
 
-    expect.same(
+    expect.eql(
       Right(
         record(
           Schema.Name("Person"),
@@ -230,7 +230,7 @@ object SchemaParseSpec extends BaseSuite {
 
     val name = fixed(Schema.Name("Name"))
 
-    expect.same(
+    expect.eql(
       Right(record(Schema.Name("Person"), Schema.Field("first", name), Schema.Field("last", name))),
       parse(json)
     )
@@ -240,7 +240,7 @@ object SchemaParseSpec extends BaseSuite {
     val json =
       """["null",{"type":"fixed","name":"Id","size":1},{"type":"array","items":{"type":"fixed","name":"Id","size":2}}]"""
 
-    expect.same(Left("Conflicting definitions of named schema Id"), parse(json))
+    expect.eql(Left("Conflicting definitions of named schema Id"), parse(json))
   }
 
   pureTest("Schema parse should convert text defaults of floats and doubles to numbers") {
@@ -263,7 +263,7 @@ object SchemaParseSpec extends BaseSuite {
     val json =
       """{"type":"record","name":"Person","fields":[{"name":"name","type":"string","default":null}]}"""
 
-    expect.same(
+    expect.eql(
       Right(
         record(
           Schema.Name("Person"),
@@ -280,7 +280,7 @@ object SchemaParseSpec extends BaseSuite {
 
     val id = fixed(Schema.Name("Id"))
 
-    expect.same(
+    expect.eql(
       Right(record(Schema.Name("Person"), Schema.Field("id", id), Schema.Field("other", id))),
       parse(json)
     )
@@ -332,7 +332,7 @@ object SchemaParseSpec extends BaseSuite {
           """Duplicate int in union ["int",{"type":"int","logicalType":"date"}]"""
       )
     ) { case (json, message) =>
-      expect.same(Left(message), parse(json))
+      expect.eql(Left(message), parse(json))
     }
   }
 

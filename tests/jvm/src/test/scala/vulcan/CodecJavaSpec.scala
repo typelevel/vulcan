@@ -420,7 +420,7 @@ object CodecJavaSpec extends BaseSuite {
     javaEncode: A => AvroValue
   )(implicit loc: SourceLocation): Expectations =
     (codec.encode(value), Try(javaEncode(value)).toEither) match {
-      case (Right(encoded), Right(javaEncoded)) => expect.same(javaEncoded, encoded)
+      case (Right(encoded), Right(javaEncoded)) => expect.eql(javaEncoded, encoded)
       case (Left(_), Left(_)) => success
       case (encoded, javaEncoded) =>
         failure(s"Encoded $value as $encoded, Java Avro encoded $javaEncoded")

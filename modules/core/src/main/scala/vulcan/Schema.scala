@@ -6,6 +6,7 @@
 
 package vulcan
 
+import cats.Hash
 import cats.Show
 import io.circe.Json
 import io.circe.JsonObject
@@ -46,6 +47,9 @@ object Schema {
   /** Decodes and validates the provided schema `Json`. */
   def fromJson(json: Json): Either[AvroException, Schema] =
     SchemaDecoder.decode(json)
+
+  implicit final val schemaHash: Hash[Schema] =
+    Hash.fromUniversalHashCode
 
   implicit final val schemaShow: Show[Schema] =
     Show.fromToString

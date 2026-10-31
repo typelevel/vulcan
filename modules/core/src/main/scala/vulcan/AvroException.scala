@@ -6,6 +6,7 @@
 
 package vulcan
 
+import cats.Show
 import io.circe.Json
 import scala.util.control.NoStackTrace
 import vulcan.internal.JsonPrinter
@@ -35,6 +36,9 @@ object AvroException {
     */
   def apply(message: String, cause: Throwable): AvroException =
     new AvroException(message, Some(cause))
+
+  implicit final val avroExceptionShow: Show[AvroException] =
+    Show.fromToString
 
   /**
     * Exception raised when the Avro binary encoding of a value
