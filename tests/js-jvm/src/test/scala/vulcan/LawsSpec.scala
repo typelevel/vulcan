@@ -98,7 +98,7 @@ object LawsSpec extends FunSuite with Discipline {
         schema <- Arbitrary.arbitrary[Either[AvroException, Schema]]
         encoder <- Arbitrary.arbitrary[Encoder[A]]
         decoder <- Arbitrary.arbitrary[Schema => Either[AvroException, Decoder[A]]]
-      } yield Codec.instance(schema, encoder, decoder)
+      } yield Codec.custom(schema, encoder, decoder)
     }
 
   implicit def codecEq[A: Arbitrary: Eq]: Eq[Codec[A]] =

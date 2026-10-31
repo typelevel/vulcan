@@ -314,6 +314,24 @@ object Codec {
       .withTypeName("Char")
 
   /**
+    * Returns a new [[Codec]] using the specified schema, encoder, and decoder function.
+    *
+    * The decoder function returns a [[Decoder]] for values of the writer schema, and is
+    * called once for each writer schema. Values of unions are decoded using the schema
+    * of the written type, so the writer schema is neither a union nor a reference. It
+    * includes the definitions of the named schemas it references, so it can be passed
+    * to [[Codec#decoder]] of other codecs.
+    *
+    * @group Create
+    */
+  final def custom[A](
+    schema: Either[AvroException, Schema],
+    encoder: Encoder[A],
+    decoder: Schema => Either[AvroException, Decoder[A]]
+  ): Codec[A] =
+    new CustomCodec(schema, encoder, decoder)
+
+  /**
     * Returns a new decimal [[Codec]] for `BigDecimal`.
     *
     * Values are decoded using the precision and scale of the writer schema.
@@ -392,25 +410,6 @@ object Codec {
     */
   implicit lazy val float: Codec[Float] =
     FloatCodec
-
-  /**
-    * Returns a new [[Codec]] using the specified schema, encoder, and decoder function.
-    *
-    * The decoder function returns a [[Decoder]] for values of the writer schema, and is
-    * called once for each writer schema. Values of unions are decoded using the schema
-    * of the written type, so the writer schema is neither a union nor a reference. It
-    * includes the definitions of the named schemas it references, so it can be passed
-    * to [[Codec#decoder]] of other codecs. If the decoder function returns an error,
-    * decoding values fails with the error.
-    *
-    * @group Create
-    */
-  final def instance[A](
-    schema: Either[AvroException, Schema],
-    encoder: Encoder[A],
-    decoder: Schema => Either[AvroException, Decoder[A]]
-  ): Codec[A] =
-    new Instance(schema, encoder, decoder)
 
   /**
     * @group JavaTime
@@ -881,24 +880,24 @@ object Codec {
     }
   }
 
-  private[vulcan] final class Instance[A](
-    val instanceSchema: Either[AvroException, Schema],
-    val instanceEncoder: Encoder[A],
-    val instanceDecoder: Schema => Either[AvroException, Decoder[A]]
+  private[vulcan] final class CustomCodec[A](
+    val customSchema: Either[AvroException, Schema],
+    val customEncoder: Encoder[A],
+    val customDecoder: Schema => Either[AvroException, Decoder[A]]
   ) extends Codec[A] {
     override lazy val schema: Either[AvroException, Schema] =
-      instanceSchema.flatMap { schema =>
+      customSchema.flatMap { schema =>
         SchemaValidator.validate(schema, validateDefaults = true).map(_ => schema)
       }
 
     override def encode(a: A): Either[AvroException, AvroValue] =
-      instanceEncoder.encode(a)
+      customEncoder.encode(a)
 
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
     ): AvroValue => Either[AvroException, A] =
-      instanceDecoder(definitions.expanded(writerSchema)) match {
+      customDecoder(definitions.expanded(writerSchema)) match {
         case Right(decoder) => decoder.decode(_)
         case Left(error) => failing(error)
       }
@@ -1858,7 +1857,7 @@ object Codec {
     if (codec ne null) codec
     else {
       val error = Left(new UninitializedCodec(description))
-      new Instance[A](error, _ => error, _ => error)
+      new CustomCodec[A](error, _ => error, _ => error)
     }
 
   private[vulcan] def invalidValue(value: AvroValue, writerSchema: Schema): AvroException =
