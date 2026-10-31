@@ -299,6 +299,101 @@ object CodecSpec extends BaseSuite {
     }
   }
 
+  locally {
+    val codec: Codec[Int] =
+      Codec.custom[Int](
+        Right(Schema.Int),
+        int => Right(AvroValue.Long(int.toLong)),
+        {
+          case _: Schema.Int =>
+            Right {
+              case AvroValue.Int(int) => Right(int)
+              case value => Left(AvroException(s"Got value $value"))
+            }
+
+          case schema =>
+            Left(AvroException(s"Got schema $schema"))
+        }
+      )
+
+    pureTest("Codec custom schema should use the schema") {
+      expect.same(Right(Schema.Int), codec.schema)
+    }
+
+    pureTest("Codec custom schema should error if the schema is invalid") {
+      val invalid =
+        Codec.custom[Int](
+          Right(Schema.Fixed(Schema.Name("1Invalid"), 1)),
+          int => Right(AvroValue.Int(int)),
+          _ => Left(AvroException("error"))
+        )
+
+      expect.eql(
+        Left("""Invalid name "1Invalid": must start with a letter or underscore"""),
+        invalid.schema.left.map(_.message)
+      )
+    }
+
+    pureTest("Codec custom encode should encode using the encoder") {
+      expect.same(Right(AvroValue.Long(1L)), codec.encode(1))
+    }
+
+    pureTest("Codec custom decode should decode using the decoder function") {
+      expect.same(Right(1), codec.decoder(Schema.Int).flatMap(_.decode(AvroValue.Int(1))))
+    }
+
+    pureTest("Codec custom decode should decode values of unions using the written type") {
+      expect.same(
+        Right(1),
+        codec
+          .decoder(Schema.Union(Vector(Schema.Null, Schema.Int)))
+          .flatMap(_.decode(AvroValue.Union(1, AvroValue.Int(1))))
+      )
+    }
+
+    pureTest("Codec custom decode should call the decoder function once for each writer schema") {
+      var calls = 0
+      val counting =
+        Codec.custom[Int](
+          Right(Schema.Int),
+          int => Right(AvroValue.Int(int)),
+          _ => {
+            calls += 1
+            Right(_ => Right(1))
+          }
+        )
+
+      val decoder = counting.decoder(Schema.Int)
+      expect.same(Right(1), decoder.flatMap(_.decode(AvroValue.Int(1)))) &&
+      expect.same(Right(1), decoder.flatMap(_.decode(AvroValue.Int(2)))) &&
+      expect.eql(1, calls)
+    }
+
+    pureTest("Codec custom decode should include the definitions of referenced names in writer schemas") {
+      val inner = Schema.Fixed(Schema.Name("Inner"), 1)
+
+      def outer(innerSchema: Schema): Schema =
+        Schema.Record(Schema.Name("Outer"), Vector(Schema.Field("inner", innerSchema)))
+
+      val delegating =
+        Codec.custom[Int](Right(Schema.Int), int => Right(AvroValue.Int(int)), codec.decoder)
+
+      val decoder = delegating.decoder(Schema.Union(Vector(inner, outer(Schema.Ref(inner.name)))))
+      val value = AvroValue.Union(1, AvroValue.Record(Vector(AvroValue.Fixed(hex"00"))))
+      expect.same(
+        Left(s"Got schema ${outer(inner)}"),
+        decoder.flatMap(_.decode(value)).left.map(_.message)
+      )
+    }
+
+    pureTest("Codec custom decode should error if the decoder function errors") {
+      expect.same(
+        Left(s"Got schema ${Schema.String}"),
+        codec.decoder(Schema.String).flatMap(_.decode(AvroValue.String("a"))).left.map(_.message)
+      )
+    }
+  }
+
   pureTest("Codec decimal schema should be encoded as bytes with logical type decimal") {
     implicit val codec: Codec[BigDecimal] =
       Codec.decimal(precision = 10, scale = 5)
@@ -993,101 +1088,6 @@ object CodecSpec extends BaseSuite {
       expectDecodeError[PosInt](
         Codec[Int].encode(0),
         "java.lang.RuntimeException: 0 is not positive"
-      )
-    }
-  }
-
-  locally {
-    val codec: Codec[Int] =
-      Codec.instance[Int](
-        Right(Schema.Int),
-        int => Right(AvroValue.Long(int.toLong)),
-        {
-          case _: Schema.Int =>
-            Right {
-              case AvroValue.Int(int) => Right(int)
-              case value => Left(AvroException(s"Got value $value"))
-            }
-
-          case schema =>
-            Left(AvroException(s"Got schema $schema"))
-        }
-      )
-
-    pureTest("Codec instance schema should use the schema") {
-      expect.same(Right(Schema.Int), codec.schema)
-    }
-
-    pureTest("Codec instance schema should error if the schema is invalid") {
-      val invalid =
-        Codec.instance[Int](
-          Right(Schema.Fixed(Schema.Name("1Invalid"), 1)),
-          int => Right(AvroValue.Int(int)),
-          _ => Left(AvroException("error"))
-        )
-
-      expect.eql(
-        Left("""Invalid name "1Invalid": must start with a letter or underscore"""),
-        invalid.schema.left.map(_.message)
-      )
-    }
-
-    pureTest("Codec instance encode should encode using the encoder") {
-      expect.same(Right(AvroValue.Long(1L)), codec.encode(1))
-    }
-
-    pureTest("Codec instance decode should decode using the decoder function") {
-      expect.same(Right(1), codec.decoder(Schema.Int).flatMap(_.decode(AvroValue.Int(1))))
-    }
-
-    pureTest("Codec instance decode should decode values of unions using the written type") {
-      expect.same(
-        Right(1),
-        codec
-          .decoder(Schema.Union(Vector(Schema.Null, Schema.Int)))
-          .flatMap(_.decode(AvroValue.Union(1, AvroValue.Int(1))))
-      )
-    }
-
-    pureTest("Codec instance decode should call the decoder function once for each writer schema") {
-      var calls = 0
-      val counting =
-        Codec.instance[Int](
-          Right(Schema.Int),
-          int => Right(AvroValue.Int(int)),
-          _ => {
-            calls += 1
-            Right(_ => Right(1))
-          }
-        )
-
-      val decoder = counting.decoder(Schema.Int)
-      expect.same(Right(1), decoder.flatMap(_.decode(AvroValue.Int(1)))) &&
-      expect.same(Right(1), decoder.flatMap(_.decode(AvroValue.Int(2)))) &&
-      expect.eql(1, calls)
-    }
-
-    pureTest("Codec instance decode should include the definitions of referenced names in writer schemas") {
-      val inner = Schema.Fixed(Schema.Name("Inner"), 1)
-
-      def outer(innerSchema: Schema): Schema =
-        Schema.Record(Schema.Name("Outer"), Vector(Schema.Field("inner", innerSchema)))
-
-      val delegating =
-        Codec.instance[Int](Right(Schema.Int), int => Right(AvroValue.Int(int)), codec.decoder)
-
-      val decoder = delegating.decoder(Schema.Union(Vector(inner, outer(Schema.Ref(inner.name)))))
-      val value = AvroValue.Union(1, AvroValue.Record(Vector(AvroValue.Fixed(hex"00"))))
-      expect.same(
-        Left(s"Got schema ${outer(inner)}"),
-        decoder.flatMap(_.decode(value)).left.map(_.message)
-      )
-    }
-
-    pureTest("Codec instance decode should error if the decoder function errors") {
-      expect.same(
-        Left(s"Got schema ${Schema.String}"),
-        codec.decoder(Schema.String).flatMap(_.decode(AvroValue.String("a"))).left.map(_.message)
       )
     }
   }
@@ -2844,7 +2844,7 @@ object CodecSpec extends BaseSuite {
 
   pureTest("Codec show should show the error if schema is unavailable") {
     val codec =
-      Codec.instance[Int](
+      Codec.custom[Int](
         Left(AvroException("error")),
         int => Right(AvroValue.Int(int)),
         _ => Left(AvroException("error"))
