@@ -734,9 +734,6 @@ object Codec {
     def codec: Codec[B]
 
     def prism: Prism[A, B]
-
-    def imap[A0](f: A0 => Option[A], g: A => A0): Alt[A0] =
-      Alt(codec, prism.imap(f, g))
   }
 
   private[vulcan] object Alt {
