@@ -6,7 +6,6 @@
 
 package vulcan.examples
 
-import cats.Eq
 import io.circe.Json
 import io.circe.JsonObject
 import org.scalacheck.Arbitrary
@@ -38,9 +37,6 @@ object FixedBoolean {
         aliases = List("SomeOtherBoolean"),
         props = JsonObject("custom" -> Json.fromString("value"))
       )
-
-  implicit val fixedBooleanEq: Eq[FixedBoolean] =
-    Eq.fromUniversalEquals
 
   implicit val fixedBooleanArbitrary: Arbitrary[FixedBoolean] =
     Arbitrary(Gen.oneOf(FalseFixedBoolean, TrueFixedBoolean))

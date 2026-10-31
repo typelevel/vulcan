@@ -6,7 +6,6 @@
 
 package vulcan.generic.examples
 
-import cats.Eq
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
 import vulcan.AvroException
@@ -19,9 +18,6 @@ sealed trait SealedTraitEnumDerived
 object SealedTraitEnumDerived {
   implicit final val arbitrary: Arbitrary[SealedTraitEnumDerived] =
     Arbitrary(Gen.oneOf(FirstInSealedTraitEnumDerived, SecondInSealedTraitEnumDerived))
-
-  implicit final val eq: Eq[SealedTraitEnumDerived] =
-    Eq.fromUniversalEquals
 
   implicit final val codec: Codec[SealedTraitEnumDerived] =
     deriveEnum(

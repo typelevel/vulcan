@@ -6,7 +6,6 @@
 
 package vulcan.examples
 
-import cats.Eq
 import io.circe.Json
 import io.circe.JsonObject
 import org.scalacheck.Arbitrary
@@ -19,9 +18,6 @@ sealed trait SealedTraitEnumNoDefault
 object SealedTraitEnumNoDefault {
   implicit final val arbitrary: Arbitrary[SealedTraitEnumNoDefault] =
     Arbitrary(Gen.oneOf(FirstInSealedTraitEnumNoDefault, SecondInSealedTraitEnumNoDefault))
-
-  implicit final val eq: Eq[SealedTraitEnumNoDefault] =
-    Eq.fromUniversalEquals
 
   implicit final val codec: Codec[SealedTraitEnumNoDefault] =
     Codec.enumeration(

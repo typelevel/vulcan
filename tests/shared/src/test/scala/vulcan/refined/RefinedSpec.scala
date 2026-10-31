@@ -6,7 +6,6 @@
 
 package vulcan.refined
 
-import cats.Eq
 import cats.Show
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.scalacheck.numeric.*
@@ -18,9 +17,6 @@ import vulcan.Codec
 object RefinedSpec extends BaseSuite {
   implicit def refinedShow[T, P]: Show[Refined[T, P]] =
     Show.fromToString
-
-  implicit def refinedEq[T, P]: Eq[Refined[T, P]] =
-    Eq.fromUniversalEquals
 
   test("Refined should succeed for values conforming to predicate") {
     forallRoundtrip[PosInt]

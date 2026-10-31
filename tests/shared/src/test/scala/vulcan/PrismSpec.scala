@@ -8,41 +8,46 @@ package vulcan
 
 import vulcan.examples.*
 import weaver.Expectations
+import weaver.SourceLocation
 
 object PrismSpec extends BaseSuite {
-  test("Prism derive partialRoundtrip") {
-    def check[S, A](s: S, prism: Prism[S, A]): Expectations =
-      expect.same(s, prism.getOption(s).fold(s)(prism.reverseGet))
 
+  /** Expects `reverseGet` to return `s` from what `getOption` returns, if anything. */
+  private def expectPrismPartialRoundtrip[S, A](s: S, prism: Prism[S, A])(implicit
+    loc: SourceLocation
+  ): Expectations =
+    expect.same(s, prism.getOption(s).fold(s)(prism.reverseGet))
+
+  /** Expects `getOption` to return `a` from what `reverseGet` returns. */
+  private def expectPrismRoundtrip[S, A](a: A, prism: Prism[S, A])(implicit
+    loc: SourceLocation
+  ): Expectations =
+    expect.same(Some(a), prism.getOption(prism.reverseGet(a)))
+
+  test("Prism derive partialRoundtrip") {
     forall { (s: SealedTraitCaseClass) =>
-      check(s, Prism[SealedTraitCaseClass, FirstInSealedTraitCaseClass]) &&
-      check(s, Prism[SealedTraitCaseClass, SecondInSealedTraitCaseClass]) &&
-      check(s, Prism[SealedTraitCaseClass, ThirdInSealedTraitCaseClass])
+      expectPrismPartialRoundtrip(s, Prism[SealedTraitCaseClass, FirstInSealedTraitCaseClass]) &&
+      expectPrismPartialRoundtrip(s, Prism[SealedTraitCaseClass, SecondInSealedTraitCaseClass]) &&
+      expectPrismPartialRoundtrip(s, Prism[SealedTraitCaseClass, ThirdInSealedTraitCaseClass])
     }
   }
 
   test("Prism derive roundtrip") {
-    def check[S, A](a: A, prism: Prism[S, A]): Expectations =
-      expect.same(Some(a), prism.getOption(prism.reverseGet(a)))
-
     forall {
       (
         first: FirstInSealedTraitCaseClass,
         second: SecondInSealedTraitCaseClass,
         third: ThirdInSealedTraitCaseClass
       ) =>
-        check(first, Prism[SealedTraitCaseClass, FirstInSealedTraitCaseClass]) &&
-        check(second, Prism[SealedTraitCaseClass, SecondInSealedTraitCaseClass]) &&
-        check(third, Prism[SealedTraitCaseClass, ThirdInSealedTraitCaseClass])
+        expectPrismRoundtrip(first, Prism[SealedTraitCaseClass, FirstInSealedTraitCaseClass]) &&
+        expectPrismRoundtrip(second, Prism[SealedTraitCaseClass, SecondInSealedTraitCaseClass]) &&
+        expectPrismRoundtrip(third, Prism[SealedTraitCaseClass, ThirdInSealedTraitCaseClass])
     }
   }
 
   test("Prism identity roundtrip") {
-    def check[S, A](a: A, prism: Prism[S, A]): Expectations =
-      expect.same(Some(a), prism.getOption(prism.reverseGet(a)))
-
     forall { (n: Int) =>
-      check(n, Prism.identity[Int])
+      expectPrismRoundtrip(n, Prism.identity[Int])
     }
   }
 

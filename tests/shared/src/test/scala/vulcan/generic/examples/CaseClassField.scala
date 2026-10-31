@@ -6,7 +6,6 @@
 
 package vulcan.generic.examples
 
-import cats.Eq
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 import vulcan.Codec
@@ -20,7 +19,4 @@ object CaseClassField {
 
   implicit val caseClassFieldArbitrary: Arbitrary[CaseClassField] =
     Arbitrary(arbitrary[Int].map(CaseClassField(_)))
-
-  implicit val caseClassFieldEq: Eq[CaseClassField] =
-    Eq.fromUniversalEquals
 }

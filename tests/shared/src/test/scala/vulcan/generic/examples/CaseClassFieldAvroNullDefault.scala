@@ -6,7 +6,6 @@
 
 package vulcan.generic.examples
 
-import cats.Eq
 import java.time.LocalDate
 import org.scalacheck.Arbitrary
 import vulcan.Codec
@@ -23,11 +22,8 @@ final case class CaseClassFieldAvroNullDefault(
 )
 
 object CaseClassFieldAvroNullDefault {
-  implicit val caseClassAvroNullDefaultArbitrary: Arbitrary[CaseClassFieldAvroNullDefault] =
+  implicit val caseClassFieldAvroNullDefaultArbitrary: Arbitrary[CaseClassFieldAvroNullDefault] =
     Arbitrary(CaseClassNullableFields.genFieldProduct.map((apply _).tupled))
-
-  implicit val caseClassAvroNamespaceEq: Eq[CaseClassFieldAvroNullDefault] =
-    Eq.fromUniversalEquals
 
   implicit val codec: Codec[CaseClassFieldAvroNullDefault] =
     Codec.derive

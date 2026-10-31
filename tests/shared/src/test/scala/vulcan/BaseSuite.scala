@@ -75,7 +75,11 @@ abstract class BaseSuite extends SimpleIOSuite with Checkers {
     }
 
   /** Expects `a` to roundtrip as an Avro value, as Avro binary, and as Avro JSON. */
-  def expectRoundtrip[A](a: A)(implicit codec: Codec[A], eq: Eq[A], loc: SourceLocation): Expectations =
+  def expectRoundtrip[A](a: A)(implicit
+    codec: Codec[A],
+    eq: Eq[A] = Eq.fromUniversalEquals[A],
+    loc: SourceLocation
+  ): Expectations =
     whenSuccess(codec.schema) { schema =>
       val decoded = List(
         (codec.encoder, codec.decoder(schema)).flatMapN((e, d) => e.encode(a).flatMap(d.decode)),
@@ -90,7 +94,7 @@ abstract class BaseSuite extends SimpleIOSuite with Checkers {
   def forallRoundtrip[A](implicit
     codec: Codec[A],
     arbitrary: Arbitrary[A],
-    eq: Eq[A],
+    eq: Eq[A] = Eq.fromUniversalEquals[A],
     loc: SourceLocation
   ): IO[Expectations] = {
     implicit val show: Show[A] = Show.fromToString

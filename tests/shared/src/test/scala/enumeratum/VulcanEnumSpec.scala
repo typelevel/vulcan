@@ -6,7 +6,6 @@
 
 package enumeratum
 
-import cats.Eq
 import enumeratum.EnumEntry.Lowercase
 import vulcan.BaseSuite
 import vulcan.Codec
@@ -50,8 +49,5 @@ object VulcanEnumSpec extends BaseSuite {
     override def withNameOption(name: String): Option[Suit] =
       if (name == "clubs") None
       else super.withNameOption(name)
-
-    implicit val suitEq: Eq[Suit] =
-      Eq.fromUniversalEquals
   }
 }

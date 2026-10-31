@@ -2114,6 +2114,10 @@ object CodecSpec extends BaseSuite {
     }
   }
 
+  pureTest("Codec record field builder should have FieldBuilder as toString") {
+    expect.eql("FieldBuilder", Codec.FieldBuilder.instance[Int].toString)
+  }
+
   locally {
     sealed trait CustomEnum
     case object First extends CustomEnum
@@ -2905,6 +2909,10 @@ object CodecSpec extends BaseSuite {
       Codec[ByteVector].schema,
       "abc"
     )
+  }
+
+  pureTest("Codec union alt builder should have AltBuilder as toString") {
+    expect.eql("AltBuilder", Codec.AltBuilder.instance[Int].toString)
   }
 
   locally {
