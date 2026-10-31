@@ -23,14 +23,13 @@ object RefinedSpec extends BaseSuite {
     Eq.fromUniversalEquals
 
   test("Refined should succeed for values conforming to predicate") {
-    roundtrip[PosInt]
+    forallRoundtrip[PosInt]
   }
 
   test("Refined should fail for values not conforming to predicate") {
     forall { (nonPosInt: NonPosInt) =>
       expectDecodeError[PosInt](
         Codec[Int].encode(nonPosInt.value),
-        Codec[PosInt].schema,
         s"Predicate failed: ($nonPosInt > 0)."
       )
     }

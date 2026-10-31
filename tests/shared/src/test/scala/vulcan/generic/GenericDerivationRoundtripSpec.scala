@@ -10,11 +10,11 @@ import vulcan.BaseSuite
 import vulcan.generic.examples.*
 
 object GenericDerivationRoundtripSpec extends BaseSuite {
-  test("derive CaseClassAvroNamespace") { roundtrip[CaseClassAvroNamespace] }
-  test("derive CaseClassField") { roundtrip[CaseClassField] }
-  test("derive SealedTraitCaseClassAvroNamespace") { roundtrip[SealedTraitCaseClassAvroNamespace] }
-  test("derive SealedTraitCaseClassCustom") { roundtrip[SealedTraitCaseClassCustom] }
-  test("derive CaseClassAvroNullDefault") { roundtrip[CaseClassAvroNullDefault] }
-  test("derive CaseClassFieldAvroNullDefault") { roundtrip[CaseClassFieldAvroNullDefault] }
-  test("derive CaseClassAndFieldAvroNullDefault") { roundtrip[CaseClassAndFieldAvroNullDefault] }
+  test("derive CaseClassAvroNamespace") { forallRoundtrip[CaseClassAvroNamespace] }
+  test("derive CaseClassField") { forallRoundtrip[CaseClassField] }
+  test("derive SealedTraitCaseClassAvroNamespace") { forallRoundtrip[SealedTraitCaseClassAvroNamespace] }
+  test("derive SealedTraitCaseClassCustom") { forallRoundtrip[SealedTraitCaseClassCustom] }
+  test("derive CaseClassAvroNullDefault") { forallRoundtrip[CaseClassAvroNullDefault] }
+  test("derive CaseClassFieldAvroNullDefault") { forallRoundtrip[CaseClassFieldAvroNullDefault] }
+  test("derive CaseClassAndFieldAvroNullDefault") { forallRoundtrip[CaseClassAndFieldAvroNullDefault] }
 }

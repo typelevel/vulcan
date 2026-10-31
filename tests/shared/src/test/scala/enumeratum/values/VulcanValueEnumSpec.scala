@@ -15,13 +15,12 @@ object VulcanValueEnumSpec extends BaseSuite {
   }
 
   pureTest("ByteVulcanEnum should roundtrip enumeration values") {
-    forEach(List[CustomByteEnum](CustomByteEnum.First, CustomByteEnum.Second))(roundtrip(_))
+    forEach(List[CustomByteEnum](CustomByteEnum.First, CustomByteEnum.Second))(expectRoundtrip(_))
   }
 
   pureTest("ByteVulcanEnum should error if withValueOpt does not handle schema value") {
     expectDecodeError[CustomByteEnum](
       Codec[CustomByteEnum].encoder.flatMap(_.encode(CustomByteEnum.Third)),
-      Codec[CustomByteEnum].schema,
       "3 is not a member of CustomByteEnum (1, 2, 3)"
     )
   }
@@ -31,13 +30,12 @@ object VulcanValueEnumSpec extends BaseSuite {
   }
 
   pureTest("CharVulcanEnum should roundtrip enumeration values") {
-    forEach(List[CustomCharEnum](CustomCharEnum.First, CustomCharEnum.Second))(roundtrip(_))
+    forEach(List[CustomCharEnum](CustomCharEnum.First, CustomCharEnum.Second))(expectRoundtrip(_))
   }
 
   pureTest("CharVulcanEnum should error if withValueOpt does not handle schema value") {
     expectDecodeError[CustomCharEnum](
       Codec[CustomCharEnum].encoder.flatMap(_.encode(CustomCharEnum.Third)),
-      Codec[CustomCharEnum].schema,
       "3 is not a member of CustomCharEnum (1, 2, 3)"
     )
   }
@@ -47,13 +45,12 @@ object VulcanValueEnumSpec extends BaseSuite {
   }
 
   pureTest("IntVulcanEnum should roundtrip enumeration values") {
-    forEach(List[CustomIntEnum](CustomIntEnum.First, CustomIntEnum.Second))(roundtrip(_))
+    forEach(List[CustomIntEnum](CustomIntEnum.First, CustomIntEnum.Second))(expectRoundtrip(_))
   }
 
   pureTest("IntVulcanEnum should error if withValueOpt does not handle schema value") {
     expectDecodeError[CustomIntEnum](
       Codec[CustomIntEnum].encoder.flatMap(_.encode(CustomIntEnum.Third)),
-      Codec[CustomIntEnum].schema,
       "3 is not a member of CustomIntEnum (1, 2, 3)"
     )
   }
@@ -63,13 +60,12 @@ object VulcanValueEnumSpec extends BaseSuite {
   }
 
   pureTest("LongVulcanEnum should roundtrip enumeration values") {
-    forEach(List[CustomLongEnum](CustomLongEnum.First, CustomLongEnum.Second))(roundtrip(_))
+    forEach(List[CustomLongEnum](CustomLongEnum.First, CustomLongEnum.Second))(expectRoundtrip(_))
   }
 
   pureTest("LongVulcanEnum should error if withValueOpt does not handle schema value") {
     expectDecodeError[CustomLongEnum](
       Codec[CustomLongEnum].encoder.flatMap(_.encode(CustomLongEnum.Third)),
-      Codec[CustomLongEnum].schema,
       "3 is not a member of CustomLongEnum (1, 2, 3)"
     )
   }
@@ -79,31 +75,29 @@ object VulcanValueEnumSpec extends BaseSuite {
   }
 
   pureTest("ShortVulcanEnum should roundtrip enumeration values") {
-    forEach(List[CustomShortEnum](CustomShortEnum.First, CustomShortEnum.Second))(roundtrip(_))
+    forEach(List[CustomShortEnum](CustomShortEnum.First, CustomShortEnum.Second))(expectRoundtrip(_))
   }
 
   pureTest("ShortVulcanEnum should error if withValueOpt does not handle schema value") {
     expectDecodeError[CustomShortEnum](
       Codec[CustomShortEnum].encoder.flatMap(_.encode(CustomShortEnum.Third)),
-      Codec[CustomShortEnum].schema,
       "3 is not a member of CustomShortEnum (1, 2, 3)"
     )
   }
 
   pureTest("StringVulcanEnum schema should be enum") {
-    expectSchemaIs[CustomStringEnum] {
+    expectSchema[CustomStringEnum] {
       """{"type":"enum","name":"CustomStringEnum","namespace":"com.example","doc":"Custom enumeration","symbols":["first","second","third"]}"""
     }
   }
 
   pureTest("StringVulcanEnum should roundtrip enumeration values") {
-    forEach(List[CustomStringEnum](CustomStringEnum.First, CustomStringEnum.Second))(roundtrip(_))
+    forEach(List[CustomStringEnum](CustomStringEnum.First, CustomStringEnum.Second))(expectRoundtrip(_))
   }
 
   pureTest("StringVulcanEnum should error if withValueOpt does not handle schema value") {
     expectDecodeError[CustomStringEnum](
       Codec[CustomStringEnum].encoder.flatMap(_.encode(CustomStringEnum.Third)),
-      Codec[CustomStringEnum].schema,
       "Error decoding com.example.CustomStringEnum: third is not a member of CustomStringEnum (first, second, third)"
     )
   }

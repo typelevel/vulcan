@@ -15,7 +15,7 @@ import vulcan.generic.AvroNamespace
 
 object VulcanEnumSpec extends BaseSuite {
   pureTest("VulcanEnum schema should use an enum schema") {
-    expectSchemaIs[Suit] {
+    expectSchema[Suit] {
       """{"type":"enum","name":"Suit","namespace":"com.example","doc":"The different card suits","symbols":["clubs","diamonds","hearts","spades"]}"""
     }
   }
@@ -25,13 +25,12 @@ object VulcanEnumSpec extends BaseSuite {
   }
 
   pureTest("VulcanEnum should roundtrip enum values") {
-    forEach(List[Suit](Suit.Diamonds, Suit.Hearts, Suit.Spades))(roundtrip(_))
+    forEach(List[Suit](Suit.Diamonds, Suit.Hearts, Suit.Spades))(expectRoundtrip(_))
   }
 
   pureTest("VulcanEnum should error if withNameOption does not handle schema symbol") {
     expectDecodeError[Suit](
       Codec[Suit].encoder.flatMap(_.encode(Suit.Clubs)),
-      Codec[Suit].schema,
       "Error decoding com.example.Suit: clubs is not a member of Suit (clubs, diamonds, hearts, spades)"
     )
   }

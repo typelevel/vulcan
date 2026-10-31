@@ -26,7 +26,7 @@ object AvroFieldDefaultSpec extends BaseSuite {
   }
 
   pureTest("AvroFieldDefault should succeed when annotating an Option") {
-    expectSchemaIs[HasOptionDefault](
+    expectSchema[HasOptionDefault](
       """{"type":"record","name":"HasOptionDefault","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"a","type":["null","string"],"default":"foo"}]}"""
     )
   }
@@ -40,24 +40,24 @@ object AvroFieldDefaultSpec extends BaseSuite {
   }
 
   pureTest("AvroFieldDefault should succeed with the first member of a union") {
-    expectSchemaIs[HasUnion](
+    expectSchema[HasUnion](
       """{"type":"record","name":"HasUnion","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"u","type":[{"type":"record","name":"A","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"a","type":"int"}]},{"type":"record","name":"B","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"b","type":"string"}]}],"default":{"a":1}}]}"""
     ) &&
-    expectDecodeIs[HasUnion](
+    expectDecode[HasUnion](
       Codec[Empty].encode(Empty()),
-      Right(HasUnion(Union.A(1))),
-      Codec[Empty].schema
+      Codec[Empty].schema,
+      HasUnion(Union.A(1))
     )
   }
 
   pureTest("AvroFieldDefault should succeed with the second member of a union") {
-    expectSchemaIs[HasUnionSecond](
+    expectSchema[HasUnionSecond](
       """{"type":"record","name":"HasUnionSecond","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"u","type":[{"type":"record","name":"A","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"a","type":"int"}]},{"type":"record","name":"B","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"b","type":"string"}]}],"default":{"b":"foo"}}]}"""
     ) &&
-    expectDecodeIs[HasUnionSecond](
+    expectDecode[HasUnionSecond](
       Codec[Empty].encode(Empty()),
-      Right(HasUnionSecond(Union.B("foo"))),
-      Codec[Empty].schema
+      Codec[Empty].schema,
+      HasUnionSecond(Union.B("foo"))
     )
   }
 }
