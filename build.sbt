@@ -324,6 +324,10 @@ lazy val tests = crossProject(JVMPlatform, JSPlatform, NativePlatform)
       "org.slf4j" % "slf4j-nop" % slf4jNopVersion % Test
     )
   )
+  .nativeSettings(
+    // Increase initial heap size to work around https://github.com/scala-native/scala-native/issues/5086
+    nativeConfig ~= (_.withCompileOptions(_ :+ "-DGC_INITIAL_HEAP_SIZE=64m"))
+  )
 
 lazy val unidocs = project
   .enablePlugins(TypelevelUnidocPlugin)
