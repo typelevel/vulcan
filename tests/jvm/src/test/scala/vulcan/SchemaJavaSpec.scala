@@ -9,12 +9,17 @@ package vulcan
 import io.circe.Json
 import org.apache.avro.Schema as JavaSchema
 import org.scalacheck.Gen
+import scala.util.Failure
 import scala.util.Random
 import scala.util.Success
 import scala.util.Try
+import weaver.scalacheck.CheckConfig
 
 /** Checks schemas against the Java Avro library. */
 object SchemaJavaSpec extends BaseSuite {
+  override def checkConfig: CheckConfig =
+    super.checkConfig.withMinimumSuccessful(1000)
+
   private val backslash: String = "\\"
 
   private val letter: String = 0xe9.toChar.toString
@@ -242,7 +247,7 @@ object SchemaJavaSpec extends BaseSuite {
   }
 
   test("Schema toString should print the same as the Java Avro library") {
-    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(SchemaGenerators.genSchema) { schema =>
+    forall(SchemaGenerators.genSchema) { schema =>
       val printed = schema.toString
       val parsed = new JavaSchema.Parser().parse(printed)
       expect.eql(printed, parsed.toString)
@@ -252,11 +257,10 @@ object SchemaJavaSpec extends BaseSuite {
   test("Schema parse should parse the same as the Java Avro library") {
     val seeds = Gen.choose(Long.MinValue, Long.MaxValue)
 
-    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(Gen.zip(SchemaGenerators.genSchema, seeds)) {
-      case (schema, seed) =>
-        val json = shuffleKeys(schema.toJson, new Random(seed)).spaces2
-        val expected = new JavaSchema.Parser().parse(json).toString
-        expect.same(Right(expected), Schema.parse(json).map(_.toString))
+    forall(Gen.zip(SchemaGenerators.genSchema, seeds)) { case (schema, seed) =>
+      val json = shuffleKeys(schema.toJson, new Random(seed)).spaces2
+      val expected = new JavaSchema.Parser().parse(json).toString
+      expect.same(Right(expected), Schema.parse(json).map(_.toString))
     }
   }
 
@@ -270,20 +274,22 @@ object SchemaJavaSpec extends BaseSuite {
 
   Rejected.foreach { case (description, json) =>
     pureTest(s"Schema parse should reject $description, same as the Java Avro library") {
-      expect(javaParse(json).isFailure) && expect(Schema.parse(json).isLeft)
+      matches(javaParse(json)) { case Failure(_) => success } &&
+      matches(Schema.parse(json)) { case Left(_) => success }
     }
   }
 
   Lenient.foreach { case (description, json, printed) =>
     pureTest(s"Schema parse should accept $description") {
-      expect(javaParse(json).isFailure) &&
+      matches(javaParse(json)) { case Failure(_) => success } &&
       expect.same(Right(printed), Schema.parse(json).map(_.toString))
     }
   }
 
   Strict.foreach { case (description, json) =>
     pureTest(s"Schema parse should reject $description") {
-      expect(javaParse(json).isSuccess) && expect(Schema.parse(json).isLeft)
+      matches(javaParse(json)) { case Success(_) => success } &&
+      matches(Schema.parse(json)) { case Left(_) => success }
     }
   }
 }

@@ -9,11 +9,10 @@ package vulcan.generic
 import io.circe.Json
 import vulcan.BaseSuite
 import vulcan.Codec
-import vulcan.CodecSpecHelpers
 import vulcan.Schema
 import vulcan.generic.examples.AvroRecordDefault.*
 
-object AvroFieldDefaultSpec extends BaseSuite with CodecSpecHelpers {
+object AvroFieldDefaultSpec extends BaseSuite {
   private def fieldDefault[A](name: String)(implicit codec: Codec[A]): Option[Json] =
     codec.schema match {
       case Right(record: Schema.Record) => record.fields.find(_.name == name).flatMap(_.default)

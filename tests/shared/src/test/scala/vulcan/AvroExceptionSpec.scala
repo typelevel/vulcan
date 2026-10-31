@@ -22,8 +22,7 @@ object AvroExceptionSpec extends BaseSuite {
   test("AvroException should have no cause unless specified") {
     forall { (message: String) =>
       val exception = AvroException(message)
-      expect(exception.cause.isEmpty) &&
-      expect(exception.getCause() == null)
+      expect.all(exception.cause.isEmpty, exception.getCause() == null)
     }
   }
 
@@ -31,8 +30,7 @@ object AvroExceptionSpec extends BaseSuite {
     forall { (message: String) =>
       val cause = new IllegalArgumentException(message)
       val exception = AvroException(message, cause)
-      expect(exception.cause.contains(cause)) &&
-      expect(exception.getCause() eq cause)
+      expect.all(exception.cause.contains(cause), exception.getCause() eq cause)
     }
   }
 
@@ -48,30 +46,29 @@ object AvroExceptionSpec extends BaseSuite {
 
   pureTest("AvroException ErrorDecodingType should have the exception decoding the type as cause") {
     val decoder = Codec[Int].decoder(Schema.Boolean)
-    matches(decoder.flatMap(_.decode(AvroValue.Boolean(true)))) { case Left(exception) =>
-      expect(exception.isInstanceOf[AvroException.ErrorDecodingType]) &&
-      expect(exception.getCause().isInstanceOf[AvroException.UnexpectedSchemaType])
+    matches(decoder.flatMap(_.decode(AvroValue.Boolean(true)))) {
+      case Left(exception: AvroException.ErrorDecodingType) =>
+        matches(exception.getCause()) { case _: AvroException.UnexpectedSchemaType => success }
     }
   }
 
   pureTest("AvroException InvalidBinary should be the exception for invalid binary") {
     val decoder = Codec[Int].binaryDecoder(Schema.Int)
-    matches(decoder.flatMap(_.decode(ByteVector.empty))) { case Left(exception) =>
-      expect(exception.isInstanceOf[AvroException.InvalidBinary])
+    matches(decoder.flatMap(_.decode(ByteVector.empty))) { case Left(_: AvroException.InvalidBinary) =>
+      success
     }
   }
 
   pureTest("AvroException InvalidJson should be the exception for invalid JSON") {
     val decoder = Codec[Int].jsonDecoder(Schema.Int)
-    matches(decoder.flatMap(_.decode(Json.fromString("1")))) { case Left(exception) =>
-      expect(exception.isInstanceOf[AvroException.InvalidJson])
+    matches(decoder.flatMap(_.decode(Json.fromString("1")))) { case Left(_: AvroException.InvalidJson) =>
+      success
     }
   }
 
   pureTest("AvroException InvalidSchema should have the parsing failure as cause for invalid JSON") {
-    matches(Schema.parse("{")) { case Left(exception) =>
-      expect(exception.isInstanceOf[AvroException.InvalidSchema]) &&
-      expect(exception.getCause().isInstanceOf[ParsingFailure])
+    matches(Schema.parse("{")) { case Left(exception: AvroException.InvalidSchema) =>
+      matches(exception.getCause()) { case _: ParsingFailure => success }
     }
   }
 }

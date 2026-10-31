@@ -9,8 +9,12 @@ package vulcan
 import io.circe.Json
 import scodec.bits.*
 import vulcan.internal.JsonPrinter
+import weaver.scalacheck.CheckConfig
 
 object JsonValueSpec extends BaseSuite {
+  override def checkConfig: CheckConfig =
+    super.checkConfig.withMinimumSuccessful(1000)
+
   private def encode(schema: Schema, value: AvroValue): Either[String, String] =
     JsonEncoder(schema).flatMap(_.encode(value)).left.map(_.message).map(JsonPrinter.print)
 
@@ -49,9 +53,8 @@ object JsonValueSpec extends BaseSuite {
     )
 
   test("JsonEncoder and JsonDecoder should decode encoded values") {
-    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(AvroValueGenerators.genSchemaAndValue) {
-      case (schema, value) =>
-        expect.same(Right(value), encode(schema, value).flatMap(decode(schema, _)))
+    forall(AvroValueGenerators.genSchemaAndValue) { case (schema, value) =>
+      expect.same(Right(value), encode(schema, value).flatMap(decode(schema, _)))
     }
   }
 
@@ -197,7 +200,7 @@ object JsonValueSpec extends BaseSuite {
     val error =
       s"Invalid depth ${limit + 1}, exceeding the limit of $limit nested values of recursive schemas"
 
-    expect(decoder.flatMap(_.decode(nodes(limit + 1))).isRight) &&
+    matches(decoder.flatMap(_.decode(nodes(limit + 1)))) { case Right(_) => success } &&
     expect.same(Left(error), decoder.flatMap(_.decode(nodes(limit + 2))).left.map(_.message)) &&
     expect.same(Left(error), decoder.flatMap(_.decode(nodes(100000))).left.map(_.message))
   }

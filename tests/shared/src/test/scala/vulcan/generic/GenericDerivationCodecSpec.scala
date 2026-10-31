@@ -9,11 +9,10 @@ package vulcan.generic
 import vulcan.AvroValue
 import vulcan.BaseSuite
 import vulcan.Codec
-import vulcan.CodecSpecHelpers
 import vulcan.Schema
 import vulcan.generic.examples.*
 
-object GenericDerivationCodecSpec extends BaseSuite with CodecSpecHelpers {
+object GenericDerivationCodecSpec extends BaseSuite {
   pureTest("Codec derive caseClass schema should encode value classes as underlying type") {
     expectSchemaIs[CaseClassValueClass] {
       """"int""""

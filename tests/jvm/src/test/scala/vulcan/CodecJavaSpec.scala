@@ -457,7 +457,7 @@ object CodecJavaSpec extends BaseSuite {
           .map(reader.fromJava)
 
       (decoded, javaDecoded) match {
-        case (Right(a), Right(javaA)) => expect(same(a, javaA))
+        case (Right(a), Right(javaA)) => expect(same(clue(a), clue(javaA)))
         case (Left(_), Left(_)) => success
         // The Java Avro library checks the remaining bytes using the minimum size of reader items,
         // so rejects collections of items promoted to larger types, for example from int to float

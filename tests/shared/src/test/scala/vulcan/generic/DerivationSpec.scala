@@ -7,11 +7,9 @@
 package vulcan.generic
 
 import vulcan.BaseSuite
-import vulcan.CodecSpecHelpers
-import vulcan.RoundtripHelpers
 import vulcan.generic.examples.*
 
-object DerivationSpec extends BaseSuite with RoundtripHelpers with CodecSpecHelpers {
+object DerivationSpec extends BaseSuite {
   pureTest("Codec deriveEnum schema should derive name, namespace, doc") {
     expectSchemaIs[CaseClassEnumAvroDoc] {
       """{"type":"enum","name":"CaseClassEnumAvroDoc","namespace":"vulcan.generic.examples","doc":"documentation","symbols":["first"]}"""

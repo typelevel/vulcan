@@ -7,10 +7,9 @@
 package vulcan.generic
 
 import vulcan.BaseSuite
-import vulcan.RoundtripHelpers
 import vulcan.generic.examples.*
 
-object GenericDerivationRoundtripSpec extends BaseSuite with RoundtripHelpers {
+object GenericDerivationRoundtripSpec extends BaseSuite {
   test("derive CaseClassAvroNamespace") { roundtrip[CaseClassAvroNamespace] }
   test("derive CaseClassField") { roundtrip[CaseClassField] }
   test("derive SealedTraitCaseClassAvroNamespace") { roundtrip[SealedTraitCaseClassAvroNamespace] }

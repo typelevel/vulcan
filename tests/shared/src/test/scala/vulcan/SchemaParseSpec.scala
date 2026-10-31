@@ -26,8 +26,8 @@ object SchemaParseSpec extends BaseSuite {
   }
 
   pureTest("Schema parse should parse primitives as type names and objects") {
-    expect(parse("\"int\"").exists(_ eq Schema.Int)) &&
-    expect(parse("""{"type":"string"}""").exists(_ eq Schema.String))
+    matches(parse("\"int\"")) { case Right(schema) => expect(schema eq Schema.Int) } &&
+    matches(parse("""{"type":"string"}""")) { case Right(schema) => expect(schema eq Schema.String) }
   }
 
   pureTest("Schema parse should keep props of primitives, including logical types") {
@@ -42,7 +42,9 @@ object SchemaParseSpec extends BaseSuite {
   }
 
   pureTest("Schema parse should ignore reserved attributes of primitives") {
-    expect(parse("""{"type":"int","name":"Int","doc":"documentation"}""").exists(_ eq Schema.Int))
+    matches(parse("""{"type":"int","name":"Int","doc":"documentation"}""")) { case Right(schema) =>
+      expect(schema eq Schema.Int)
+    }
   }
 
   pureTest("Schema parse should parse records") {
@@ -285,7 +287,9 @@ object SchemaParseSpec extends BaseSuite {
   }
 
   pureTest("Schema parse should reject invalid JSON") {
-    expect(parse("""{"type":"int"""").left.exists(_.startsWith("Invalid JSON: ")))
+    matches(parse("""{"type":"int"""")) { case Left(message) =>
+      expect(clue(message).startsWith("Invalid JSON: "))
+    }
   }
 
   pureTest("Schema parse should reject invalid schemas") {

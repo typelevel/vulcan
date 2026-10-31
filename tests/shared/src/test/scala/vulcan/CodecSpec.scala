@@ -21,10 +21,8 @@ import scala.util.Try
 import scodec.bits.*
 import vulcan.Codec.InstantMicros
 import vulcan.examples.*
-import weaver.Expectations
-import weaver.SourceLocation
 
-object CodecSpec extends BaseSuite with CodecSpecHelpers {
+object CodecSpec extends BaseSuite {
   pureTest("Codec binaryDecoder should decode values using the writer schema") {
     val decoder = Codec[Long].binaryDecoder(Schema.Int)
     expect.same(Right(1L), decoder.flatMap(_.decode(hex"02"))) &&
@@ -2096,46 +2094,51 @@ object CodecSpec extends BaseSuite with CodecSpecHelpers {
     }
 
     pureTest("Codec option.union encode should encode none as null") {
-      expect.same(Right(AvroValue.Union(0, AvroValue.Null)), codec.encode(None))
+      expectEncodeIs[Option[FirstOrSecond]](
+        None,
+        Right(AvroValue.Union(0, AvroValue.Null))
+      )
     }
 
     test("Codec option.union encode should encode first as int") {
       forall { (n: Int) =>
-        expect.same(Right(AvroValue.Union(1, AvroValue.Int(n))), codec.encode(Some(First(n))))
+        expectEncodeIs[Option[FirstOrSecond]](
+          Some(First(n)),
+          Right(AvroValue.Union(1, AvroValue.Int(n)))
+        )
       }
     }
 
     test("Codec option.union encode should encode second as double") {
       forall { (n: Double) =>
-        expect.same(Right(AvroValue.Union(2, AvroValue.Double(n))), codec.encode(Some(Second(n))))
+        expectEncodeIs[Option[FirstOrSecond]](
+          Some(Second(n)),
+          Right(AvroValue.Union(2, AvroValue.Double(n)))
+        )
       }
     }
 
     pureTest("Codec option.union decode should decode null as none") {
-      expect.same(
-        Right(None),
-        codec.schema
-          .flatMap(codec.decoder)
-          .flatMap(_.decode(AvroValue.Union(0, AvroValue.Null)))
+      expectDecodeIs[Option[FirstOrSecond]](
+        Right(AvroValue.Union(0, AvroValue.Null)),
+        Right(None)
       )
     }
 
     test("Codec option.union decode should decode int as first") {
-      val decoder = codec.schema.flatMap(codec.decoder)
       forall { (n: Int) =>
-        expect.same(
-          Right(Some(First(n))),
-          decoder.flatMap(_.decode(AvroValue.Union(1, AvroValue.Int(n))))
+        expectDecodeIs[Option[FirstOrSecond]](
+          Right(AvroValue.Union(1, AvroValue.Int(n))),
+          Right(Some(First(n)))
         )
       }
     }
 
     test("Codec option.union decode should decode double as second") {
-      val decoder = codec.schema.flatMap(codec.decoder)
       forall { (n: Double) =>
-        expect.same(
-          Right(Some(Second(n))),
-          decoder.flatMap(_.decode(AvroValue.Union(2, AvroValue.Double(n))))
+        expectDecodeIs[Option[FirstOrSecond]](
+          Right(AvroValue.Union(2, AvroValue.Double(n))),
+          Right(Some(Second(n)))
         )
       }
     }
@@ -3310,54 +3313,4 @@ object CodecSpec extends BaseSuite with CodecSpecHelpers {
       )
     }
   }
-}
-
-trait CodecSpecHelpers {
-  self: BaseSuite =>
-
-  def expectSchemaIs[A](
-    expectedSchema: String
-  )(implicit codec: Codec[A], loc: SourceLocation): Expectations =
-    expect.same(Right(expectedSchema), codec.schema.map(_.toString))
-
-  def expectEncodeIs[A](
-    a: A,
-    encoded: Either[AvroException, AvroValue]
-  )(implicit codec: Codec[A], loc: SourceLocation): Expectations =
-    expect.same(encoded, codec.encode(a))
-
-  def expectDecodeIs[A](
-    value: Either[AvroException, AvroValue],
-    decoded: Either[AvroException, A]
-  )(implicit codec: Codec[A], loc: SourceLocation): Expectations =
-    expectDecodeIs(value, decoded, codec.schema)
-
-  def expectDecodeIs[A](
-    value: Either[AvroException, AvroValue],
-    decoded: Either[AvroException, A],
-    schema: Either[AvroException, Schema]
-  )(implicit codec: Codec[A], loc: SourceLocation): Expectations =
-    whenSuccess((value, schema).tupled) { case (v, s) =>
-      expect.same(decoded, codec.decoder(s).flatMap(_.decode(v)))
-    }
-
-  def expectSchemaError[A](
-    expectedErrorMessage: String
-  )(implicit codec: Codec[A], loc: SourceLocation): Expectations =
-    expect.same(Left(expectedErrorMessage), codec.schema.left.map(_.message))
-
-  def expectDecodeError[A](
-    value: Either[AvroException, AvroValue],
-    schema: Either[AvroException, Schema],
-    expectedErrorMessage: String
-  )(implicit codec: Codec[A], loc: SourceLocation): Expectations =
-    whenSuccess((value, schema).tupled) { case (v, s) =>
-      expect.same(Left(expectedErrorMessage), codec.decoder(s).flatMap(_.decode(v)).left.map(_.message))
-    }
-
-  def expectEncodeError[A](
-    a: A,
-    expectedErrorMessage: String
-  )(implicit codec: Codec[A], loc: SourceLocation): Expectations =
-    expect.same(Left(expectedErrorMessage), codec.encode(a).left.map(_.message))
 }

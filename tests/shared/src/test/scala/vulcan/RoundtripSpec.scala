@@ -23,7 +23,7 @@ import scodec.bits.ByteVector
 import vulcan.Codec.InstantMicros
 import vulcan.examples.*
 
-object RoundtripSpec extends BaseSuite with RoundtripHelpers {
+object RoundtripSpec extends BaseSuite {
   test("BigDecimal roundtrip") {
     implicit val bigDecimalCodec: Codec[BigDecimal] =
       Codec.decimal(precision = 10, scale = 5)
@@ -62,19 +62,10 @@ object RoundtripSpec extends BaseSuite with RoundtripHelpers {
   test("Double roundtrip") { roundtrip[Double] }
 
   pureTest("Double roundtrip negative zero") {
-    val codec = Codec[Double]
-    val bits = java.lang.Double.doubleToRawLongBits(-0.0d)
-    val decoded = List(
-      for {
-        binary <- codec.binaryEncoder.flatMap(_.encode(-0.0d))
-        decoded <- codec.binaryDecoder(Schema.Double).flatMap(_.decode(binary))
-      } yield decoded,
-      for {
-        json <- codec.jsonEncoder.flatMap(_.encode(-0.0d))
-        decoded <- codec.jsonDecoder(Schema.Double).flatMap(_.decode(json))
-      } yield decoded
-    )
-    forEach(decoded)(double => expect.same(Right(bits), double.map(java.lang.Double.doubleToRawLongBits)))
+    implicit val doubleBitsEq: Eq[Double] =
+      Eq.by(java.lang.Double.doubleToRawLongBits(_))
+
+    roundtrip(-0.0d)
   }
 
   test("Either roundtrip") { roundtrip[Either[Int, String]] }
@@ -86,19 +77,10 @@ object RoundtripSpec extends BaseSuite with RoundtripHelpers {
   test("Float roundtrip") { roundtrip[Float] }
 
   pureTest("Float roundtrip negative zero") {
-    val codec = Codec[Float]
-    val bits = java.lang.Float.floatToRawIntBits(-0.0f)
-    val decoded = List(
-      for {
-        binary <- codec.binaryEncoder.flatMap(_.encode(-0.0f))
-        decoded <- codec.binaryDecoder(Schema.Float).flatMap(_.decode(binary))
-      } yield decoded,
-      for {
-        json <- codec.jsonEncoder.flatMap(_.encode(-0.0f))
-        decoded <- codec.jsonDecoder(Schema.Float).flatMap(_.decode(json))
-      } yield decoded
-    )
-    forEach(decoded)(float => expect.same(Right(bits), float.map(java.lang.Float.floatToRawIntBits)))
+    implicit val floatBitsEq: Eq[Float] =
+      Eq.by(java.lang.Float.floatToRawIntBits(_))
+
+    roundtrip(-0.0f)
   }
 
   test("Instant roundtrip") {

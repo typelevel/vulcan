@@ -6,6 +6,7 @@
 
 package vulcan.refined
 
+import cats.Eq
 import cats.Show
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.scalacheck.numeric.*
@@ -18,31 +19,20 @@ object RefinedSpec extends BaseSuite {
   implicit def refinedShow[T, P]: Show[Refined[T, P]] =
     Show.fromToString
 
-  test("Refined should succeed for values conforming to predicate") {
-    forall { (posInt: PosInt) =>
-      val codec = Codec[PosInt]
-      val decoded =
-        for {
-          schema <- codec.schema
-          encoded <- codec.encoder.flatMap(_.encode(posInt))
-          decoded <- codec.decoder(schema).flatMap(_.decode(encoded))
-        } yield decoded
+  implicit def refinedEq[T, P]: Eq[Refined[T, P]] =
+    Eq.fromUniversalEquals
 
-      expect.same(Right(posInt), decoded)
-    }
+  test("Refined should succeed for values conforming to predicate") {
+    roundtrip[PosInt]
   }
 
   test("Refined should fail for values not conforming to predicate") {
     forall { (nonPosInt: NonPosInt) =>
-      val codec = Codec[PosInt]
-      val decoded =
-        for {
-          schema <- codec.schema
-          encoded <- Codec[Int].encoder.flatMap(_.encode(nonPosInt.value))
-          decoded <- codec.decoder(schema).flatMap(_.decode(encoded))
-        } yield decoded
-
-      expect.same(Left(s"Predicate failed: ($nonPosInt > 0)."), decoded.left.map(_.message))
+      expectDecodeError[PosInt](
+        Codec[Int].encode(nonPosInt.value),
+        Codec[PosInt].schema,
+        s"Predicate failed: ($nonPosInt > 0)."
+      )
     }
   }
 }

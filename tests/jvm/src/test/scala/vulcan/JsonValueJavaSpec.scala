@@ -8,16 +8,20 @@ package vulcan
 
 import org.scalacheck.Gen
 import vulcan.internal.JsonPrinter
+import weaver.scalacheck.CheckConfig
 
 /** Checks the JSON encoding of values against the Java Avro library. */
 object JsonValueJavaSpec extends BaseSuite {
+  override def checkConfig: CheckConfig =
+    super.checkConfig.withMinimumSuccessful(1000)
+
   private val genSchemaAndValue: Gen[(Schema, AvroValue)] =
     AvroValueGenerators.genSchemaAndValue.map { case (schema, value) =>
       (Schema.Array(schema), AvroValue.Array(Vector(value)))
     }
 
   test("JsonEncoder should encode the same as the Java Avro library") {
-    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(genSchemaAndValue) { case (schema, value) =>
+    forall(genSchemaAndValue) { case (schema, value) =>
       val javaSchema = JavaAvro.schema(schema)
       val javaJson = JavaAvro.writeJson(javaSchema, JavaAvro.toJava(value, schema, javaSchema))
       whenSuccess(io.circe.jawn.parse(javaJson)) { json =>
@@ -27,7 +31,7 @@ object JsonValueJavaSpec extends BaseSuite {
   }
 
   test("JsonEncoder should encode values which the Java Avro library decodes") {
-    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(genSchemaAndValue) { case (schema, value) =>
+    forall(genSchemaAndValue) { case (schema, value) =>
       val javaSchema = JavaAvro.schema(schema)
       whenSuccess(JsonEncoder(schema).flatMap(_.encode(value))) { json =>
         val javaBytes =
@@ -41,7 +45,7 @@ object JsonValueJavaSpec extends BaseSuite {
   }
 
   test("JsonDecoder should decode values encoded by the Java Avro library") {
-    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(genSchemaAndValue) { case (schema, value) =>
+    forall(genSchemaAndValue) { case (schema, value) =>
       val javaSchema = JavaAvro.schema(schema)
       val javaJson = JavaAvro.writeJson(javaSchema, JavaAvro.toJava(value, schema, javaSchema))
       whenSuccess(io.circe.jawn.parse(javaJson)) { json =>

@@ -9,8 +9,12 @@ package vulcan
 import scodec.bits.*
 import vulcan.internal.BinaryReader
 import vulcan.internal.BinaryWriter
+import weaver.scalacheck.CheckConfig
 
 object BinaryValueSpec extends BaseSuite {
+  override def checkConfig: CheckConfig =
+    super.checkConfig.withMinimumSuccessful(1000)
+
   private def encode(schema: Schema, value: AvroValue): Either[String, ByteVector] =
     BinaryEncoder(schema).flatMap(_.encode(value)).left.map(_.message)
 
@@ -59,9 +63,8 @@ object BinaryValueSpec extends BaseSuite {
     )
 
   test("BinaryEncoder and BinaryDecoder should decode encoded values") {
-    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(AvroValueGenerators.genSchemaAndValue) {
-      case (schema, value) =>
-        expect.same(Right(value), encode(schema, value).flatMap(decode(schema, _)))
+    forall(AvroValueGenerators.genSchemaAndValue) { case (schema, value) =>
+      expect.same(Right(value), encode(schema, value).flatMap(decode(schema, _)))
     }
   }
 
@@ -268,7 +271,7 @@ object BinaryValueSpec extends BaseSuite {
     val error =
       s"Invalid depth ${limit + 1} at position ${2 * (limit + 1)}, exceeding the limit of $limit nested values of recursive schemas"
 
-    expect(decode(node, nodes(limit + 1)).isRight) &&
+    matches(decode(node, nodes(limit + 1))) { case Right(_) => success } &&
     expect.same(Left(error), decode(node, nodes(limit + 2))) &&
     expect.same(Left(error), decode(node, nodes(100000)))
   }

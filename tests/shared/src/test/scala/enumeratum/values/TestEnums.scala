@@ -6,6 +6,7 @@
 
 package enumeratum.values
 
+import cats.Eq
 import vulcan.generic.AvroDoc
 import vulcan.generic.AvroNamespace
 
@@ -21,6 +22,9 @@ object CustomByteEnum extends ByteEnum[CustomByteEnum] with ByteVulcanEnum[Custo
   override def withValueOpt(i: Byte): Option[CustomByteEnum] =
     if (i == 3) None
     else super.withValueOpt(i)
+
+  implicit val customByteEnumEq: Eq[CustomByteEnum] =
+    Eq.fromUniversalEquals
 }
 
 sealed abstract class CustomCharEnum(val value: Char) extends CharEnumEntry
@@ -35,6 +39,9 @@ object CustomCharEnum extends CharEnum[CustomCharEnum] with CharVulcanEnum[Custo
   override def withValueOpt(c: Char): Option[CustomCharEnum] =
     if (c == '3') None
     else super.withValueOpt(c)
+
+  implicit val customCharEnumEq: Eq[CustomCharEnum] =
+    Eq.fromUniversalEquals
 }
 
 sealed abstract class CustomIntEnum(val value: Int) extends IntEnumEntry
@@ -49,6 +56,9 @@ object CustomIntEnum extends IntEnum[CustomIntEnum] with IntVulcanEnum[CustomInt
   override def withValueOpt(i: Int): Option[CustomIntEnum] =
     if (i == 3) None
     else super.withValueOpt(i)
+
+  implicit val customIntEnumEq: Eq[CustomIntEnum] =
+    Eq.fromUniversalEquals
 }
 
 sealed abstract class CustomLongEnum(val value: Long) extends LongEnumEntry
@@ -63,6 +73,9 @@ object CustomLongEnum extends LongEnum[CustomLongEnum] with LongVulcanEnum[Custo
   override def withValueOpt(l: Long): Option[CustomLongEnum] =
     if (l == 3L) None
     else super.withValueOpt(l)
+
+  implicit val customLongEnumEq: Eq[CustomLongEnum] =
+    Eq.fromUniversalEquals
 }
 
 sealed abstract class CustomShortEnum(val value: Short) extends ShortEnumEntry
@@ -77,6 +90,9 @@ object CustomShortEnum extends ShortEnum[CustomShortEnum] with ShortVulcanEnum[C
   override def withValueOpt(s: Short): Option[CustomShortEnum] =
     if (s == 3) None
     else super.withValueOpt(s)
+
+  implicit val customShortEnumEq: Eq[CustomShortEnum] =
+    Eq.fromUniversalEquals
 }
 
 @AvroNamespace("com.example")
@@ -93,4 +109,7 @@ object CustomStringEnum extends StringEnum[CustomStringEnum] with StringVulcanEn
   override def withValueOpt(s: String): Option[CustomStringEnum] =
     if (s == "third") None
     else super.withValueOpt(s)
+
+  implicit val customStringEnumEq: Eq[CustomStringEnum] =
+    Eq.fromUniversalEquals
 }

@@ -48,9 +48,7 @@ object SchemaSpec extends BaseSuite {
 
   pureTest("Schema Record should not have optional attributes by default") {
     val record = Schema.Record(Schema.Name("Person"), Vector.empty)
-    expect(record.doc.isEmpty) &&
-    expect(record.aliases.isEmpty) &&
-    expect(record.props.isEmpty)
+    expect.all(record.doc.isEmpty, record.aliases.isEmpty, record.props.isEmpty)
   }
 
   pureTest("Schema Record should replace attributes using modifiers") {
@@ -90,9 +88,11 @@ object SchemaSpec extends BaseSuite {
   }
 
   pureTest("Schema primitive should be the companion object without props") {
-    expect(Schema.String.props.isEmpty) &&
-    expect(Schema.String.withProps(JsonObject.empty) eq Schema.String) &&
-    expect(Schema.String.withProps(props).withProps(JsonObject.empty) eq Schema.String)
+    expect.all(
+      Schema.String.props.isEmpty,
+      Schema.String.withProps(JsonObject.empty) eq Schema.String,
+      Schema.String.withProps(props).withProps(JsonObject.empty) eq Schema.String
+    )
   }
 
   pureTest("Schema primitive should be equal with equal props") {
@@ -121,8 +121,7 @@ object SchemaSpec extends BaseSuite {
   }
 
   pureTest("Schema isNullable should be false for other schemas") {
-    expect(!Schema.Int.isNullable) &&
-    expect(!Schema.Array(Schema.Null).isNullable)
+    expect.all(!Schema.Int.isNullable, !Schema.Array(Schema.Null).isNullable)
   }
 
   pureTest("Schema logicalType should add the logical type followed by its parameters to the props") {
@@ -165,20 +164,24 @@ object SchemaSpec extends BaseSuite {
   }
 
   pureTest("Schema logicalType should ignore logical types which are invalid for the underlying type") {
-    expect(Schema.String.withProps(withLogicalTypeProp("timestamp-millis")).logicalType.isEmpty) &&
-    expect(Schema.Int.withProps(withLogicalTypeProp("timestamp-millis")).logicalType.isEmpty) &&
-    expect(Schema.Long.withProps(withLogicalTypeProp("date")).logicalType.isEmpty) &&
-    expect(Schema.Bytes.withProps(withLogicalTypeProp("uuid")).logicalType.isEmpty) &&
-    expect(fixed(8).withLogicalType(LogicalType.uuid).logicalType.isEmpty) &&
-    expect(fixed(11).withLogicalType(LogicalType.duration).logicalType.isEmpty)
+    expect.all(
+      Schema.String.withProps(withLogicalTypeProp("timestamp-millis")).logicalType.isEmpty,
+      Schema.Int.withProps(withLogicalTypeProp("timestamp-millis")).logicalType.isEmpty,
+      Schema.Long.withProps(withLogicalTypeProp("date")).logicalType.isEmpty,
+      Schema.Bytes.withProps(withLogicalTypeProp("uuid")).logicalType.isEmpty,
+      fixed(8).withLogicalType(LogicalType.uuid).logicalType.isEmpty,
+      fixed(11).withLogicalType(LogicalType.duration).logicalType.isEmpty
+    )
   }
 
   pureTest("Schema logicalType should ignore decimals with invalid precision or scale") {
-    expect(Schema.Bytes.withLogicalType(LogicalType.decimal(0, 0)).logicalType.isEmpty) &&
-    expect(Schema.Bytes.withLogicalType(LogicalType.decimal(2, 3)).logicalType.isEmpty) &&
-    expect(Schema.Bytes.withLogicalType(LogicalType.decimal(2, -1)).logicalType.isEmpty) &&
-    expect(Schema.Bytes.withProps(withLogicalTypeProp("decimal")).logicalType.isEmpty) &&
-    expect(fixed(4).withLogicalType(LogicalType.decimal(10, 2)).logicalType.isEmpty)
+    expect.all(
+      Schema.Bytes.withLogicalType(LogicalType.decimal(0, 0)).logicalType.isEmpty,
+      Schema.Bytes.withLogicalType(LogicalType.decimal(2, 3)).logicalType.isEmpty,
+      Schema.Bytes.withLogicalType(LogicalType.decimal(2, -1)).logicalType.isEmpty,
+      Schema.Bytes.withProps(withLogicalTypeProp("decimal")).logicalType.isEmpty,
+      fixed(4).withLogicalType(LogicalType.decimal(10, 2)).logicalType.isEmpty
+    )
   }
 
   pureTest("Schema logicalType should default the decimal scale to zero") {
@@ -201,7 +204,9 @@ object SchemaSpec extends BaseSuite {
   }
 
   pureTest("Schema logicalType should be empty for unions and references") {
-    expect(Schema.Union(Vector(Schema.Int)).logicalType.isEmpty) &&
-    expect(Schema.Ref(Schema.Name("Record")).logicalType.isEmpty)
+    expect.all(
+      Schema.Union(Vector(Schema.Int)).logicalType.isEmpty,
+      Schema.Ref(Schema.Name("Record")).logicalType.isEmpty
+    )
   }
 }
