@@ -27,7 +27,7 @@ abstract class BaseSuite extends SimpleIOSuite with Checkers {
 
   /** Expects the codec schema to fail with the given error message. */
   def expectSchemaError[A](message: String)(implicit codec: Codec[A], loc: SourceLocation): Expectations =
-    expect.same(Left(message), codec.schema.left.map(_.message))
+    expect.eql(Left(message), codec.schema.left.map(_.message))
 
   /** Expects the codec to encode `a` as `value`. */
   def expectEncode[A](a: A, value: AvroValue)(implicit codec: Codec[A], loc: SourceLocation): Expectations =
@@ -38,7 +38,7 @@ abstract class BaseSuite extends SimpleIOSuite with Checkers {
     a: A,
     message: String
   )(implicit codec: Codec[A], loc: SourceLocation): Expectations =
-    expect.same(Left(message), codec.encode(a).left.map(_.message))
+    expect.eql(Left(message), codec.encode(a).left.map(_.message))
 
   /** Expects the codec to decode `value`, written with the codec schema, as `a`. */
   def expectDecode[A](

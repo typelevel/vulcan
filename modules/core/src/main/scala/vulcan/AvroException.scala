@@ -6,6 +6,7 @@
 
 package vulcan
 
+import cats.Show
 import io.circe.Json
 import scala.util.control.NoStackTrace
 import vulcan.internal.JsonPrinter
@@ -35,6 +36,9 @@ object AvroException {
     */
   def apply(message: String, cause: Throwable): AvroException =
     new AvroException(message, Some(cause))
+
+  implicit final val avroExceptionShow: Show[AvroException] =
+    Show.fromToString
 
   /**
     * Exception raised when the Avro binary encoding of a value
@@ -364,6 +368,16 @@ object AvroException {
   final class UnexpectedSchemaType private[vulcan] (writerSchema: Schema, expectedType: String)
     extends AvroException(
       s"Got unexpected schema type ${SchemaNames.typeName(writerSchema)}, expected schema type $expectedType"
+    )
+
+  /**
+    * Exception raised when a codec is `null`, for example when a
+    * codec `val` is used before it has been initialized.
+    */
+  final class UninitializedCodec private[vulcan] (description: String)
+    extends AvroException(
+      s"Got unexpected null codec for $description; " +
+        "use lazy val or def for codecs used before their definition"
     )
 
   /**

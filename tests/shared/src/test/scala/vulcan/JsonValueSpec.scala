@@ -54,7 +54,7 @@ object JsonValueSpec extends BaseSuite {
 
   test("JsonEncoder and JsonDecoder should decode encoded values") {
     forall(AvroValueGenerators.genSchemaAndValue) { case (schema, value) =>
-      expect.same(Right(value), encode(schema, value).flatMap(decode(schema, _)))
+      expect.eql(Right(value), encode(schema, value).flatMap(decode(schema, _)))
     }
   }
 
@@ -103,7 +103,7 @@ object JsonValueSpec extends BaseSuite {
 
     forEach(examples) { case (schema, value, json) =>
       expect.same(Right(json), encode(schema, value)) &&
-      expect.same(Right(value), decode(schema, json))
+      expect.eql(Right(value), decode(schema, json))
     }
   }
 
@@ -112,9 +112,9 @@ object JsonValueSpec extends BaseSuite {
   ) {
     val fixed = Schema.Fixed(name("Id"), 2)
     expect.same(Right(string(0x41, 0xe9, 0xff)), encode(Schema.Bytes, AvroValue.Bytes(hex"41e9ff"))) &&
-    expect.same(Right(AvroValue.Bytes(hex"41e9ff")), decode(Schema.Bytes, string(0x41, 0xe9, 0xff))) &&
+    expect.eql(Right(AvroValue.Bytes(hex"41e9ff")), decode(Schema.Bytes, string(0x41, 0xe9, 0xff))) &&
     expect.same(Right("\"AB\""), encode(fixed, AvroValue.Fixed(hex"4142"))) &&
-    expect.same(Right(AvroValue.Fixed(hex"4142")), decode(fixed, "\"AB\""))
+    expect.eql(Right(AvroValue.Fixed(hex"4142")), decode(fixed, "\"AB\""))
   }
 
   pureTest("JsonEncoder and JsonDecoder should encode floats and doubles which are not finite as strings") {
@@ -127,17 +127,17 @@ object JsonValueSpec extends BaseSuite {
     val aliased =
       Schema.Record(name("test"), Vector(Schema.Field("a", Schema.Long).withAliases(Vector("x"))))
 
-    expect.same(Right(AvroValue.Int(1)), decode(Schema.Int, "1.0")) &&
-    expect.same(Right(AvroValue.Long(100L)), decode(Schema.Long, "1e2")) &&
-    expect.same(Right(AvroValue.Float(Float.PositiveInfinity)), decode(Schema.Float, "\"INF\"")) &&
-    expect.same(Right(AvroValue.Double(Double.NegativeInfinity)), decode(Schema.Double, "\"-INF\"")) &&
-    expect.same(Right(AvroValue.Double(Double.NaN)), decode(Schema.Double, "\"NaN\"")) &&
-    expect.same(Right(AvroValue.Union(0, AvroValue.Null)), decode(nullableString, """{"null":null}""")) &&
-    expect.same(
+    expect.eql(Right(AvroValue.Int(1)), decode(Schema.Int, "1.0")) &&
+    expect.eql(Right(AvroValue.Long(100L)), decode(Schema.Long, "1e2")) &&
+    expect.eql(Right(AvroValue.Float(Float.PositiveInfinity)), decode(Schema.Float, "\"INF\"")) &&
+    expect.eql(Right(AvroValue.Double(Double.NegativeInfinity)), decode(Schema.Double, "\"-INF\"")) &&
+    expect.eql(Right(AvroValue.Double(Double.NaN)), decode(Schema.Double, "\"NaN\"")) &&
+    expect.eql(Right(AvroValue.Union(0, AvroValue.Null)), decode(nullableString, """{"null":null}""")) &&
+    expect.eql(
       Right(AvroValue.Record(Vector(AvroValue.Long(27L), AvroValue.String("foo")))),
       decode(record, """{"b":"foo","a":27}""")
     ) &&
-    expect.same(Right(AvroValue.Record(Vector(AvroValue.Long(1L)))), decode(aliased, """{"x":1}"""))
+    expect.eql(Right(AvroValue.Record(Vector(AvroValue.Long(1L)))), decode(aliased, """{"x":1}"""))
   }
 
   pureTest("JsonEncoder and JsonDecoder should not encode values which do not match the schema") {
@@ -164,27 +164,27 @@ object JsonValueSpec extends BaseSuite {
         Vector(Schema.Field("a", Schema.Long).withAliases(Vector("b")), Schema.Field("b", Schema.Long))
       )
 
-    expect.same(Left("Invalid number 1.5 for int"), decode(Schema.Int, "1.5")) &&
-    expect.same(Left("Invalid string for long"), decode(Schema.Long, "\"1\"")) &&
-    expect.same(Left("Invalid number 1 for string"), decode(Schema.String, "1")) &&
-    expect.same(Left("Invalid object for array"), decode(Schema.Array(Schema.Int), "{}")) &&
-    expect.same(Left("Missing field b for record test"), decode(record, """{"a":27}""")) &&
-    expect.same(
+    expect.eql(Left("Invalid number 1.5 for int"), decode(Schema.Int, "1.5")) &&
+    expect.eql(Left("Invalid string for long"), decode(Schema.Long, "\"1\"")) &&
+    expect.eql(Left("Invalid number 1 for string"), decode(Schema.String, "1")) &&
+    expect.eql(Left("Invalid object for array"), decode(Schema.Array(Schema.Int), "{}")) &&
+    expect.eql(Left("Missing field b for record test"), decode(record, """{"a":27}""")) &&
+    expect.eql(
       Left("Unknown fields c, d for record test"),
       decode(record, """{"a":27,"b":"foo","c":1,"d":2}""")
     ) &&
-    expect.same(Left("Unknown fields c for record test"), decode(colliding, """{"b":1,"c":2}""")) &&
-    expect.same(Left("Invalid symbol E for enum Foo"), decode(enumeration, "\"E\"")) &&
-    expect.same(
+    expect.eql(Left("Unknown fields c for record test"), decode(colliding, """{"b":1,"c":2}""")) &&
+    expect.eql(Left("Invalid symbol E for enum Foo"), decode(enumeration, "\"E\"")) &&
+    expect.eql(
       Left("Invalid fixed with 3 bytes for fixed Id with size 2"),
       decode(Schema.Fixed(name("Id"), 2), "\"ABC\"")
     ) &&
-    expect.same(Left("Unknown type int for union"), decode(nullableString, """{"int":1}""")) &&
-    expect.same(
+    expect.eql(Left("Unknown type int for union"), decode(nullableString, """{"int":1}""")) &&
+    expect.eql(
       Left("Invalid object with 2 keys for union, expected one key"),
       decode(nullableString, """{"null":null,"string":"a"}""")
     ) &&
-    expect.same(Left("Invalid null for union"), decode(Schema.Union(Vector(Schema.Int)), "null"))
+    expect.eql(Left("Invalid null for union"), decode(Schema.Union(Vector(Schema.Int)), "null"))
   }
 
   pureTest("JsonEncoder and JsonDecoder should limit the number of nested values of recursive schemas") {
@@ -201,8 +201,8 @@ object JsonValueSpec extends BaseSuite {
       s"Invalid depth ${limit + 1}, exceeding the limit of $limit nested values of recursive schemas"
 
     matches(decoder.flatMap(_.decode(nodes(limit + 1)))) { case Right(_) => success } &&
-    expect.same(Left(error), decoder.flatMap(_.decode(nodes(limit + 2))).left.map(_.message)) &&
-    expect.same(Left(error), decoder.flatMap(_.decode(nodes(100000))).left.map(_.message))
+    expect.eql(Left(error), decoder.flatMap(_.decode(nodes(limit + 2))).left.map(_.message)) &&
+    expect.eql(Left(error), decoder.flatMap(_.decode(nodes(100000))).left.map(_.message))
   }
 
   pureTest("JsonEncoder and JsonDecoder should not compile invalid schemas") {

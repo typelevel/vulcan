@@ -6,6 +6,9 @@
 
 package vulcan
 
+import cats.MonadError
+import vulcan.internal.DecoderMonadError
+
 /**
   * Decodes Avro values, written using a writer schema, to type `A`.
   *
@@ -17,4 +20,18 @@ trait Decoder[A] {
 
   /** Attempts to decode the specified value. */
   def decode(value: AvroValue): Either[AvroException, A]
+}
+
+object Decoder {
+  implicit final val decoderMonadError: MonadError[Decoder, AvroException] =
+    new DecoderMonadError[Decoder, AvroValue] {
+      override protected def decoder[A](f: AvroValue => Either[AvroException, A]): Decoder[A] =
+        new Decoder[A] {
+          override def decode(value: AvroValue): Either[AvroException, A] =
+            f(value)
+        }
+
+      override protected def decode[A](fa: Decoder[A], input: AvroValue): Either[AvroException, A] =
+        fa.decode(input)
+    }
 }

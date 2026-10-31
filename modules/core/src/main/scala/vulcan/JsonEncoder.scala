@@ -6,6 +6,7 @@
 
 package vulcan
 
+import cats.Contravariant
 import io.circe.Json
 import java.nio.charset.StandardCharsets
 import scala.annotation.tailrec
@@ -35,6 +36,14 @@ trait JsonEncoder[A] {
 }
 
 object JsonEncoder {
+  implicit final val jsonEncoderContravariant: Contravariant[JsonEncoder] =
+    new Contravariant[JsonEncoder] {
+      override final def contramap[A, B](encoder: JsonEncoder[A])(f: B => A): JsonEncoder[B] =
+        new JsonEncoder[B] {
+          override def encode(b: B): Either[AvroException, Json] =
+            encoder.encode(f(b))
+        }
+    }
 
   /** Returns an encoder for values of the schema, if the schema is valid. */
   private[vulcan] def apply(schema: Schema): Either[AvroException, JsonEncoder[AvroValue]] =

@@ -6,6 +6,7 @@
 
 package vulcan
 
+import cats.MonadError
 import io.circe.Json
 import io.circe.JsonObject
 import java.nio.charset.StandardCharsets
@@ -13,6 +14,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scodec.bits.ByteVector
 import vulcan.AvroException.InvalidJson
+import vulcan.internal.DecoderMonadError
 import vulcan.internal.SchemaNames
 import vulcan.internal.SchemaValidator
 
@@ -30,6 +32,17 @@ trait JsonDecoder[A] {
 }
 
 object JsonDecoder {
+  implicit final val jsonDecoderMonadError: MonadError[JsonDecoder, AvroException] =
+    new DecoderMonadError[JsonDecoder, Json] {
+      override protected def decoder[A](f: Json => Either[AvroException, A]): JsonDecoder[A] =
+        new JsonDecoder[A] {
+          override def decode(json: Json): Either[AvroException, A] =
+            f(json)
+        }
+
+      override protected def decode[A](fa: JsonDecoder[A], input: Json): Either[AvroException, A] =
+        fa.decode(input)
+    }
 
   /** The limit for the number of nested values of recursive schemas, to avoid stack overflows. */
   private[vulcan] val MaxDepth: Int =

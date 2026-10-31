@@ -6,6 +6,7 @@
 
 package vulcan
 
+import cats.Contravariant
 import scala.collection.mutable
 import scodec.bits.ByteVector
 import vulcan.AvroException.InvalidEnumValue
@@ -30,6 +31,14 @@ trait BinaryEncoder[A] {
 }
 
 object BinaryEncoder {
+  implicit final val binaryEncoderContravariant: Contravariant[BinaryEncoder] =
+    new Contravariant[BinaryEncoder] {
+      override final def contramap[A, B](encoder: BinaryEncoder[A])(f: B => A): BinaryEncoder[B] =
+        new BinaryEncoder[B] {
+          override def encode(b: B): Either[AvroException, ByteVector] =
+            encoder.encode(f(b))
+        }
+    }
 
   /** Returns an encoder for values of the schema, if the schema is valid. */
   private[vulcan] def apply(schema: Schema): Either[AvroException, BinaryEncoder[AvroValue]] =

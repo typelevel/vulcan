@@ -101,6 +101,23 @@ object RegressionSpec extends BaseSuite {
     }
   }
 
+  pureTest("#64 and #749: Java string types in writer schemas should decode strings and maps") {
+    def read[A](a: A, writerSchema: String)(implicit codec: Codec[A]): Either[AvroException, A] =
+      for {
+        schema <- Schema.parse(writerSchema)
+        encoder <- codec.binaryEncoder
+        bytes <- encoder.encode(a)
+        decoder <- codec.binaryDecoder(schema)
+        decoded <- decoder.decode(bytes)
+      } yield decoded
+
+    expect.same(Right("value"), read("value", """{"type":"string","avro.java.string":"String"}""")) &&
+    expect.same(
+      Right(Map("key" -> 1)),
+      read(Map("key" -> 1), """{"type":"map","values":"int","avro.java.string":"String"}""")
+    )
+  }
+
   locally {
     final case class Inner(value: Int)
     final case class Outer(inner: Inner)
@@ -209,6 +226,63 @@ object RegressionSpec extends BaseSuite {
       Left("Error decoding Option: other is not a thing"),
       writeRead[Option[String], Option[Thing]](Some("other")).left.map(_.message)
     )
+  }
+
+  locally {
+    final case class Inner(value: Int)
+    final case class Outer(inner: Inner)
+
+    object Codecs {
+      implicit val outerCodec: Codec[Outer] =
+        Codec.record("Outer", "com.example") { field =>
+          field("inner", _.inner).map(Outer(_))
+        }
+
+      implicit val innerCodec: Codec[Inner] =
+        Codec.record("Inner", "com.example") { field =>
+          field("value", _.value).map(Inner(_))
+        }
+    }
+
+    pureTest("#317: codecs used before their initialization should error for the field") {
+      matches(Codecs.outerCodec.schema) { case Left(error: AvroException.UninitializedCodec) =>
+        expect.eql(
+          "Got unexpected null codec for field inner; use lazy val or def for codecs used before their definition",
+          error.message
+        )
+      }
+    }
+  }
+
+  pureTest("#317: codecs used before their initialization should error for the type using them") {
+    val codec: Codec[Int] = null
+    val codecs: List[(String, Codec[_])] = List(
+      "Chain items" -> Codec.chain(codec),
+      "Left value" -> Codec.either(codec, Codec.string),
+      "List items" -> Codec.list(codec),
+      "Map values" -> Codec.map(codec),
+      "NonEmptyChain items" -> Codec.nonEmptyChain(codec),
+      "NonEmptyList items" -> Codec.nonEmptyList(codec),
+      "NonEmptyMap values" -> Codec.nonEmptyMap(codec),
+      "NonEmptySet items" -> Codec.nonEmptySet(codec, Ordering.Int),
+      "NonEmptyVector items" -> Codec.nonEmptyVector(codec),
+      "Option value" -> Codec.option(codec),
+      "Right value" -> Codec.either(Codec.string, codec),
+      "Seq items" -> Codec.seq(codec),
+      "Set items" -> Codec.set(codec),
+      "Some value" -> Codec.some(codec),
+      "union alternative" -> Codec.union[Int](_[Int](codec, Prism.identity)),
+      "Vector items" -> Codec.vector(codec)
+    )
+
+    forEach(codecs) { case (description, codec) =>
+      expect.eql(
+        Left(
+          s"Got unexpected null codec for $description; use lazy val or def for codecs used before their definition"
+        ),
+        codec.schema.left.map(_.message)
+      )
+    }
   }
 
   pureTest("#320: errors from exceptions should preserve the exception as cause") {
@@ -421,7 +495,7 @@ object RegressionSpec extends BaseSuite {
     pureTest("#538: named schemas defined more than once should error for conflicting definitions") {
       val codec = pairCodec(elementCodec("value"), elementCodec("other"))
 
-      expect.same(
+      expect.eql(
         Left("Conflicting definitions of named schema com.example.Element"),
         codec.schema.left.map(_.message)
       )

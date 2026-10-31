@@ -1026,7 +1026,7 @@ object CodecSpec extends BaseSuite {
           _ => Left(AvroException("error"))
         )
 
-      expect.same(
+      expect.eql(
         Left("""Invalid name "1Invalid": must start with a letter or underscore"""),
         invalid.schema.left.map(_.message)
       )
@@ -2154,7 +2154,7 @@ object CodecSpec extends BaseSuite {
           field("value", _.value, default = Some(10)).map(CaseClassField(_))
         }
 
-      expect.same(
+      expect.eql(
         Left("Error encoding default for field value: error"),
         caseClassFieldCodec.schema.left.map(_.message)
       )
