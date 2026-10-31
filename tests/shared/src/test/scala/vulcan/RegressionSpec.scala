@@ -101,6 +101,23 @@ object RegressionSpec extends BaseSuite {
     }
   }
 
+  pureTest("#64 and #749: Java string types in writer schemas should decode strings and maps") {
+    def read[A](a: A, writerSchema: String)(implicit codec: Codec[A]): Either[AvroException, A] =
+      for {
+        schema <- Schema.parse(writerSchema)
+        encoder <- codec.binaryEncoder
+        bytes <- encoder.encode(a)
+        decoder <- codec.binaryDecoder(schema)
+        decoded <- decoder.decode(bytes)
+      } yield decoded
+
+    expect.same(Right("value"), read("value", """{"type":"string","avro.java.string":"String"}""")) &&
+    expect.same(
+      Right(Map("key" -> 1)),
+      read(Map("key" -> 1), """{"type":"map","values":"int","avro.java.string":"String"}""")
+    )
+  }
+
   locally {
     final case class Inner(value: Int)
     final case class Outer(inner: Inner)
