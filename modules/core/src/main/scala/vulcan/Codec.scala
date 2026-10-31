@@ -299,7 +299,7 @@ object Codec {
     * @group Cats
     */
   implicit final def chain[A](implicit codec: Codec[A]): Codec[Chain[A]] =
-    new ArrayCodec[A, Chain[A]](codec, _.length.toInt, _.iterator, chainBuilder)
+    new ArrayCodec[A, Chain[A]](initialized(codec, "Chain items"), _.length.toInt, _.iterator, chainBuilder)
       .withTypeName("Chain")
 
   /**
@@ -476,13 +476,13 @@ object Codec {
     * @group General
     */
   implicit final def left[A, B](implicit codec: Codec[A]): Codec[Left[A, B]] =
-    codec.imap(Left[A, B](_))(_.value)
+    initialized(codec, "Left value").imap(Left[A, B](_))(_.value)
 
   /**
     * @group Collection
     */
   implicit final def list[A](implicit codec: Codec[A]): Codec[List[A]] =
-    new ArrayCodec[A, List[A]](codec, _.length, _.iterator, _ => List.newBuilder)
+    new ArrayCodec[A, List[A]](initialized(codec, "List items"), _.length, _.iterator, _ => List.newBuilder)
       .withTypeName("List")
 
   /**
@@ -545,7 +545,7 @@ object Codec {
     * @group Collection
     */
   implicit final def map[A](implicit codec: Codec[A]): Codec[Map[String, A]] =
-    new MapCodec[A, Map[String, A]](codec, _.size, _.iterator, _ => Map.newBuilder)
+    new MapCodec[A, Map[String, A]](initialized(codec, "Map values"), _.size, _.iterator, _ => Map.newBuilder)
       .withTypeName("Map")
 
   /**
@@ -557,26 +557,32 @@ object Codec {
   /**
     * @group Cats
     */
-  implicit final def nonEmptyChain[A](implicit codec: Codec[A]): Codec[NonEmptyChain[A]] =
-    new ArrayCodec[A, Chain[A]](codec, _.length.toInt, _.iterator, chainBuilder)
+  implicit final def nonEmptyChain[A](implicit codec: Codec[A]): Codec[NonEmptyChain[A]] = {
+    val items = initialized(codec, "NonEmptyChain items")
+    new ArrayCodec[A, Chain[A]](items, _.length.toInt, _.iterator, chainBuilder)
       .imapError(NonEmptyChain.fromChain(_).toRight(new EmptyCollection()))(_.toChain)
       .withTypeName("NonEmptyChain")
+  }
 
   /**
     * @group Cats
     */
-  implicit final def nonEmptyList[A](implicit codec: Codec[A]): Codec[NonEmptyList[A]] =
-    new ArrayCodec[A, List[A]](codec, _.length, _.iterator, _ => List.newBuilder)
+  implicit final def nonEmptyList[A](implicit codec: Codec[A]): Codec[NonEmptyList[A]] = {
+    val items = initialized(codec, "NonEmptyList items")
+    new ArrayCodec[A, List[A]](items, _.length, _.iterator, _ => List.newBuilder)
       .imapError(NonEmptyList.fromList(_).toRight(new EmptyCollection()))(_.toList)
       .withTypeName("NonEmptyList")
+  }
 
   /**
     * @group Cats
     */
-  implicit final def nonEmptyMap[A](implicit codec: Codec[A]): Codec[NonEmptyMap[String, A]] =
-    new MapCodec[A, SortedMap[String, A]](codec, _.size, _.iterator, _ => SortedMap.newBuilder)
+  implicit final def nonEmptyMap[A](implicit codec: Codec[A]): Codec[NonEmptyMap[String, A]] = {
+    val values = initialized(codec, "NonEmptyMap values")
+    new MapCodec[A, SortedMap[String, A]](values, _.size, _.iterator, _ => SortedMap.newBuilder)
       .imapError(NonEmptyMap.fromMap(_).toRight(new EmptyCollection()))(_.toSortedMap)
       .withTypeName("NonEmptyMap")
+  }
 
   /**
     * @group Cats
@@ -584,18 +590,22 @@ object Codec {
   implicit final def nonEmptySet[A](implicit
     codec: Codec[A],
     ordering: Ordering[A]
-  ): Codec[NonEmptySet[A]] =
-    new ArrayCodec[A, SortedSet[A]](codec, _.size, _.iterator, _ => SortedSet.newBuilder)
+  ): Codec[NonEmptySet[A]] = {
+    val items = initialized(codec, "NonEmptySet items")
+    new ArrayCodec[A, SortedSet[A]](items, _.size, _.iterator, _ => SortedSet.newBuilder)
       .imapError(NonEmptySet.fromSet(_).toRight(new EmptyCollection()))(_.toSortedSet)
       .withTypeName("NonEmptySet")
+  }
 
   /**
     * @group Cats
     */
-  implicit final def nonEmptyVector[A](implicit codec: Codec[A]): Codec[NonEmptyVector[A]] =
-    new ArrayCodec[A, Vector[A]](codec, _.length, _.iterator, vectorBuilder)
+  implicit final def nonEmptyVector[A](implicit codec: Codec[A]): Codec[NonEmptyVector[A]] = {
+    val items = initialized(codec, "NonEmptyVector items")
+    new ArrayCodec[A, Vector[A]](items, _.length, _.iterator, vectorBuilder)
       .imapError(NonEmptyVector.fromVector(_).toRight(new EmptyCollection()))(_.toVector)
       .withTypeName("NonEmptyVector")
+  }
 
   /**
     * Returns a [[Codec]] for options, encoded as a union with `null` first.
@@ -605,7 +615,7 @@ object Codec {
     * @group General
     */
   implicit final def option[A](implicit codec: Codec[A]): Codec[Option[A]] =
-    new OptionCodec(codec).withTypeName("Option")
+    new OptionCodec(initialized(codec, "Option value")).withTypeName("Option")
 
   /**
     * Returns a new record [[Codec]] for type `A`.
@@ -631,20 +641,20 @@ object Codec {
     * @group General
     */
   implicit final def right[A, B](implicit codec: Codec[B]): Codec[Right[A, B]] =
-    codec.imap(Right[A, B](_))(_.value)
+    initialized(codec, "Right value").imap(Right[A, B](_))(_.value)
 
   /**
     * @group Collection
     */
   implicit final def seq[A](implicit codec: Codec[A]): Codec[Seq[A]] =
-    new ArrayCodec[A, Seq[A]](codec, _.length, _.iterator, _ => Seq.newBuilder)
+    new ArrayCodec[A, Seq[A]](initialized(codec, "Seq items"), _.length, _.iterator, _ => Seq.newBuilder)
       .withTypeName("Seq")
 
   /**
     * @group Collection
     */
   implicit final def set[A](implicit codec: Codec[A]): Codec[Set[A]] =
-    new ArrayCodec[A, Set[A]](codec, _.size, _.iterator, _ => Set.newBuilder)
+    new ArrayCodec[A, Set[A]](initialized(codec, "Set items"), _.size, _.iterator, _ => Set.newBuilder)
       .withTypeName("Set")
 
   /**
@@ -662,7 +672,7 @@ object Codec {
     * @group General
     */
   implicit final def some[A](implicit codec: Codec[A]): Codec[Some[A]] =
-    codec.imap(Some(_))(_.value)
+    initialized(codec, "Some value").imap(Some(_))(_.value)
 
   /**
     * @group General
@@ -707,7 +717,7 @@ object Codec {
     * @group Collection
     */
   implicit final def vector[A](implicit codec: Codec[A]): Codec[Vector[A]] =
-    new ArrayCodec[A, Vector[A]](codec, _.length, _.iterator, vectorBuilder)
+    new ArrayCodec[A, Vector[A]](initialized(codec, "Vector items"), _.length, _.iterator, vectorBuilder)
       .withTypeName("Vector")
 
   /**
@@ -762,7 +772,7 @@ object Codec {
           codec: Codec[B],
           prism: Prism[Any, B]
         ): Chain[Alt[Any]] =
-          Chain.one(Alt(codec, prism))
+          Chain.one(Alt(initialized(codec, "union alternative"), prism))
 
         override final def toString: String =
           "AltBuilder"
@@ -822,7 +832,7 @@ object Codec {
         )(implicit codec: Codec[B]): FreeApplicative[Field[Any, *], B] = {
           val _name = name
           val _access = access
-          val _codec = codec
+          val _codec = initialized(codec, s"field $name")
           val _doc = doc
           val _default = default
           val _order = order
@@ -1842,6 +1852,14 @@ object Codec {
     val result = Left(error)
     _ => result
   }
+
+  /** The codec, or a codec failing with an error if the codec is `null`. */
+  private def initialized[A](codec: Codec[A], description: => String): Codec[A] =
+    if (codec ne null) codec
+    else {
+      val error = Left(new UninitializedCodec(description))
+      new Instance[A](error, _ => error, _ => error)
+    }
 
   private[vulcan] def invalidValue(value: AvroValue, writerSchema: Schema): AvroException =
     new InvalidValue(value, SchemaNames.describe(writerSchema))

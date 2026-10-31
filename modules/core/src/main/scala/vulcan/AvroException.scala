@@ -371,6 +371,16 @@ object AvroException {
     )
 
   /**
+    * Exception raised when a codec is `null`, for example when a
+    * codec `val` is used before it has been initialized.
+    */
+  final class UninitializedCodec private[vulcan] (description: String)
+    extends AvroException(
+      s"Got unexpected null codec for $description; " +
+        "use lazy val or def for codecs used before their definition"
+    )
+
+  /**
     * Exception raised when adding a logical type to a
     * schema with a type which has no logical types.
     */
