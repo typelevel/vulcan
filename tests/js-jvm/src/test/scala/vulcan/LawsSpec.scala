@@ -20,6 +20,8 @@ import scodec.bits.ByteVector
 import weaver.FunSuite
 import weaver.discipline.Discipline
 
+// Not run on Scala Native, where the test process intermittently segfaults
+// in these tests: https://github.com/scala-native/scala-native/issues/5086
 object LawsSpec extends FunSuite with Discipline {
   implicit val avroExceptionEq: Eq[AvroException] =
     Eq.by(_.message)
