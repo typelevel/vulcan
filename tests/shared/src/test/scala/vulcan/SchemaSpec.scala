@@ -108,22 +108,6 @@ object SchemaSpec extends BaseSuite {
     }
   }
 
-  pureTest("Schema isNullable should be true for null") {
-    expect(Schema.Null.isNullable)
-  }
-
-  pureTest("Schema isNullable should be true for unions including null") {
-    expect(Schema.Union(Vector(Schema.Int, Schema.Null)).isNullable)
-  }
-
-  pureTest("Schema isNullable should be false for unions without null") {
-    expect(!Schema.Union(Vector(Schema.Int, Schema.String)).isNullable)
-  }
-
-  pureTest("Schema isNullable should be false for other schemas") {
-    expect.all(!Schema.Int.isNullable, !Schema.Array(Schema.Null).isNullable)
-  }
-
   pureTest("Schema logicalType should add the logical type followed by its parameters to the props") {
     val bytes = Schema.Bytes.withLogicalType(LogicalType.decimal(10, 2))
     expect.eql(List("logicalType", "precision", "scale"), bytes.props.keys.toList) &&

@@ -24,14 +24,6 @@ sealed abstract class Schema {
   final def logicalType: Option[LogicalType] =
     LogicalType.of(this)
 
-  /** Returns `true` for `null`, and for unions including `null`. */
-  final def isNullable: Boolean =
-    this match {
-      case _: Schema.Null => true
-      case union: Schema.Union => union.types.exists(_.isInstanceOf[Schema.Null])
-      case _ => false
-    }
-
   /** The schema as `Json`. Named schemas are referenced by name after their definition. */
   final def toJson: Json =
     SchemaEncoder.encode(this)
