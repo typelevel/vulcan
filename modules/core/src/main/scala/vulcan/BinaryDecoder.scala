@@ -6,12 +6,14 @@
 
 package vulcan
 
+import cats.MonadError
 import scala.collection.immutable.ArraySeq
 import scala.collection.mutable
 import scodec.bits.ByteVector
 import vulcan.AvroException.InfiniteRecord
 import vulcan.AvroException.InvalidBinary
 import vulcan.internal.BinaryReader
+import vulcan.internal.DecoderMonadError
 import vulcan.internal.SchemaNames
 import vulcan.internal.SchemaValidator
 
@@ -29,6 +31,17 @@ trait BinaryDecoder[A] {
 }
 
 object BinaryDecoder {
+  implicit final val binaryDecoderMonadError: MonadError[BinaryDecoder, AvroException] =
+    new DecoderMonadError[BinaryDecoder, ByteVector] {
+      override protected def decoder[A](f: ByteVector => Either[AvroException, A]): BinaryDecoder[A] =
+        new BinaryDecoder[A] {
+          override def decode(bytes: ByteVector): Either[AvroException, A] =
+            f(bytes)
+        }
+
+      override protected def decode[A](fa: BinaryDecoder[A], input: ByteVector): Either[AvroException, A] =
+        fa.decode(input)
+    }
 
   /** The limit for the total number of array items in a value encoded using zero bytes. */
   private[vulcan] val MaxZeroByteItems: Long =

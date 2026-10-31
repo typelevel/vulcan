@@ -8,78 +8,144 @@ package vulcan
 
 import cats.Eq
 import cats.kernel.laws.discipline.HashTests
+import cats.laws.discipline.ContravariantTests
 import cats.laws.discipline.InvariantTests
-import java.nio.charset.Charset
-import java.nio.charset.StandardCharsets
+import cats.laws.discipline.MonadErrorTests
+import io.circe.Json
 import org.scalacheck.Arbitrary
 import org.scalacheck.Cogen
 import org.scalacheck.Gen
-import org.scalacheck.Prop
-import org.scalacheck.Test
+import org.scalacheck.rng.Seed
 import scodec.bits.ByteVector
 import weaver.FunSuite
 import weaver.discipline.Discipline
 
 object LawsSpec extends FunSuite with Discipline {
+  implicit val avroExceptionEq: Eq[AvroException] =
+    Eq.by(_.message)
+
+  implicit val avroExceptionArbitrary: Arbitrary[AvroException] =
+    Arbitrary(Arbitrary.arbitrary[String].map(AvroException(_)))
+
+  implicit val avroExceptionCogen: Cogen[AvroException] =
+    Cogen[String].contramap(_.message)
+
   implicit val avroValueArbitrary: Arbitrary[AvroValue] =
     Arbitrary(AvroValueGenerators.genSchemaAndValue.map(_._2))
 
   implicit val avroValueCogen: Cogen[AvroValue] =
     Cogen[String].contramap(_.toString)
 
+  implicit val byteVectorArbitrary: Arbitrary[ByteVector] =
+    Arbitrary(Arbitrary.arbitrary[Array[Byte]].map(ByteVector(_)))
+
+  implicit val byteVectorCogen: Cogen[ByteVector] =
+    Cogen[Array[Byte]].contramap(_.toArray)
+
+  implicit val byteVectorEq: Eq[ByteVector] =
+    Eq.fromUniversalEquals
+
+  implicit val jsonArbitrary: Arbitrary[Json] =
+    Arbitrary(SchemaGenerators.genJson)
+
+  implicit val jsonCogen: Cogen[Json] =
+    Cogen[String].contramap(_.noSpaces)
+
+  implicit val schemaArbitrary: Arbitrary[Schema] =
+    Arbitrary(SchemaGenerators.genSchema)
+
+  implicit val schemaCogen: Cogen[Schema] =
+    Cogen[String].contramap(_.toString)
+
+  /** Schemas together with a value which is valid for the schema. */
+  implicit val schemaAndValueArbitrary: Arbitrary[(Schema, AvroValue)] =
+    Arbitrary(AvroValueGenerators.genSchemaAndValue)
+
+  private def arbitraryFunction[F, I: Cogen, O: Arbitrary](f: (I => O) => F): Arbitrary[F] =
+    Arbitrary(Arbitrary.arbitrary[I => O].map(f))
+
+  private def sampleEq[F, I: Arbitrary, O: Eq](f: F => I => O): Eq[F] = {
+    val inputs = Gen.listOfN(50, Arbitrary.arbitrary[I]).pureApply(Gen.Parameters.default, Seed(0L))
+    Eq.instance { (x, y) =>
+      val (fx, fy) = (f(x), f(y))
+      inputs.forall(input => Eq[O].eqv(fx(input), fy(input)))
+    }
+  }
+
   checkAll("AvroValue", HashTests[AvroValue].hash)
 
-  val schemaGen: Gen[Either[AvroException, Schema]] =
-    Gen.oneOf(
-      Left(AvroException("error")),
-      Codec[Int].schema,
-      Codec[String].schema
-    )
+  implicit def binaryDecoderArbitrary[A: Arbitrary]: Arbitrary[BinaryDecoder[A]] =
+    arbitraryFunction[BinaryDecoder[A], ByteVector, Either[AvroException, A]](f => bytes => f(bytes))
 
-  val charsetGen: Gen[Charset] =
-    Gen.oneOf(
-      StandardCharsets.ISO_8859_1,
-      StandardCharsets.US_ASCII,
-      StandardCharsets.UTF_8,
-      StandardCharsets.UTF_16
-    )
+  implicit def binaryDecoderEq[A: Eq]: Eq[BinaryDecoder[A]] =
+    sampleEq[BinaryDecoder[A], ByteVector, Either[AvroException, A]](decoder => decoder.decode)
 
-  implicit val codecStringArbitrary: Arbitrary[Codec[String]] =
+  checkAll("BinaryDecoder", MonadErrorTests[BinaryDecoder, AvroException].monadError[Int, Int, String])
+
+  implicit def binaryEncoderArbitrary[A: Cogen]: Arbitrary[BinaryEncoder[A]] =
+    arbitraryFunction[BinaryEncoder[A], A, Either[AvroException, ByteVector]](f => a => f(a))
+
+  implicit def binaryEncoderEq[A: Arbitrary]: Eq[BinaryEncoder[A]] =
+    sampleEq[BinaryEncoder[A], A, Either[AvroException, ByteVector]](encoder => encoder.encode)
+
+  checkAll("BinaryEncoder", ContravariantTests[BinaryEncoder].contravariant[Int, Int, String])
+
+  implicit def codecArbitrary[A: Arbitrary: Cogen]: Arbitrary[Codec[A]] =
     Arbitrary {
-      schemaGen.flatMap { schema =>
-        charsetGen.map { charset =>
-          Codec
-            .instance[String](
-              schema,
-              s => Right(AvroValue.Bytes(ByteVector.view(s.getBytes(charset)))),
-              {
-                case _: Schema.String =>
-                  Right {
-                    case AvroValue.Bytes(bytes) => Right(new String(bytes.toArray, charset))
-                    case value => Left(AvroException(s"Got unexpected value $value"))
-                  }
-                case schema =>
-                  Left(AvroException(s"Got unexpected schema $schema"))
-              }
-            )
-            .withTypeName("String")
+      for {
+        schema <- Arbitrary.arbitrary[Either[AvroException, Schema]]
+        encoder <- Arbitrary.arbitrary[Encoder[A]]
+        decoder <- Arbitrary.arbitrary[Schema => Either[AvroException, Decoder[A]]]
+      } yield Codec.instance(schema, encoder, decoder)
+    }
+
+  implicit def codecEq[A: Arbitrary: Eq]: Eq[Codec[A]] =
+    Eq.and(
+      Eq.by[Codec[A], Either[AvroException, Schema]](_.schema),
+      Eq.and(
+        sampleEq[Codec[A], A, Either[AvroException, AvroValue]] { codec =>
+          val encoder = codec.encoder
+          a => encoder.flatMap(_.encode(a))
+        },
+        sampleEq[Codec[A], (Schema, AvroValue), Either[AvroException, A]] { codec =>
+          { case (writerSchema, value) => codec.decoder(writerSchema).flatMap(_.decode(value)) }
         }
-      }
-    }
+      )
+    )
 
-  /** Returns the decoded string or error message, if the string can be encoded. */
-  private def roundtrip(codec: Codec[String], s: String): Option[Either[String, String]] =
-    codec.encode(s).toOption.map { encoded =>
-      codec.schema.flatMap(codec.decoder).flatMap(_.decode(encoded)).left.map(_.message)
-    }
+  checkAll("Codec", InvariantTests[Codec].invariant[Int, Int, String])
 
-  implicit val codecStringEq: Eq[Codec[String]] =
-    Eq.instance { (c1, c2) =>
-      val prop = Prop.forAll((s: String) => roundtrip(c1, s) == roundtrip(c2, s))
-      Test.check(Test.Parameters.default, prop).passed
-    }
+  implicit def decoderArbitrary[A: Arbitrary]: Arbitrary[Decoder[A]] =
+    arbitraryFunction[Decoder[A], AvroValue, Either[AvroException, A]](f => value => f(value))
 
-  checkAll("Codec", InvariantTests[Codec].invariant[String, String, String])
+  implicit def decoderEq[A: Eq]: Eq[Decoder[A]] =
+    sampleEq[Decoder[A], AvroValue, Either[AvroException, A]](decoder => decoder.decode)
+
+  checkAll("Decoder", MonadErrorTests[Decoder, AvroException].monadError[Int, Int, String])
+
+  implicit def encoderArbitrary[A: Cogen]: Arbitrary[Encoder[A]] =
+    arbitraryFunction[Encoder[A], A, Either[AvroException, AvroValue]](f => a => f(a))
+
+  implicit def encoderEq[A: Arbitrary]: Eq[Encoder[A]] =
+    sampleEq[Encoder[A], A, Either[AvroException, AvroValue]](encoder => encoder.encode)
+
+  checkAll("Encoder", ContravariantTests[Encoder].contravariant[Int, Int, String])
+
+  implicit def jsonDecoderArbitrary[A: Arbitrary]: Arbitrary[JsonDecoder[A]] =
+    arbitraryFunction[JsonDecoder[A], Json, Either[AvroException, A]](f => json => f(json))
+
+  implicit def jsonDecoderEq[A: Eq]: Eq[JsonDecoder[A]] =
+    sampleEq[JsonDecoder[A], Json, Either[AvroException, A]](decoder => decoder.decode)
+
+  checkAll("JsonDecoder", MonadErrorTests[JsonDecoder, AvroException].monadError[Int, Int, String])
+
+  implicit def jsonEncoderArbitrary[A: Cogen]: Arbitrary[JsonEncoder[A]] =
+    arbitraryFunction[JsonEncoder[A], A, Either[AvroException, Json]](f => a => f(a))
+
+  implicit def jsonEncoderEq[A: Arbitrary]: Eq[JsonEncoder[A]] =
+    sampleEq[JsonEncoder[A], A, Either[AvroException, Json]](encoder => encoder.encode)
+
+  checkAll("JsonEncoder", ContravariantTests[JsonEncoder].contravariant[Int, Int, String])
 
   /** Few distinct logical types, so equal ones are generated often. */
   implicit val logicalTypeArbitrary: Arbitrary[LogicalType] =
@@ -97,12 +163,6 @@ object LawsSpec extends FunSuite with Discipline {
     Cogen[String].contramap(_.toString)
 
   checkAll("LogicalType", HashTests[LogicalType].hash)
-
-  implicit val schemaArbitrary: Arbitrary[Schema] =
-    Arbitrary(SchemaGenerators.genSchema)
-
-  implicit val schemaCogen: Cogen[Schema] =
-    Cogen[String].contramap(_.toString)
 
   checkAll("Schema", HashTests[Schema].hash)
 }

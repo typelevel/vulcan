@@ -360,7 +360,7 @@ object SchemaGenerators {
   private def genPropKey: Gen[String] =
     genName.map(name => if (ReservedNames.contains(name)) s"${name}_" else name)
 
-  private def genJson: Gen[Json] =
+  def genJson: Gen[Json] =
     Gen.oneOf(
       Gen.const(Json.Null),
       Gen.oneOf(Json.True, Json.False),
