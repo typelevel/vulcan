@@ -17,7 +17,7 @@ object AvroAliasSpec extends BaseSuite {
 
   test("AvroAlias should include alias in toString") {
     forall { (s: String) =>
-      expect(new AvroAlias(s).toString.contains(s))
+      expect(clue(new AvroAlias(s).toString).contains(s))
     }
   }
 

@@ -24,7 +24,7 @@ object AvroValueSpec extends BaseSuite {
 
   pureTest("AvroValue Float should distinguish positive and negative zero") {
     val negativeZero = java.lang.Float.intBitsToFloat(Int.MinValue)
-    expect(AvroValue.Float(0.0f) != AvroValue.Float(negativeZero))
+    expect(clue(AvroValue.Float(0.0f)) != clue(AvroValue.Float(negativeZero)))
   }
 
   test("AvroValue Double should be equal for equal values") {
@@ -41,12 +41,12 @@ object AvroValueSpec extends BaseSuite {
 
   pureTest("AvroValue Double should distinguish positive and negative zero") {
     val negativeZero = java.lang.Double.longBitsToDouble(Long.MinValue)
-    expect(AvroValue.Double(0.0d) != AvroValue.Double(negativeZero))
+    expect(clue(AvroValue.Double(0.0d)) != clue(AvroValue.Double(negativeZero)))
   }
 
   pureTest("AvroValue Bytes should be equal for equal contents") {
     expect.same(AvroValue.Bytes(ByteVector(1, 2, 3)), AvroValue.Bytes(ByteVector(1, 2, 3))) &&
-    expect(AvroValue.Bytes(ByteVector(1, 2, 3)) != AvroValue.Bytes(ByteVector(1, 2)))
+    expect(clue(AvroValue.Bytes(ByteVector(1, 2, 3))) != clue(AvroValue.Bytes(ByteVector(1, 2))))
   }
 
   pureTest("AvroValue show should have a Show instance consistent with toString") {

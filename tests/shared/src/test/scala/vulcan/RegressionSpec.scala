@@ -215,7 +215,7 @@ object RegressionSpec extends BaseSuite {
     val exception = new IllegalArgumentException("invalid")
     val codec = Codec[Int].imapTry[Int](_ => Failure(exception))(identity)
     matches(codec.decoder(Schema.Int).flatMap(_.decode(AvroValue.Int(1)))) { case Left(error) =>
-      expect(error.getCause eq exception)
+      expect(clue(error.getCause) eq exception)
     }
   }
 

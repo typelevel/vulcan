@@ -26,8 +26,8 @@ object SchemaParseSpec extends BaseSuite {
   }
 
   pureTest("Schema parse should parse primitives as type names and objects") {
-    matches(parse("\"int\"")) { case Right(schema) => expect(schema eq Schema.Int) } &&
-    matches(parse("""{"type":"string"}""")) { case Right(schema) => expect(schema eq Schema.String) }
+    matches(parse("\"int\"")) { case Right(schema) => expect(clue(schema) eq Schema.Int) } &&
+    matches(parse("""{"type":"string"}""")) { case Right(schema) => expect(clue(schema) eq Schema.String) }
   }
 
   pureTest("Schema parse should keep props of primitives, including logical types") {
@@ -43,7 +43,7 @@ object SchemaParseSpec extends BaseSuite {
 
   pureTest("Schema parse should ignore reserved attributes of primitives") {
     matches(parse("""{"type":"int","name":"Int","doc":"documentation"}""")) { case Right(schema) =>
-      expect(schema eq Schema.Int)
+      expect(clue(schema) eq Schema.Int)
     }
   }
 

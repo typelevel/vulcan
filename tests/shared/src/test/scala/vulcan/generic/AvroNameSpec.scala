@@ -17,7 +17,7 @@ object AvroNameSpec extends BaseSuite {
 
   test("AvroName should include name in toString") {
     forall { (s: String) =>
-      expect(new AvroName(s).toString.contains(s))
+      expect(clue(new AvroName(s).toString).contains(s))
     }
   }
 

@@ -17,7 +17,7 @@ object AvroDocSpec extends BaseSuite {
 
   test("AvroDoc should include documentation in toString") {
     forall { (s: String) =>
-      expect(new AvroDoc(s).toString.contains(s))
+      expect(clue(new AvroDoc(s).toString).contains(s))
     }
   }
 

@@ -21,14 +21,15 @@ object AvroPropsSpec extends BaseSuite {
   test("AvroProps should include props in toString") {
     forall { (name: String, value: String) =>
       val props = JsonObject(name -> Json.fromString(value))
-      expect(new AvroProps(props).toString.contains(props.toString))
+      expect(clue(new AvroProps(props).toString).contains(props.toString))
     }
   }
 
   test("AvroProps should provide an extractor for props") {
     forall { (name: String, value: String) =>
-      matches(new AvroProps(JsonObject(name -> Json.fromString(value)))) { case AvroProps(props) =>
-        expect(props.contains(name))
+      val props = JsonObject(name -> Json.fromString(value))
+      matches(new AvroProps(props)) { case AvroProps(extracted) =>
+        expect.eql(props, extracted)
       }
     }
   }

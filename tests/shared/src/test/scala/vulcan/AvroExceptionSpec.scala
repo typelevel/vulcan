@@ -22,7 +22,8 @@ object AvroExceptionSpec extends BaseSuite {
   test("AvroException should have no cause unless specified") {
     forall { (message: String) =>
       val exception = AvroException(message)
-      expect.all(exception.cause.isEmpty, exception.getCause() == null)
+      expect.same(None, exception.cause) &&
+      expect(clue(exception.getCause()) == null)
     }
   }
 
@@ -30,7 +31,8 @@ object AvroExceptionSpec extends BaseSuite {
     forall { (message: String) =>
       val cause = new IllegalArgumentException(message)
       val exception = AvroException(message, cause)
-      expect.all(exception.cause.contains(cause), exception.getCause() eq cause)
+      expect.same(Some(cause), exception.cause) &&
+      expect(clue(exception.getCause()) eq cause)
     }
   }
 
@@ -41,7 +43,7 @@ object AvroExceptionSpec extends BaseSuite {
   }
 
   pureTest("AvroException should not have a stack trace") {
-    expect(AvroException("message").getStackTrace().isEmpty)
+    expect.same(Nil, AvroException("message").getStackTrace().toList)
   }
 
   pureTest("AvroException ErrorDecodingType should have the exception decoding the type as cause") {

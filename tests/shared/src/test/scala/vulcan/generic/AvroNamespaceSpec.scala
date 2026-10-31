@@ -17,7 +17,7 @@ object AvroNamespaceSpec extends BaseSuite {
 
   test("AvroNamespace should include namespace in toString") {
     forall { (s: String) =>
-      expect(new AvroNamespace(s).toString.contains(s))
+      expect(clue(new AvroNamespace(s).toString).contains(s))
     }
   }
 

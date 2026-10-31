@@ -29,7 +29,7 @@ object LogicalTypeSpec extends BaseSuite {
   pureTest("LogicalType should be equal when names and parameters are equal") {
     expect.same(LogicalType("custom", JsonObject.empty), LogicalType("custom")) &&
     expect.same(LogicalType.decimal(10, 2), LogicalType.decimal(10, 2)) &&
-    expect(LogicalType.decimal(10, 2) != LogicalType.decimal(10, 3))
+    expect(clue(LogicalType.decimal(10, 2)) != clue(LogicalType.decimal(10, 3)))
   }
 
   pureTest("LogicalType should include the parameters in toString") {
@@ -54,7 +54,7 @@ object LogicalTypeSpec extends BaseSuite {
   }
 
   pureTest("LogicalType decimal should not extract other logical types") {
-    expect(LogicalType.Decimal.unapply(LogicalType.date).isEmpty)
+    expect.same(None, LogicalType.Decimal.unapply(LogicalType.date))
   }
 
   pureTest(

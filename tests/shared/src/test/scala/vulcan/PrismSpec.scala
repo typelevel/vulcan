@@ -52,11 +52,7 @@ object PrismSpec extends BaseSuite {
   }
 
   pureTest("Prism instance toString") {
-    expect {
-      Prism[SealedTraitCaseClass, FirstInSealedTraitCaseClass]
-        .toString()
-        .startsWith("Prism$")
-    }
+    expect(clue(Prism[SealedTraitCaseClass, FirstInSealedTraitCaseClass].toString()).startsWith("Prism$"))
   }
 
   pureTest("Prism none none") {

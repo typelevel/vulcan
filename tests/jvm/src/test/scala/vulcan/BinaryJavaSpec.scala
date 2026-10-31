@@ -192,7 +192,8 @@ object BinaryJavaSpec extends BaseSuite {
       }
 
     // Blocks are written with negative counts followed by their size in bytes
-    val negativeCount = expect(BinaryReader(javaWriteArray(List.fill(100)(Long.MaxValue))).readLong() < 0)
+    val negativeCount =
+      expect(clue(BinaryReader(javaWriteArray(List.fill(100)(Long.MaxValue))).readLong()) < 0)
 
     forall { (values: List[Long]) =>
       val bytes = javaWriteArray(values)

@@ -21,7 +21,7 @@ object AvroNullDefaultSpec extends BaseSuite {
 
   test("AvroNullDefault should include enabled flag value in toString") {
     forall { (b: Boolean) =>
-      expect(new AvroNullDefault(b).toString.contains(b.toString))
+      expect(clue(new AvroNullDefault(b).toString).contains(b.toString))
     }
   }
 

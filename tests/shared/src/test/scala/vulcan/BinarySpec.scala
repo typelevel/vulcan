@@ -140,8 +140,8 @@ object BinarySpec extends BaseSuite {
         expect.eql(boolean, reader.readBoolean()) &&
         expect.eql(int, reader.readInt()) &&
         expect.eql(long, reader.readLong()) &&
-        expect(java.lang.Float.compare(reader.readFloat(), float) == 0) &&
-        expect(java.lang.Double.compare(reader.readDouble(), double) == 0)
+        expect(java.lang.Float.compare(clue(reader.readFloat()), float) == 0) &&
+        expect(java.lang.Double.compare(clue(reader.readDouble()), double) == 0)
       }
     }
   }
