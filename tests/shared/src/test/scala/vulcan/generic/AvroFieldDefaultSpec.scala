@@ -9,14 +9,13 @@ package vulcan.generic
 import io.circe.Json
 import vulcan.BaseSuite
 import vulcan.Codec
-import vulcan.CodecSpecHelpers
 import vulcan.Schema
 import vulcan.generic.examples.AvroRecordDefault.*
 
-object AvroFieldDefaultSpec extends BaseSuite with CodecSpecHelpers {
+object AvroFieldDefaultSpec extends BaseSuite {
   private def fieldDefault[A](name: String)(implicit codec: Codec[A]): Option[Json] =
-    unsafeSchema[A] match {
-      case record: Schema.Record => record.fields.find(_.name == name).flatMap(_.default)
+    codec.schema match {
+      case Right(record: Schema.Record) => record.fields.find(_.name == name).flatMap(_.default)
       case _ => None
     }
 
@@ -27,7 +26,7 @@ object AvroFieldDefaultSpec extends BaseSuite with CodecSpecHelpers {
   }
 
   pureTest("AvroFieldDefault should succeed when annotating an Option") {
-    expectSchemaIs[HasOptionDefault](
+    expectSchema[HasOptionDefault](
       """{"type":"record","name":"HasOptionDefault","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"a","type":["null","string"],"default":"foo"}]}"""
     )
   }
@@ -41,18 +40,24 @@ object AvroFieldDefaultSpec extends BaseSuite with CodecSpecHelpers {
   }
 
   pureTest("AvroFieldDefault should succeed with the first member of a union") {
-    val decoder = Codec[HasUnion].decoder(unsafeSchema[Empty]).value
-    expectSchemaIs[HasUnion](
+    expectSchema[HasUnion](
       """{"type":"record","name":"HasUnion","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"u","type":[{"type":"record","name":"A","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"a","type":"int"}]},{"type":"record","name":"B","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"b","type":"string"}]}],"default":{"a":1}}]}"""
     ) &&
-    expect.same(Right(HasUnion(Union.A(1))), decoder.decode(unsafeEncode(Empty())))
+    expectDecode[HasUnion](
+      Codec[Empty].encode(Empty()),
+      Codec[Empty].schema,
+      HasUnion(Union.A(1))
+    )
   }
 
   pureTest("AvroFieldDefault should succeed with the second member of a union") {
-    val decoder = Codec[HasUnionSecond].decoder(unsafeSchema[Empty]).value
-    expectSchemaIs[HasUnionSecond](
+    expectSchema[HasUnionSecond](
       """{"type":"record","name":"HasUnionSecond","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"u","type":[{"type":"record","name":"A","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"a","type":"int"}]},{"type":"record","name":"B","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"b","type":"string"}]}],"default":{"b":"foo"}}]}"""
     ) &&
-    expect.same(Right(HasUnionSecond(Union.B("foo"))), decoder.decode(unsafeEncode(Empty())))
+    expectDecode[HasUnionSecond](
+      Codec[Empty].encode(Empty()),
+      Codec[Empty].schema,
+      HasUnionSecond(Union.B("foo"))
+    )
   }
 }

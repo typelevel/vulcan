@@ -21,84 +21,98 @@ import scodec.bits.ByteVector
 object Fs2KafkaSpec extends BaseSuite {
   pureTest("serializer should register the schema of the codec") {
     val registry = new Registry
-    val _ = serialize[Either[Int, Boolean]](registry, Right(true)).value
-    expect.eql(Some("""["int","boolean"]"""), registry.schema(1).map(_.noSpaces))
+    whenSuccess(serialize[Either[Int, Boolean]](registry, Right(true))) { _ =>
+      expect.eql(Some("""["int","boolean"]"""), registry.schema(1).map(_.noSpaces))
+    }
   }
 
   pureTest("serializer should error for invalid schemas") {
     val codec = Codec.decimal(-1, -1)
-    expect.eql(
-      "Invalid decimal precision -1: must be positive",
-      serialize(new Registry, BigDecimal(1))(codec).swap.value.message
+    expect.same(
+      Left("Invalid decimal precision -1: must be positive"),
+      serialize(new Registry, BigDecimal(1))(codec).left.map(_.message)
     )
   }
 
   pureTest("serializer should write values the Java Avro library reads") {
-    val bytes = ByteVector.view(serialize(new Registry, Test2("test", 42)).value)
-    val writerSchema = JavaAvro.schema(Codec[Test2].schema.value)
-    val readerSchema = JavaAvro.schema(Codec[Test].schema.value)
-    val record = JavaAvro.readBinary(writerSchema, readerSchema, bytes.drop(5)).asInstanceOf[GenericRecord]
-    expect.eql("test", record.get("name").toString)
+    val inputs = (serialize(new Registry, Test2("test", 42)), Codec[Test2].schema, Codec[Test].schema)
+    whenSuccess(inputs.tupled) { case (bytes, writerSchema, readerSchema) =>
+      val datum =
+        JavaAvro.readBinary(
+          JavaAvro.schema(writerSchema),
+          JavaAvro.schema(readerSchema),
+          ByteVector.view(bytes).drop(5)
+        )
+
+      matches(datum) { case record: GenericRecord =>
+        expect.eql("test", record.get("name").toString)
+      }
+    }
   }
 
   pureTest("deserializer should roundtrip values") {
     val registry = new Registry
-    val deserialize = deserializer[Either[Test, Int]](registry).value
-
-    forEach(List[Either[Test, Int]](Left(Test("test")), Right(1))) { value =>
-      expect.same(Right(value), deserialize(serialize[Either[Test, Int]](registry, value).value))
+    whenSuccess(deserializer[Either[Test, Int]](registry)) { deserialize =>
+      forEach(List[Either[Test, Int]](Left(Test("test")), Right(1))) { value =>
+        expect.same(Right(value), serialize[Either[Test, Int]](registry, value).flatMap(deserialize))
+      }
     }
   }
 
   pureTest("deserializer should decode using compatible schemas") {
     val registry = new Registry
-    val bytes = serialize(registry, Test2("test", 42)).value
-    expect.same(Right(Test("test")), deserializer[Test](registry).value(bytes))
+    whenSuccess(serialize(registry, Test2("test", 42))) { bytes =>
+      expect.same(Right(Test("test")), deserializer[Test](registry).flatMap(_(bytes)))
+    }
   }
 
   pureTest("deserializer should error for mismatching logical types") {
     val registry = new Registry
-    val bytes = serialize(registry, 42L).value
-    expect.eql(
-      "Error decoding Instant: Got unexpected missing logical type",
-      deserializer[Instant](registry).value(bytes).swap.value.message
-    )
+    whenSuccess(serialize(registry, 42L)) { bytes =>
+      expect.same(
+        Left("Error decoding Instant: Got unexpected missing logical type"),
+        deserializer[Instant](registry).flatMap(_(bytes)).left.map(_.message)
+      )
+    }
   }
 
   pureTest("deserializer should error for invalid schemas") {
     val codec = Codec.decimal(-1, -1)
-    expect.eql(
-      "Invalid decimal precision -1: must be positive",
-      deserializer(new Registry)(codec).swap.value.message
+    expect.same(
+      Left("Invalid decimal precision -1: must be positive"),
+      deserializer(new Registry)(codec).left.map(_.message)
     )
   }
 
   pureTest("deserializer should error for values missing after the schema id") {
     val registry = new Registry
-    val id = registry.register(Codec[Int].schema.value)
-    expect.eql(
-      "Unexpected end of input at position 0",
-      deserializer[Int](registry).value(frame(id, ByteVector.empty)).swap.value.message
-    )
+    whenSuccess(Codec[Int].schema) { schema =>
+      val id = registry.register(schema)
+      expect.same(
+        Left("Unexpected end of input at position 0"),
+        deserializer[Int](registry).flatMap(_(frame(id, ByteVector.empty))).left.map(_.message)
+      )
+    }
   }
 
   pureTest("deserializer should decode values the Java Avro library writes") {
     val registry = new Registry
-    val schema = Codec[Test2].schema.value
-    val javaSchema = JavaAvro.schema(schema)
-    val value = Codec[Test2].encoder.value.encode(Test2("test", 42)).value
-    val datum = JavaAvro.toJava(value, schema, javaSchema)
-    val bytes = frame(registry.register(schema), JavaAvro.writeBinary(javaSchema, datum))
-    expect.same(Right(Test("test")), deserializer[Test](registry).value(bytes))
+    val encoded = (Codec[Test2].schema, Codec[Test2].encoder.flatMap(_.encode(Test2("test", 42))))
+    whenSuccess(encoded.tupled) { case (schema, value) =>
+      val javaSchema = JavaAvro.schema(schema)
+      val datum = JavaAvro.toJava(value, schema, javaSchema)
+      val bytes = frame(registry.register(schema), JavaAvro.writeBinary(javaSchema, datum))
+      expect.same(Right(Test("test")), deserializer[Test](registry).flatMap(_(bytes)))
+    }
   }
 
   pureTest("deserializer should decode values with a decoder compiled once for each writer schema") {
     val registry = new Registry
-    val deserialize = deserializer[Test](registry).value
-    val bytes = List("a", "b", "c").map(name => serialize(registry, Test2(name, 1)).value)
-
-    expect.same(Right(List(Test("a"), Test("b"), Test("c"))), bytes.traverse(deserialize)) &&
-    expect.eql(1, registry.lookups)
+    whenSuccess(deserializer[Test](registry)) { deserialize =>
+      val bytes = List("a", "b", "c").traverse(name => serialize(registry, Test2(name, 1)))
+      expect.same(Right(List(Test("a"), Test("b"), Test("c"))), bytes.flatMap(_.traverse(deserialize))) &&
+      expect.eql(1, registry.lookups)
+    }
   }
 
   pureTest("schemas should be the same after printing and parsing") {
@@ -110,9 +124,11 @@ object Fs2KafkaSpec extends BaseSuite {
       Codec.decimal(10, 2).schema
     )
 
-    forEach(schemas) { schema =>
-      expect.same(Right(schema.value), Schema.fromJson(schema.value.toJson)) &&
-      expect.eql(schema.value.toString, JavaAvro.schema(schema.value).toString)
+    forEach(schemas) { result =>
+      whenSuccess(result) { schema =>
+        expect.same(Right(schema), Schema.fromJson(schema.toJson)) &&
+        expect.eql(schema.toString, JavaAvro.schema(schema).toString)
+      }
     }
   }
 
@@ -121,18 +137,19 @@ object Fs2KafkaSpec extends BaseSuite {
     val json =
       """{"type":"record","name":"Test","namespace":"fs2.kafka.vulcan","fields":[{"name":"name","type":{"type":"string","avro.java.string":"String"}},{"name":"id","type":{"type":"string","logicalType":"custom-id"},"default":"none"},{"name":"next","type":["null","Test"],"default":null}],"aliases":["Other"]}"""
 
-    val writerSchema = Schema.parse(json).value
-    val javaSchema = JavaAvro.schema(writerSchema)
+    whenSuccess(Schema.parse(json)) { writerSchema =>
+      val javaSchema = JavaAvro.schema(writerSchema)
 
-    val record = new GenericData.Record(javaSchema)
-    record.put("name", "test")
-    record.put("id", "1")
-    record.put("next", null)
+      val record = new GenericData.Record(javaSchema)
+      record.put("name", "test")
+      record.put("id", "1")
+      record.put("next", null)
 
-    val bytes = JavaAvro.writeBinary(javaSchema, record)
-    expect.eql(json, writerSchema.toString) &&
-    expect.eql(json, javaSchema.toString) &&
-    expect.same(Right(Test("test")), Codec[Test].binaryDecoder(writerSchema).flatMap(_.decode(bytes)))
+      val bytes = JavaAvro.writeBinary(javaSchema, record)
+      expect.eql(json, writerSchema.toString) &&
+      expect.eql(json, javaSchema.toString) &&
+      expect.same(Right(Test("test")), Codec[Test].binaryDecoder(writerSchema).flatMap(_.decode(bytes)))
+    }
   }
 
   final case class Test(name: String)

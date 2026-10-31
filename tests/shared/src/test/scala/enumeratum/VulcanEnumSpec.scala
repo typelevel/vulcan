@@ -7,29 +7,16 @@
 package enumeratum
 
 import enumeratum.EnumEntry.Lowercase
-import vulcan.AvroException
 import vulcan.BaseSuite
 import vulcan.Codec
 import vulcan.generic.AvroDoc
 import vulcan.generic.AvroNamespace
 
 object VulcanEnumSpec extends BaseSuite {
-
-  /** Encodes the value, and decodes it using the schema of the codec as the writer schema. */
-  private def encodeAndDecode[A](a: A)(implicit codec: Codec[A]): Either[AvroException, A] =
-    for {
-      encoder <- codec.encoder
-      value <- encoder.encode(a)
-      schema <- codec.schema
-      decoder <- codec.decoder(schema)
-      decoded <- decoder.decode(value)
-    } yield decoded
-
   pureTest("VulcanEnum schema should use an enum schema") {
-    expect.eql(
-      """{"type":"enum","name":"Suit","namespace":"com.example","doc":"The different card suits","symbols":["clubs","diamonds","hearts","spades"]}""",
-      Codec[Suit].schema.value.toString
-    )
+    expectSchema[Suit] {
+      """{"type":"enum","name":"Suit","namespace":"com.example","doc":"The different card suits","symbols":["clubs","diamonds","hearts","spades"]}"""
+    }
   }
 
   pureTest("VulcanEnum should provide the codec as vulcanCodec") {
@@ -37,15 +24,13 @@ object VulcanEnumSpec extends BaseSuite {
   }
 
   pureTest("VulcanEnum should roundtrip enum values") {
-    forEach(List[Suit](Suit.Diamonds, Suit.Hearts, Suit.Spades)) { suit =>
-      expect.same(suit, encodeAndDecode(suit).value)
-    }
+    forEach(List[Suit](Suit.Diamonds, Suit.Hearts, Suit.Spades))(expectRoundtrip(_))
   }
 
   pureTest("VulcanEnum should error if withNameOption does not handle schema symbol") {
-    expect.eql(
-      "Error decoding com.example.Suit: clubs is not a member of Suit (clubs, diamonds, hearts, spades)",
-      encodeAndDecode[Suit](Suit.Clubs).swap.value.message
+    expectDecodeError[Suit](
+      Codec[Suit].encoder.flatMap(_.encode(Suit.Clubs)),
+      "Error decoding com.example.Suit: clubs is not a member of Suit (clubs, diamonds, hearts, spades)"
     )
   }
 

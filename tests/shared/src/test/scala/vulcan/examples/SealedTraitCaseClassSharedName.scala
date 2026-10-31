@@ -6,7 +6,6 @@
 
 package vulcan.examples
 
-import cats.Eq
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
@@ -17,13 +16,8 @@ sealed trait SealedTraitCaseClassSharedName
 object SealedTraitCaseClassSharedName {
   implicit val sealedTraitCaseClassCodec: Codec[SealedTraitCaseClassSharedName] =
     Codec.union { alt =>
-      assert(alt.toString() == "AltBuilder")
-
       alt[First.SharedNameSealedTraitCaseClass] ++ alt[Second.SharedNameSealedTraitCaseClass]
     }
-
-  implicit val sealedTraitCaseClassEq: Eq[SealedTraitCaseClassSharedName] =
-    Eq.fromUniversalEquals
 
   implicit val sealedTraitCaseClassArbitrary: Arbitrary[SealedTraitCaseClassSharedName] =
     Arbitrary {

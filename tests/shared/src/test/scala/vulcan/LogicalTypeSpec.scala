@@ -29,7 +29,7 @@ object LogicalTypeSpec extends BaseSuite {
   pureTest("LogicalType should be equal when names and parameters are equal") {
     expect.same(LogicalType("custom", JsonObject.empty), LogicalType("custom")) &&
     expect.same(LogicalType.decimal(10, 2), LogicalType.decimal(10, 2)) &&
-    expect(LogicalType.decimal(10, 2) != LogicalType.decimal(10, 3))
+    expect(clue(LogicalType.decimal(10, 2)) != clue(LogicalType.decimal(10, 3)))
   }
 
   pureTest("LogicalType should include the parameters in toString") {
@@ -54,18 +54,18 @@ object LogicalTypeSpec extends BaseSuite {
   }
 
   pureTest("LogicalType decimal should not extract other logical types") {
-    expect(LogicalType.Decimal.unapply(LogicalType.date).isEmpty)
+    expect.same(None, LogicalType.Decimal.unapply(LogicalType.date))
   }
 
   pureTest(
     "LogicalType decimal should only use integers without fraction and exponent, same as the Java Avro library"
   ) {
-    def logicalType(params: String): Option[LogicalType] =
-      Schema.parse(s"""{"type":"bytes","logicalType":"decimal",$params}""").value.logicalType
+    def logicalType(params: String): Either[AvroException, Option[LogicalType]] =
+      Schema.parse(s"""{"type":"bytes","logicalType":"decimal",$params}""").map(_.logicalType)
 
-    expect.same(Some(LogicalType.decimal(4, 2)), logicalType(""""precision":4,"scale":2""")) &&
-    expect(logicalType(""""precision":4.0,"scale":2""").isEmpty) &&
-    expect(logicalType(""""precision":4e0,"scale":2""").isEmpty) &&
-    expect(logicalType(""""precision":4,"scale":2.0""").isEmpty)
+    expect.same(Right(Some(LogicalType.decimal(4, 2))), logicalType(""""precision":4,"scale":2""")) &&
+    expect.same(Right(None), logicalType(""""precision":4.0,"scale":2""")) &&
+    expect.same(Right(None), logicalType(""""precision":4e0,"scale":2""")) &&
+    expect.same(Right(None), logicalType(""""precision":4,"scale":2.0"""))
   }
 }

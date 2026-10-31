@@ -23,8 +23,6 @@ object CaseClassTwoFields {
       aliases = Seq("FirstAlias", "SecondAlias"),
       props = JsonObject("custom" -> Json.arr(Json.fromInt(1), Json.fromInt(2), Json.fromInt(3)))
     ) { field =>
-      assert(field.toString() == "FieldBuilder")
-
       (
         field(
           name = "name",

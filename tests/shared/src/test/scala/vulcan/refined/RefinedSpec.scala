@@ -19,22 +19,15 @@ object RefinedSpec extends BaseSuite {
     Show.fromToString
 
   test("Refined should succeed for values conforming to predicate") {
-    forall { (posInt: PosInt) =>
-      val codec = Codec[PosInt]
-      val schema = codec.schema.value
-      val encoded = codec.encoder.value.encode(posInt).value
-      val decoded = codec.decoder(schema).value.decode(encoded).value
-      expect.same(posInt, decoded)
-    }
+    forallRoundtrip[PosInt]
   }
 
   test("Refined should fail for values not conforming to predicate") {
     forall { (nonPosInt: NonPosInt) =>
-      val codec = Codec[PosInt]
-      val schema = codec.schema.value
-      val encoded = Codec[Int].encoder.value.encode(nonPosInt.value).value
-      val error = codec.decoder(schema).value.decode(encoded).swap.map(_.message).value
-      expect.eql(s"Predicate failed: ($nonPosInt > 0).", error)
+      expectDecodeError[PosInt](
+        Codec[Int].encode(nonPosInt.value),
+        s"Predicate failed: ($nonPosInt > 0)."
+      )
     }
   }
 }

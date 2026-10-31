@@ -64,8 +64,8 @@ object RegressionSpec extends BaseSuite {
       }
 
     def default(name: String): Option[Json] =
-      afterCodec.schema.value match {
-        case record: Schema.Record => record.fields.find(_.name == name).flatMap(_.default)
+      afterCodec.schema match {
+        case Right(record: Schema.Record) => record.fields.find(_.name == name).flatMap(_.default)
         case _ => None
       }
 
@@ -118,13 +118,13 @@ object RegressionSpec extends BaseSuite {
     pureTest(
       "#94: nested records in the null namespace should keep the null namespace when parsing the schema"
     ) {
-      val schema = outerCodec(innerCodec("")).schema.value
-
-      expect.eql(
-        """{"type":"record","name":"Outer","namespace":"com.example","fields":[{"name":"inner","type":{"type":"record","name":"Inner","namespace":"","fields":[{"name":"value","type":"int"}]}}]}""",
-        schema.toString
-      ) &&
-      expect.same(Right(schema), Schema.parse(schema.toString))
+      whenSuccess(outerCodec(innerCodec("")).schema) { schema =>
+        expect.eql(
+          """{"type":"record","name":"Outer","namespace":"com.example","fields":[{"name":"inner","type":{"type":"record","name":"Inner","namespace":"","fields":[{"name":"value","type":"int"}]}}]}""",
+          schema.toString
+        ) &&
+        expect.same(Right(schema), Schema.parse(schema.toString))
+      }
     }
 
     pureTest(
@@ -190,9 +190,9 @@ object RegressionSpec extends BaseSuite {
       val reader =
         Codec.enumeration[String]("Suit", "com.example", List("hearts", "spades"), identity, Right(_))
 
-      expect.eql(
-        "Error decoding com.example.Suit: clubs is not one of schema symbols [hearts, spades]",
-        writeRead("clubs")(writer, reader).swap.value.message
+      expect.same(
+        Left("Error decoding com.example.Suit: clubs is not one of schema symbols [hearts, spades]"),
+        writeRead("clubs")(writer, reader).left.map(_.message)
       )
     }
   }
@@ -205,17 +205,18 @@ object RegressionSpec extends BaseSuite {
         if (string == "thing") Right(Thing(string)) else Left(AvroException(s"$string is not a thing"))
       }(_.value)
 
-    expect.eql(
-      "Error decoding Option: other is not a thing",
-      writeRead[Option[String], Option[Thing]](Some("other")).swap.value.message
+    expect.same(
+      Left("Error decoding Option: other is not a thing"),
+      writeRead[Option[String], Option[Thing]](Some("other")).left.map(_.message)
     )
   }
 
   pureTest("#320: errors from exceptions should preserve the exception as cause") {
     val exception = new IllegalArgumentException("invalid")
     val codec = Codec[Int].imapTry[Int](_ => Failure(exception))(identity)
-    val error = codec.decoder(Schema.Int).flatMap(_.decode(AvroValue.Int(1))).swap.value
-    expect(error.getCause eq exception)
+    matches(codec.decoder(Schema.Int).flatMap(_.decode(AvroValue.Int(1)))) { case Left(error) =>
+      expect(clue(error.getCause) eq exception)
+    }
   }
 
   pureTest("#333: missing fields should decode fields missing in the writer schema using the default") {
@@ -259,9 +260,9 @@ object RegressionSpec extends BaseSuite {
   }
 
   pureTest("#335: logical types of writer schemas should error decoding instants from plain longs") {
-    expect.eql(
-      "Error decoding Instant: Got unexpected missing logical type",
-      writeRead[Long, Instant](123L).swap.value.message
+    expect.same(
+      Left("Error decoding Instant: Got unexpected missing logical type"),
+      writeRead[Long, Instant](123L).left.map(_.message)
     )
   }
 
@@ -281,9 +282,11 @@ object RegressionSpec extends BaseSuite {
         field("instant", _.instant).map(LongRecord(_))
       }
 
-    expect.eql(
-      "Error decoding Example: Error decoding field instant: Error decoding Instant: Got unexpected missing logical type",
-      writeRead[LongRecord, InstantRecord](LongRecord(123L)).swap.value.message
+    expect.same(
+      Left(
+        "Error decoding Example: Error decoding field instant: Error decoding Instant: Got unexpected missing logical type"
+      ),
+      writeRead[LongRecord, InstantRecord](LongRecord(123L)).left.map(_.message)
     )
   }
 
@@ -307,9 +310,11 @@ object RegressionSpec extends BaseSuite {
   }
 
   pureTest("#350: dates exceeding the int range should error when encoding") {
-    expect.eql(
-      "Error encoding LocalDate: Unable to encode date as epoch days of 365241780471 exceeds the maximum integer size",
-      Codec[LocalDate].encoder.flatMap(_.encode(LocalDate.MAX)).swap.value.message
+    expect.same(
+      Left(
+        "Error encoding LocalDate: Unable to encode date as epoch days of 365241780471 exceeds the maximum integer size"
+      ),
+      Codec[LocalDate].encoder.flatMap(_.encode(LocalDate.MAX)).left.map(_.message)
     )
   }
 
@@ -343,16 +348,18 @@ object RegressionSpec extends BaseSuite {
   }
 
   pureTest("#398: zero bytes should decode as null") {
-    val option = Codec[Option[Int]].binaryDecoder(Schema.Null).value
-    val unit = Codec[Unit].binaryDecoder(Schema.Null).value
-    expect.same(Right(None), option.decode(ByteVector.empty)) &&
-    expect.same(Right(()), unit.decode(ByteVector.empty))
+    val option = Codec[Option[Int]].binaryDecoder(Schema.Null)
+    val unit = Codec[Unit].binaryDecoder(Schema.Null)
+    expect.same(Right(None), option.flatMap(_.decode(ByteVector.empty))) &&
+    expect.same(Right(()), unit.flatMap(_.decode(ByteVector.empty)))
   }
 
   pureTest("#450: options of unions should include the alternatives of the union") {
-    expect.eql(
-      """["null",{"type":"record","name":"FirstInSealedTraitCaseClass","namespace":"com.example","fields":[{"name":"value","type":"int"}]},{"type":"record","name":"SecondInSealedTraitCaseClass","namespace":"com.example","fields":[{"name":"value","type":"string"}]},{"type":"array","items":"int"}]""",
-      Codec[Option[SealedTraitCaseClass]].schema.value.toString
+    expect.same(
+      Right(
+        """["null",{"type":"record","name":"FirstInSealedTraitCaseClass","namespace":"com.example","fields":[{"name":"value","type":"int"}]},{"type":"record","name":"SecondInSealedTraitCaseClass","namespace":"com.example","fields":[{"name":"value","type":"string"}]},{"type":"array","items":"int"}]"""
+      ),
+      Codec[Option[SealedTraitCaseClass]].schema.map(_.toString)
     )
   }
 
@@ -402,9 +409,11 @@ object RegressionSpec extends BaseSuite {
       val codec = pairCodec(elementCodec("value"), elementCodec("value"))
       val pair = Pair(Element("a"), Element("b"))
 
-      expect.eql(
-        """{"type":"record","name":"Pair","namespace":"com.example","fields":[{"name":"first","type":{"type":"record","name":"Element","fields":[{"name":"value","type":"string"}]}},{"name":"second","type":"Element"}]}""",
-        codec.schema.value.toString
+      expect.same(
+        Right(
+          """{"type":"record","name":"Pair","namespace":"com.example","fields":[{"name":"first","type":{"type":"record","name":"Element","fields":[{"name":"value","type":"string"}]}},{"name":"second","type":"Element"}]}"""
+        ),
+        codec.schema.map(_.toString)
       ) &&
       expect.same(Right(pair), writeRead(pair)(codec, codec))
     }
@@ -412,9 +421,9 @@ object RegressionSpec extends BaseSuite {
     pureTest("#538: named schemas defined more than once should error for conflicting definitions") {
       val codec = pairCodec(elementCodec("value"), elementCodec("other"))
 
-      expect.eql(
-        "Conflicting definitions of named schema com.example.Element",
-        codec.schema.swap.value.message
+      expect.same(
+        Left("Conflicting definitions of named schema com.example.Element"),
+        codec.schema.left.map(_.message)
       )
     }
   }

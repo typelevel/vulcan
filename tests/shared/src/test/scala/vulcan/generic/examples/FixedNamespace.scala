@@ -6,7 +6,6 @@
 
 package vulcan.generic.examples
 
-import cats.Eq
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
 import scodec.bits.ByteVector
@@ -23,9 +22,6 @@ object FixedNamespace {
       encode = _.bytes,
       decode = bytes => Right(FixedNamespace(bytes))
     )
-
-  implicit val fixedNamespaceEq: Eq[FixedNamespace] =
-    Eq.fromUniversalEquals
 
   implicit val fixedNamespaceArbitrary: Arbitrary[FixedNamespace] =
     Arbitrary {

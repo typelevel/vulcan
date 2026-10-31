@@ -7,6 +7,7 @@
 package vulcan
 
 import cats.Show
+import cats.effect.IO
 import cats.syntax.all.*
 import java.io.EOFException
 import java.nio.ByteBuffer
@@ -241,11 +242,12 @@ object CodecJavaSpec extends BaseSuite {
 
   test("logical types should encode and decode decimal the same as the Java Avro library") {
     val codec = Codec.decimal(precision = 10, scale = 5)
-    val schema = JavaAvro.schema(codec.schema.value)
     val conversion = new Conversions.DecimalConversion
     val genUnscaled = Gen.chooseNum(-9999999999L, 9999999999L)
 
     for {
+      schema <- IO.fromEither(codec.schema.map(JavaAvro.schema))
+
       encode <- forall(genUnscaled.map(BigDecimal(_, 5))) { decimal =>
         expectEncodeSameAsJava(codec, decimal) { decimal =>
           val bytes = conversion.toBytes(decimal.underlying, schema, schema.getLogicalType)
@@ -428,11 +430,13 @@ object CodecJavaSpec extends BaseSuite {
   private def expectDecodeSameAsJava[A](codec: Codec[A], value: AvroValue)(
     javaDecode: AvroValue => A
   )(implicit loc: SourceLocation): Expectations =
-    (codec.decoder(codec.schema.value).flatMap(_.decode(value)), Try(javaDecode(value)).toEither) match {
-      case (Right(decoded), Right(javaDecoded)) => expect.same(javaDecoded, decoded)
-      case (Left(_), Left(_)) => success
-      case (decoded, javaDecoded) =>
-        failure(s"Decoded $value as $decoded, Java Avro decoded $javaDecoded")
+    whenSuccess(codec.schema.flatMap(codec.decoder)) { decoder =>
+      (decoder.decode(value), Try(javaDecode(value)).toEither) match {
+        case (Right(decoded), Right(javaDecoded)) => expect.same(javaDecoded, decoded)
+        case (Left(_), Left(_)) => success
+        case (decoded, javaDecoded) =>
+          failure(s"Decoded $value as $decoded, Java Avro decoded $javaDecoded")
+      }
     }
 
   /** Checks that decoding succeeds and fails the same way as for the Java Avro library. */
@@ -440,26 +444,27 @@ object CodecJavaSpec extends BaseSuite {
     reader: Reader[A],
     writerSchema: Schema,
     value: AvroValue
-  )(implicit loc: SourceLocation): Expectations = {
-    val javaWriterSchema = JavaAvro.schema(writerSchema)
-    val javaReaderSchema = JavaAvro.schema(reader.codec.schema.value)
-    val bytes =
-      JavaAvro.writeBinary(javaWriterSchema, JavaAvro.toJava(value, writerSchema, javaWriterSchema))
+  )(implicit loc: SourceLocation): Expectations =
+    whenSuccess(reader.codec.schema) { readerSchema =>
+      val javaWriterSchema = JavaAvro.schema(writerSchema)
+      val javaReaderSchema = JavaAvro.schema(readerSchema)
+      val bytes =
+        JavaAvro.writeBinary(javaWriterSchema, JavaAvro.toJava(value, writerSchema, javaWriterSchema))
 
-    val decoded = reader.codec.binaryDecoder(writerSchema).flatMap(_.decode(bytes))
-    val javaDecoded =
-      Try(JavaAvro.readBinary(javaWriterSchema, javaReaderSchema, bytes)).toEither
-        .map(reader.fromJava)
+      val decoded = reader.codec.binaryDecoder(writerSchema).flatMap(_.decode(bytes))
+      val javaDecoded =
+        Try(JavaAvro.readBinary(javaWriterSchema, javaReaderSchema, bytes)).toEither
+          .map(reader.fromJava)
 
-    (decoded, javaDecoded) match {
-      case (Right(a), Right(javaA)) => expect(same(a, javaA))
-      case (Left(_), Left(_)) => success
-      // The Java Avro library checks the remaining bytes using the minimum size of reader items,
-      // so rejects collections of items promoted to larger types, for example from int to float
-      case (Right(_), Left(error: EOFException)) if isReaderItemSizeCheck(error) => success
-      case _ => failure(s"Decoded $decoded from $writerSchema, Java Avro decoded $javaDecoded")
+      (decoded, javaDecoded) match {
+        case (Right(a), Right(javaA)) => expect(same(clue(a), clue(javaA)))
+        case (Left(_), Left(_)) => success
+        // The Java Avro library checks the remaining bytes using the minimum size of reader items,
+        // so rejects collections of items promoted to larger types, for example from int to float
+        case (Right(_), Left(error: EOFException)) if isReaderItemSizeCheck(error) => success
+        case _ => failure(s"Decoded $decoded from $writerSchema, Java Avro decoded $javaDecoded")
+      }
     }
-  }
 
   private def isReaderItemSizeCheck(error: EOFException): Boolean =
     error.getMessage.startsWith("Collection claims") || error.getMessage.startsWith("Map claims")

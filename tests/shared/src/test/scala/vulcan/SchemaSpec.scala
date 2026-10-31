@@ -48,9 +48,9 @@ object SchemaSpec extends BaseSuite {
 
   pureTest("Schema Record should not have optional attributes by default") {
     val record = Schema.Record(Schema.Name("Person"), Vector.empty)
-    expect(record.doc.isEmpty) &&
-    expect(record.aliases.isEmpty) &&
-    expect(record.props.isEmpty)
+    expect.eql(None, record.doc) &&
+    expect.eql(Vector.empty, record.aliases) &&
+    expect.eql(JsonObject.empty, record.props)
   }
 
   pureTest("Schema Record should replace attributes using modifiers") {
@@ -73,31 +73,31 @@ object SchemaSpec extends BaseSuite {
   pureTest("Schema Field should have ascending order and no default by default") {
     val field = Schema.Field("name", Schema.String)
     expect.same(Schema.Field.Order.Ascending, field.order) &&
-    expect(field.default.isEmpty)
+    expect.eql(None, field.default)
   }
 
   pureTest("Schema Field should distinguish a null default from no default") {
     val field = Schema.Field("name", Schema.Union(Vector(Schema.Null, Schema.String)))
     val withNullDefault = field.withDefault(Some(Json.Null))
     expect.eql(Some(Json.Null), withNullDefault.default) &&
-    expect(withNullDefault != field)
+    expect(clue(withNullDefault) != clue(field))
   }
 
   pureTest("Schema equality should be structural") {
     expect.same(Schema.Array(Schema.Int), Schema.Array(Schema.Int)) &&
-    expect(Schema.Array(Schema.Int) != Schema.Array(Schema.Long)) &&
-    expect(Schema.Int.withProps(JsonObject("custom" -> Json.True)) != Schema.Int)
+    expect(clue(Schema.Array(Schema.Int)) != clue(Schema.Array(Schema.Long))) &&
+    expect(clue(Schema.Int.withProps(JsonObject("custom" -> Json.True))) != clue(Schema.Int))
   }
 
   pureTest("Schema primitive should be the companion object without props") {
-    expect(Schema.String.props.isEmpty) &&
-    expect(Schema.String.withProps(JsonObject.empty) eq Schema.String) &&
-    expect(Schema.String.withProps(props).withProps(JsonObject.empty) eq Schema.String)
+    expect.eql(JsonObject.empty, Schema.String.props) &&
+    expect(clue(Schema.String.withProps(JsonObject.empty)) eq Schema.String) &&
+    expect(clue(Schema.String.withProps(props).withProps(JsonObject.empty)) eq Schema.String)
   }
 
   pureTest("Schema primitive should be equal with equal props") {
     expect.same(Schema.String.withProps(props), Schema.String.withProps(props)) &&
-    expect(Schema.String.withProps(props) != Schema.String)
+    expect(clue(Schema.String.withProps(props)) != clue(Schema.String))
   }
 
   pureTest("Schema primitive should match on the type regardless of props") {
@@ -121,8 +121,7 @@ object SchemaSpec extends BaseSuite {
   }
 
   pureTest("Schema isNullable should be false for other schemas") {
-    expect(!Schema.Int.isNullable) &&
-    expect(!Schema.Array(Schema.Null).isNullable)
+    expect.all(!Schema.Int.isNullable, !Schema.Array(Schema.Null).isNullable)
   }
 
   pureTest("Schema logicalType should add the logical type followed by its parameters to the props") {
@@ -132,7 +131,7 @@ object SchemaSpec extends BaseSuite {
   }
 
   pureTest("Schema logicalType should be empty without a logical type") {
-    expect(Schema.Long.logicalType.isEmpty)
+    expect.same(None, Schema.Long.logicalType)
   }
 
   pureTest("Schema logicalType should return logical types which are valid for the underlying type") {
@@ -165,20 +164,20 @@ object SchemaSpec extends BaseSuite {
   }
 
   pureTest("Schema logicalType should ignore logical types which are invalid for the underlying type") {
-    expect(Schema.String.withProps(withLogicalTypeProp("timestamp-millis")).logicalType.isEmpty) &&
-    expect(Schema.Int.withProps(withLogicalTypeProp("timestamp-millis")).logicalType.isEmpty) &&
-    expect(Schema.Long.withProps(withLogicalTypeProp("date")).logicalType.isEmpty) &&
-    expect(Schema.Bytes.withProps(withLogicalTypeProp("uuid")).logicalType.isEmpty) &&
-    expect(fixed(8).withLogicalType(LogicalType.uuid).logicalType.isEmpty) &&
-    expect(fixed(11).withLogicalType(LogicalType.duration).logicalType.isEmpty)
+    expect.same(None, Schema.String.withProps(withLogicalTypeProp("timestamp-millis")).logicalType) &&
+    expect.same(None, Schema.Int.withProps(withLogicalTypeProp("timestamp-millis")).logicalType) &&
+    expect.same(None, Schema.Long.withProps(withLogicalTypeProp("date")).logicalType) &&
+    expect.same(None, Schema.Bytes.withProps(withLogicalTypeProp("uuid")).logicalType) &&
+    expect.same(None, fixed(8).withLogicalType(LogicalType.uuid).logicalType) &&
+    expect.same(None, fixed(11).withLogicalType(LogicalType.duration).logicalType)
   }
 
   pureTest("Schema logicalType should ignore decimals with invalid precision or scale") {
-    expect(Schema.Bytes.withLogicalType(LogicalType.decimal(0, 0)).logicalType.isEmpty) &&
-    expect(Schema.Bytes.withLogicalType(LogicalType.decimal(2, 3)).logicalType.isEmpty) &&
-    expect(Schema.Bytes.withLogicalType(LogicalType.decimal(2, -1)).logicalType.isEmpty) &&
-    expect(Schema.Bytes.withProps(withLogicalTypeProp("decimal")).logicalType.isEmpty) &&
-    expect(fixed(4).withLogicalType(LogicalType.decimal(10, 2)).logicalType.isEmpty)
+    expect.same(None, Schema.Bytes.withLogicalType(LogicalType.decimal(0, 0)).logicalType) &&
+    expect.same(None, Schema.Bytes.withLogicalType(LogicalType.decimal(2, 3)).logicalType) &&
+    expect.same(None, Schema.Bytes.withLogicalType(LogicalType.decimal(2, -1)).logicalType) &&
+    expect.same(None, Schema.Bytes.withProps(withLogicalTypeProp("decimal")).logicalType) &&
+    expect.same(None, fixed(4).withLogicalType(LogicalType.decimal(10, 2)).logicalType)
   }
 
   pureTest("Schema logicalType should default the decimal scale to zero") {
@@ -201,7 +200,7 @@ object SchemaSpec extends BaseSuite {
   }
 
   pureTest("Schema logicalType should be empty for unions and references") {
-    expect(Schema.Union(Vector(Schema.Int)).logicalType.isEmpty) &&
-    expect(Schema.Ref(Schema.Name("Record")).logicalType.isEmpty)
+    expect.same(None, Schema.Union(Vector(Schema.Int)).logicalType) &&
+    expect.same(None, Schema.Ref(Schema.Name("Record")).logicalType)
   }
 }

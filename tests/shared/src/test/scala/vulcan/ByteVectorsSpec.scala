@@ -29,7 +29,7 @@ object ByteVectorsSpec extends BaseSuite {
 
   pureTest("ByteVectors decodeString should decode bytes without an accessible array") {
     val bytes = ByteVector.view(ByteBuffer.wrap(hex"616263".toArray).asReadOnlyBuffer)
-    expect(!bytes.toByteBufferUnsafe.hasArray) &&
+    expect(!clue(bytes.toByteBufferUnsafe).hasArray) &&
     expect.eql("abc", decode(bytes))
   }
 }

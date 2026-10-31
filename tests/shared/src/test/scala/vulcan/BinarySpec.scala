@@ -12,8 +12,12 @@ import vulcan.internal.BinaryReader
 import vulcan.internal.BinaryWriter
 import weaver.Expectations
 import weaver.SourceLocation
+import weaver.scalacheck.CheckConfig
 
 object BinarySpec extends BaseSuite {
+  override def checkConfig: CheckConfig =
+    super.checkConfig.withMinimumSuccessful(1000)
+
   private def write(f: BinaryWriter => Unit): ByteVector = {
     val writer = new BinaryWriter(0)
     f(writer)
@@ -122,42 +126,40 @@ object BinarySpec extends BaseSuite {
   }
 
   test("BinaryReader should read written values") {
-    forall.withConfig(checkConfig.withMinimumSuccessful(1000)) {
-      (boolean: Boolean, int: Int, long: Long, float: Float, double: Double) =>
-        val bytes =
-          write { writer =>
-            writer.writeBoolean(boolean)
-            writer.writeInt(int)
-            writer.writeLong(long)
-            writer.writeFloat(float)
-            writer.writeDouble(double)
-          }
-
-        read(bytes) { reader =>
-          expect.eql(boolean, reader.readBoolean()) &&
-          expect.eql(int, reader.readInt()) &&
-          expect.eql(long, reader.readLong()) &&
-          expect(java.lang.Float.compare(reader.readFloat(), float) == 0) &&
-          expect(java.lang.Double.compare(reader.readDouble(), double) == 0)
+    forall { (boolean: Boolean, int: Int, long: Long, float: Float, double: Double) =>
+      val bytes =
+        write { writer =>
+          writer.writeBoolean(boolean)
+          writer.writeInt(int)
+          writer.writeLong(long)
+          writer.writeFloat(float)
+          writer.writeDouble(double)
         }
+
+      read(bytes) { reader =>
+        expect.eql(boolean, reader.readBoolean()) &&
+        expect.eql(int, reader.readInt()) &&
+        expect.eql(long, reader.readLong()) &&
+        expect(java.lang.Float.compare(clue(reader.readFloat()), float) == 0) &&
+        expect(java.lang.Double.compare(clue(reader.readDouble()), double) == 0)
+      }
     }
   }
 
   test("BinaryReader should read written bytes, fixed, and strings") {
-    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(Gen.zip(genBytes, genBytes, genString)) {
-      case (bytes, fixed, string) =>
-        val written =
-          write { writer =>
-            writer.writeBytes(bytes)
-            writer.writeFixed(fixed)
-            writer.writeString(string)
-          }
-
-        read(written) { reader =>
-          expect.same(bytes, reader.readBytes()) &&
-          expect.same(fixed, reader.readFixed(fixed.size.toInt)) &&
-          expect.eql(string, reader.readString())
+    forall(Gen.zip(genBytes, genBytes, genString)) { case (bytes, fixed, string) =>
+      val written =
+        write { writer =>
+          writer.writeBytes(bytes)
+          writer.writeFixed(fixed)
+          writer.writeString(string)
         }
+
+      read(written) { reader =>
+        expect.same(bytes, reader.readBytes()) &&
+        expect.same(fixed, reader.readFixed(fixed.size.toInt)) &&
+        expect.eql(string, reader.readString())
+      }
     }
   }
 
@@ -222,9 +224,7 @@ object BinarySpec extends BaseSuite {
     expect.eql(Some("Invalid negative length -1 at position 0"), readError(hex"01")(_.readBytes())) &&
     expect.eql(
       Some("Invalid negative length -2 at position 1"),
-      readError(hex"0003")(r => {
-        r.readInt(); r.readString()
-      })
+      readError(hex"0003")(reader => (reader.readInt(), reader.readString()))
     )
   }
 

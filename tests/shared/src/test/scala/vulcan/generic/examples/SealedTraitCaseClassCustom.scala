@@ -6,7 +6,6 @@
 
 package vulcan.generic.examples
 
-import cats.Eq
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
@@ -32,9 +31,6 @@ object SealedTraitCaseClassCustom {
         arbitrary[String].map(SecondInSealedTraitCaseClassCustom(_))
       )
     )
-
-  implicit val sealedTraitCaseClassCustomEq: Eq[SealedTraitCaseClassCustom] =
-    Eq.fromUniversalEquals
 
   implicit val codec: Codec[SealedTraitCaseClassCustom] =
     Codec.derive

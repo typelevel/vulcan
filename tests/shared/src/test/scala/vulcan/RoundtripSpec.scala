@@ -8,6 +8,7 @@ package vulcan
 
 import cats.Eq
 import cats.data.*
+import cats.laws.discipline.arbitrary.*
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -17,13 +18,11 @@ import java.util.UUID
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
-import scala.collection.immutable.SortedMap
-import scala.collection.immutable.SortedSet
 import scodec.bits.ByteVector
 import vulcan.Codec.InstantMicros
 import vulcan.examples.*
 
-object RoundtripSpec extends BaseSuite with RoundtripHelpers {
+object RoundtripSpec extends BaseSuite {
   test("BigDecimal roundtrip") {
     implicit val bigDecimalCodec: Codec[BigDecimal] =
       Codec.decimal(precision = 10, scale = 5)
@@ -31,96 +30,71 @@ object RoundtripSpec extends BaseSuite with RoundtripHelpers {
     implicit val bigDecimalArbitrary: Arbitrary[BigDecimal] =
       Arbitrary(Gen.chooseNum(-9999999999L, 9999999999L).map(BigDecimal(_, 5)))
 
-    roundtrip[BigDecimal]
+    forallRoundtrip[BigDecimal]
   }
 
-  test("Boolean roundtrip") { roundtrip[Boolean] }
+  test("Boolean roundtrip") { forallRoundtrip[Boolean] }
 
-  test("Byte roundtrip") { roundtrip[Byte] }
+  test("Byte roundtrip") { forallRoundtrip[Byte] }
 
   test("ByteVector roundtrip") {
     implicit val byteVectorArbitrary: Arbitrary[ByteVector] =
       Arbitrary(arbitrary[Array[Byte]].map(ByteVector(_)))
 
-    implicit val byteVectorEq: Eq[ByteVector] =
-      Eq.fromUniversalEquals
-
-    roundtrip[ByteVector]
+    forallRoundtrip[ByteVector]
   }
 
-  test("Chain roundtrip") {
-    implicit def arbitraryChain[A](implicit
-      arbitrary: Arbitrary[A]
-    ): Arbitrary[Chain[A]] =
-      Arbitrary(Gen.listOf(arbitrary.arbitrary).map(Chain.fromSeq))
+  test("Chain roundtrip") { forallRoundtrip[Chain[Int]] }
 
-    roundtrip[Chain[Int]]
-  }
+  test("Char roundtrip") { forallRoundtrip[Char] }
 
-  test("Char roundtrip") { roundtrip[Char] }
-
-  test("Double roundtrip") { roundtrip[Double] }
+  test("Double roundtrip") { forallRoundtrip[Double] }
 
   pureTest("Double roundtrip negative zero") {
-    val codec = Codec[Double]
-    val bits = java.lang.Double.doubleToRawLongBits(-0.0d)
-    val decoded = List(
-      codec.binaryEncoder.value.encode(-0.0d).flatMap(codec.binaryDecoder(Schema.Double).value.decode),
-      codec.jsonEncoder.value.encode(-0.0d).flatMap(codec.jsonDecoder(Schema.Double).value.decode)
-    )
-    forEach(decoded)(double => expect.same(Right(bits), double.map(java.lang.Double.doubleToRawLongBits)))
+    implicit val doubleBitsEq: Eq[Double] =
+      Eq.by(java.lang.Double.doubleToRawLongBits(_))
+
+    expectRoundtrip(-0.0d)
   }
 
-  test("Either roundtrip") { roundtrip[Either[Int, String]] }
+  test("Either roundtrip") { forallRoundtrip[Either[Int, String]] }
 
-  test("Enum roundtrip") { roundtrip[SealedTraitEnum] }
+  test("Enum roundtrip") { forallRoundtrip[SealedTraitEnum] }
 
-  test("Fixed roundtrip") { roundtrip[FixedBoolean] }
+  test("Fixed roundtrip") { forallRoundtrip[FixedBoolean] }
 
-  test("Float roundtrip") { roundtrip[Float] }
+  test("Float roundtrip") { forallRoundtrip[Float] }
 
   pureTest("Float roundtrip negative zero") {
-    val codec = Codec[Float]
-    val bits = java.lang.Float.floatToRawIntBits(-0.0f)
-    val decoded = List(
-      codec.binaryEncoder.value.encode(-0.0f).flatMap(codec.binaryDecoder(Schema.Float).value.decode),
-      codec.jsonEncoder.value.encode(-0.0f).flatMap(codec.jsonDecoder(Schema.Float).value.decode)
-    )
-    forEach(decoded)(float => expect.same(Right(bits), float.map(java.lang.Float.floatToRawIntBits)))
+    implicit val floatBitsEq: Eq[Float] =
+      Eq.by(java.lang.Float.floatToRawIntBits(_))
+
+    expectRoundtrip(-0.0f)
   }
 
   test("Instant roundtrip") {
     implicit val instantArbitrary: Arbitrary[Instant] =
       Arbitrary(arbitrary[Long].map(Instant.ofEpochMilli))
 
-    implicit val instantEq: Eq[Instant] =
-      Eq.fromUniversalEquals
-
-    roundtrip[Instant]
+    forallRoundtrip[Instant]
   }
 
   test("InstantMicros roundtrip") {
     implicit val instantMicrosArbitrary: Arbitrary[InstantMicros] =
       Arbitrary(arbitrary[Long].map(InstantMicros.fromEpochMicro))
 
-    implicit val instantMicrosEq: Eq[InstantMicros] =
-      Eq.fromUniversalEquals
-
-    roundtrip[InstantMicros]
+    forallRoundtrip[InstantMicros]
   }
 
-  test("Int roundtrip") { roundtrip[Int] }
+  test("Int roundtrip") { forallRoundtrip[Int] }
 
-  test("List roundtrip") { roundtrip[List[Int]] }
+  test("List roundtrip") { forallRoundtrip[List[Int]] }
 
   test("LocalDate roundtrip") {
     implicit val localDateArbitrary: Arbitrary[LocalDate] =
       Arbitrary(arbitrary[Int].map(days => LocalDate.ofEpochDay(days.toLong)))
 
-    implicit val localDateEq: Eq[LocalDate] =
-      Eq.fromUniversalEquals
-
-    roundtrip[LocalDate]
+    forallRoundtrip[LocalDate]
   }
 
   test("LocalDateTime roundtrip") {
@@ -129,142 +103,64 @@ object RoundtripSpec extends BaseSuite with RoundtripHelpers {
         LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneOffset.UTC)
       })
 
-    implicit val localDateTimeEq: Eq[LocalDateTime] =
-      Eq.fromUniversalEquals
-
-    roundtrip[LocalDateTime]
+    forallRoundtrip[LocalDateTime]
   }
 
-  locally {
-    implicit val localTimeEq: Eq[LocalTime] =
-      Eq.fromUniversalEquals
+  test("LocalTime roundtrip micros") {
+    implicit val localTimeCodec: Codec[LocalTime] =
+      Codec.localTimeMicros
 
-    test("LocalTime roundtrip micros") {
-      implicit val localTimeCodec: Codec[LocalTime] =
-        Codec.localTimeMicros
-
-      implicit val localTimeArbitrary: Arbitrary[LocalTime] =
-        Arbitrary(
-          Gen.chooseNum(0L, 86399999999L).map(micros => LocalTime.ofNanoOfDay(micros * 1000L))
-        )
-
-      roundtrip[LocalTime]
-    }
-
-    test("LocalTime roundtrip millis") {
-      implicit val localTimeCodec: Codec[LocalTime] =
-        Codec.localTimeMillis
-
-      implicit val localTimeArbitrary: Arbitrary[LocalTime] =
-        Arbitrary(
-          Gen.chooseNum(0L, 86399999L).map(millis => LocalTime.ofNanoOfDay(millis * 1000000L))
-        )
-
-      roundtrip[LocalTime]
-    }
-  }
-
-  test("Long roundtrip") { roundtrip[Long] }
-
-  test("Map roundtrip") { roundtrip[Map[String, Int]] }
-
-  test("NonEmptyChain roundtrip") {
-    implicit def arbitraryNonEmptyChain[A](implicit
-      arbitrary: Arbitrary[A]
-    ): Arbitrary[NonEmptyChain[A]] =
+    implicit val localTimeArbitrary: Arbitrary[LocalTime] =
       Arbitrary(
-        Gen
-          .nonEmptyListOf(arbitrary.arbitrary)
-          .map(nel => NonEmptyChain.fromChainUnsafe(Chain.fromSeq(nel)))
+        Gen.chooseNum(0L, 86399999999L).map(micros => LocalTime.ofNanoOfDay(micros * 1000L))
       )
 
-    roundtrip[NonEmptyChain[Int]]
+    forallRoundtrip[LocalTime]
   }
 
-  test("NonEmptyList roundtrip") {
-    implicit def arbitraryNonEmptyList[A](implicit
-      arbitrary: Arbitrary[A]
-    ): Arbitrary[NonEmptyList[A]] =
+  test("LocalTime roundtrip millis") {
+    implicit val localTimeCodec: Codec[LocalTime] =
+      Codec.localTimeMillis
+
+    implicit val localTimeArbitrary: Arbitrary[LocalTime] =
       Arbitrary(
-        Gen
-          .nonEmptyListOf(arbitrary.arbitrary)
-          .map(NonEmptyList.fromListUnsafe)
+        Gen.chooseNum(0L, 86399999L).map(millis => LocalTime.ofNanoOfDay(millis * 1000000L))
       )
 
-    roundtrip[NonEmptyList[Int]]
+    forallRoundtrip[LocalTime]
   }
 
-  test("NonEmptyMap roundtrip") {
-    implicit def arbitraryNonEmptyMap[A](implicit
-      arbitrary: Arbitrary[A]
-    ): Arbitrary[NonEmptyMap[String, A]] =
-      Arbitrary(
-        Gen
-          .nonEmptyListOf(Arbitrary.arbitrary[(String, A)])
-          .map(entries => NonEmptyMap.fromMapUnsafe(SortedMap(entries: _*)))
-      )
+  test("Long roundtrip") { forallRoundtrip[Long] }
 
-    roundtrip[NonEmptyMap[String, Int]]
-  }
+  test("Map roundtrip") { forallRoundtrip[Map[String, Int]] }
 
-  test("NonEmptySet roundtrip") {
-    implicit def arbitraryNonEmptySet[A](implicit
-      arbitrary: Arbitrary[A],
-      ordering: Ordering[A]
-    ): Arbitrary[NonEmptySet[A]] =
-      Arbitrary(
-        Gen
-          .nonEmptyListOf(arbitrary.arbitrary)
-          .map(nel => NonEmptySet.fromSetUnsafe(SortedSet(nel: _*)))
-      )
+  test("NonEmptyChain roundtrip") { forallRoundtrip[NonEmptyChain[Int]] }
 
-    roundtrip[NonEmptySet[Int]]
-  }
+  test("NonEmptyList roundtrip") { forallRoundtrip[NonEmptyList[Int]] }
 
-  test("NonEmptyVector roundtrip") {
-    implicit def arbitraryNonEmptyVector[A](implicit
-      arbitrary: Arbitrary[A]
-    ): Arbitrary[NonEmptyVector[A]] =
-      Arbitrary(
-        Gen
-          .nonEmptyListOf(arbitrary.arbitrary)
-          .map(nel => NonEmptyVector.fromVectorUnsafe(nel.toVector))
-      )
+  test("NonEmptyMap roundtrip") { forallRoundtrip[NonEmptyMap[String, Int]] }
 
-    roundtrip[NonEmptyVector[Int]]
-  }
+  test("NonEmptySet roundtrip") { forallRoundtrip[NonEmptySet[Int]] }
 
-  test("Option roundtrip") { roundtrip[Option[Int]] }
+  test("NonEmptyVector roundtrip") { forallRoundtrip[NonEmptyVector[Int]] }
 
-  test("Option roundtrip with the types of unions") { roundtrip[Option[Either[Int, String]]] }
+  test("Option roundtrip") { forallRoundtrip[Option[Int]] }
 
-  test("Record roundtrip") { roundtrip[CaseClassField] }
+  test("Option roundtrip with the types of unions") { forallRoundtrip[Option[Either[Int, String]]] }
 
-  test("Seq roundtrip") {
-    implicit def seqArbitrary[A](implicit
-      arbitrary: Arbitrary[A]
-    ): Arbitrary[Seq[A]] =
-      Arbitrary(Gen.listOf(arbitrary.arbitrary))
+  test("Record roundtrip") { forallRoundtrip[CaseClassField] }
 
-    implicit def seqEq[A](implicit
-      eq: Eq[A]
-    ): Eq[Seq[A]] =
-      Eq.instance { (a, b) =>
-        a.size == b.size && a.zip(b).forall { case (a1, a2) => eq.eqv(a1, a2) }
-      }
+  test("Seq roundtrip") { forallRoundtrip[Seq[Int]] }
 
-    roundtrip[Seq[Int]]
-  }
+  test("Set roundtrip") { forallRoundtrip[Set[Int]] }
 
-  test("Set roundtrip") { roundtrip[Set[Int]] }
+  test("Short roundtrip") { forallRoundtrip[Short] }
 
-  test("Short roundtrip") { roundtrip[Short] }
+  test("String roundtrip") { forallRoundtrip[String] }
 
-  test("String roundtrip") { roundtrip[String] }
+  test("Union roundtrip") { forallRoundtrip[SealedTraitCaseClass] }
 
-  test("Union roundtrip") { roundtrip[SealedTraitCaseClass] }
-
-  test("Unit roundtrip") { roundtrip[Unit] }
+  test("Unit roundtrip") { forallRoundtrip[Unit] }
 
   test("UUID roundtrip") {
     implicit val uuidArbitrary: Arbitrary[UUID] =
@@ -272,11 +168,8 @@ object RoundtripSpec extends BaseSuite with RoundtripHelpers {
         new UUID(most, least)
       })
 
-    implicit val uuidEq: Eq[UUID] =
-      Eq.fromUniversalEquals
-
-    roundtrip[UUID]
+    forallRoundtrip[UUID]
   }
 
-  test("Vector roundtrip") { roundtrip[Vector[Int]] }
+  test("Vector roundtrip") { forallRoundtrip[Vector[Int]] }
 }

@@ -9,23 +9,26 @@ package vulcan
 import scodec.bits.*
 import vulcan.internal.BinaryReader
 import vulcan.internal.BinaryWriter
+import weaver.scalacheck.CheckConfig
 
 object BinaryValueSpec extends BaseSuite {
-  private def encode(schema: Schema, value: AvroValue): ByteVector =
-    BinaryEncoder(schema).value.encode(value).value
+  override def checkConfig: CheckConfig =
+    super.checkConfig.withMinimumSuccessful(1000)
 
-  private def encodeError(schema: Schema, value: AvroValue): String =
-    BinaryEncoder(schema).value.encode(value).swap.value.message
+  private def encode(schema: Schema, value: AvroValue): Either[String, ByteVector] =
+    BinaryEncoder(schema).flatMap(_.encode(value)).left.map(_.message)
 
-  /** Decodes the value, returning the number of bytes left unread if not all bytes were read. */
-  private def decode(schema: Schema, bytes: ByteVector): Either[Int, AvroValue] = {
-    val reader = BinaryReader(bytes)
-    val value = BinaryDecoder.reader(schema).value(reader)
-    Either.cond(reader.remaining == 0, value, reader.remaining)
-  }
-
-  private def decodeError(schema: Schema, bytes: ByteVector): String =
-    BinaryDecoder(schema).value.decode(bytes).swap.value.message
+  /** Decodes the value, failing with the number of bytes left unread if not all bytes were read. */
+  private def decode(schema: Schema, bytes: ByteVector): Either[String, AvroValue] =
+    BinaryDecoder.reader(schema).left.map(_.message).flatMap { read =>
+      val reader = BinaryReader(bytes)
+      try {
+        val value = read(reader)
+        Either.cond(reader.remaining == 0, value, s"${reader.remaining} bytes left unread")
+      } catch {
+        case e: AvroException => Left(e.message)
+      }
+    }
 
   /** Block counts without items, which is valid for items encoded using zero bytes. */
   private def blockCounts(counts: Long*): ByteVector = {
@@ -60,9 +63,8 @@ object BinaryValueSpec extends BaseSuite {
     )
 
   test("BinaryEncoder and BinaryDecoder should decode encoded values") {
-    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(AvroValueGenerators.genSchemaAndValue) {
-      case (schema, value) =>
-        expect.same(Right(value), decode(schema, encode(schema, value)))
+    forall(AvroValueGenerators.genSchemaAndValue) { case (schema, value) =>
+      expect.same(Right(value), encode(schema, value).flatMap(decode(schema, _)))
     }
   }
 
@@ -87,7 +89,7 @@ object BinaryValueSpec extends BaseSuite {
       )
 
     forEach(examples) { case (schema, value, bytes) =>
-      expect.same(bytes, encode(schema, value)) &&
+      expect.same(Right(bytes), encode(schema, value)) &&
       expect.same(Right(value), decode(schema, bytes))
     }
   }
@@ -118,22 +120,22 @@ object BinaryValueSpec extends BaseSuite {
       )
 
     forEach(examples) { case (schema, value, bytes) =>
-      expect.same(bytes, encode(schema, value)) &&
+      expect.same(Right(bytes), encode(schema, value)) &&
       expect.same(Right(value), decode(schema, bytes))
     }
   }
 
   pureTest("BinaryEncoder and BinaryDecoder should encode values of different sizes using the same encoder") {
-    val encoder = BinaryEncoder(Schema.String).value
+    val encoder = BinaryEncoder(Schema.String)
 
     forEach(List("a" * 1000, "b", "c" * 100, "", "d" * 10000)) { string =>
-      val bytes = encoder.encode(AvroValue.String(string)).value
-      expect.same(Right(AvroValue.String(string)), decode(Schema.String, bytes))
+      val bytes = encoder.flatMap(_.encode(AvroValue.String(string))).left.map(_.message)
+      expect.same(Right(AvroValue.String(string)), bytes.flatMap(decode(Schema.String, _)))
     }
   }
 
   pureTest("BinaryEncoder and BinaryDecoder should encode null using zero bytes") {
-    expect.same(ByteVector.empty, encode(Schema.Null, AvroValue.Null)) &&
+    expect.same(Right(ByteVector.empty), encode(Schema.Null, AvroValue.Null)) &&
     expect.same(Right(AvroValue.Null), decode(Schema.Null, ByteVector.empty))
   }
 
@@ -151,67 +153,69 @@ object BinaryValueSpec extends BaseSuite {
 
   pureTest("BinaryEncoder and BinaryDecoder should not read past the end of the value") {
     val reader = BinaryReader(hex"3606666f6fff")
-    BinaryDecoder.reader(record).value(reader)
-    expect.eql(5, reader.position)
+    whenSuccess(BinaryDecoder.reader(record)) { read =>
+      expect.same(AvroValue.Record(Vector(AvroValue.Long(27L), AvroValue.String("foo"))), read(reader)) &&
+      expect.eql(5, reader.position)
+    }
   }
 
   pureTest("BinaryEncoder and BinaryDecoder should not encode values which do not match the schema") {
-    expect.eql("Invalid int value for long", encodeError(Schema.Long, AvroValue.Int(1))) &&
-    expect.eql("Invalid null value for record test", encodeError(record, AvroValue.Null)) &&
-    expect.eql(
-      "Invalid record with 1 values for record test with 2 fields",
-      encodeError(record, AvroValue.Record(Vector(AvroValue.Long(1L))))
+    expect.same(Left("Invalid int value for long"), encode(Schema.Long, AvroValue.Int(1))) &&
+    expect.same(Left("Invalid null value for record test"), encode(record, AvroValue.Null)) &&
+    expect.same(
+      Left("Invalid record with 1 values for record test with 2 fields"),
+      encode(record, AvroValue.Record(Vector(AvroValue.Long(1L))))
     ) &&
-    expect.eql("Invalid symbol E for enum Foo", encodeError(enumeration, AvroValue.Enum("E"))) &&
-    expect.eql(
-      "Invalid fixed with 3 bytes for fixed Id with size 2",
-      encodeError(Schema.Fixed(name("Id"), 2), AvroValue.Fixed(hex"010203"))
+    expect.same(Left("Invalid symbol E for enum Foo"), encode(enumeration, AvroValue.Enum("E"))) &&
+    expect.same(
+      Left("Invalid fixed with 3 bytes for fixed Id with size 2"),
+      encode(Schema.Fixed(name("Id"), 2), AvroValue.Fixed(hex"010203"))
     ) &&
-    expect.eql(
-      "Invalid index 2 for union with 2 types",
-      encodeError(nullableString, AvroValue.Union(2, AvroValue.Null))
+    expect.same(
+      Left("Invalid index 2 for union with 2 types"),
+      encode(nullableString, AvroValue.Union(2, AvroValue.Null))
     ) &&
-    expect.eql(
-      "Invalid long value for int",
-      encodeError(Schema.Array(Schema.Int), AvroValue.Array(Vector(AvroValue.Long(1L))))
+    expect.same(
+      Left("Invalid long value for int"),
+      encode(Schema.Array(Schema.Int), AvroValue.Array(Vector(AvroValue.Long(1L))))
     )
   }
 
   pureTest("BinaryEncoder and BinaryDecoder should not decode invalid indices") {
-    expect.eql(
-      "Invalid index 2 at position 0 for union with 2 types",
-      decodeError(nullableString, hex"04")
+    expect.same(
+      Left("Invalid index 2 at position 0 for union with 2 types"),
+      decode(nullableString, hex"04")
     ) &&
-    expect.eql(
-      "Invalid index -1 at position 0 for union with 2 types",
-      decodeError(nullableString, hex"01")
+    expect.same(
+      Left("Invalid index -1 at position 0 for union with 2 types"),
+      decode(nullableString, hex"01")
     ) &&
-    expect.eql(
-      "Invalid index 4 at position 0 for enum Foo with 4 symbols",
-      decodeError(enumeration, hex"08")
+    expect.same(
+      Left("Invalid index 4 at position 0 for enum Foo with 4 symbols"),
+      decode(enumeration, hex"08")
     )
   }
 
   pureTest("BinaryEncoder and BinaryDecoder should not decode truncated input") {
-    expect.eql("Unexpected end of input at position 1", decodeError(record, hex"36")) &&
-    expect.eql(
-      "Unexpected end of input at position 3",
-      decodeError(Schema.Array(Schema.Long), hex"040600")
+    expect.same(Left("Unexpected end of input at position 1"), decode(record, hex"36")) &&
+    expect.same(
+      Left("Unexpected end of input at position 3"),
+      decode(Schema.Array(Schema.Long), hex"040600")
     )
   }
 
   pureTest("BinaryEncoder and BinaryDecoder should not decode more items than the remaining input can hold") {
-    expect.eql(
-      "Invalid block count 5 at position 0, exceeding the remaining input",
-      decodeError(Schema.Array(Schema.Long), hex"0a00")
+    expect.same(
+      Left("Invalid block count 5 at position 0, exceeding the remaining input"),
+      decode(Schema.Array(Schema.Long), hex"0a00")
     ) &&
-    expect.eql(
-      "Invalid block count 2 at position 0, exceeding the remaining input",
-      decodeError(Schema.Array(Schema.Double), hex"0400000000000000f03f")
+    expect.same(
+      Left("Invalid block count 2 at position 0, exceeding the remaining input"),
+      decode(Schema.Array(Schema.Double), hex"0400000000000000f03f")
     ) &&
-    expect.eql(
-      "Invalid block count 3 at position 0, exceeding the remaining input",
-      decodeError(Schema.Map(Schema.Null), hex"0600")
+    expect.same(
+      Left("Invalid block count 3 at position 0, exceeding the remaining input"),
+      decode(Schema.Map(Schema.Null), hex"0600")
     )
   }
 
@@ -232,17 +236,21 @@ object BinaryValueSpec extends BaseSuite {
       Right(AvroValue.Array(Vector.fill(limit.toInt)(AvroValue.Null))),
       decode(nulls, blockCounts(limit, 0L))
     ) &&
-    expect.eql(
-      s"Invalid block count ${limit + 1} at position 0, exceeding the limit of $limit zero byte items",
-      decodeError(nulls, blockCounts(limit + 1, 0L))
+    expect.same(
+      Left(s"Invalid block count ${limit + 1} at position 0, exceeding the limit of $limit zero byte items"),
+      decode(nulls, blockCounts(limit + 1, 0L))
     ) &&
-    expect.eql(
-      s"Invalid block count $second at position $position, exceeding the limit of $limit zero byte items",
-      decodeError(twoArrays, blockCounts(first, 0L, second, 0L))
+    expect.same(
+      Left(
+        s"Invalid block count $second at position $position, exceeding the limit of $limit zero byte items"
+      ),
+      decode(twoArrays, blockCounts(first, 0L, second, 0L))
     ) &&
-    expect.eql(
-      s"Invalid block count ${Long.MaxValue} at position 0, exceeding the limit of $limit zero byte items",
-      decodeError(nulls, blockCounts(Long.MaxValue))
+    expect.same(
+      Left(
+        s"Invalid block count ${Long.MaxValue} at position 0, exceeding the limit of $limit zero byte items"
+      ),
+      decode(nulls, blockCounts(Long.MaxValue))
     )
   }
 
@@ -263,26 +271,32 @@ object BinaryValueSpec extends BaseSuite {
     val error =
       s"Invalid depth ${limit + 1} at position ${2 * (limit + 1)}, exceeding the limit of $limit nested values of recursive schemas"
 
-    expect(BinaryDecoder(node).value.decode(nodes(limit + 1)).isRight) &&
-    expect.eql(error, decodeError(node, nodes(limit + 2))) &&
-    expect.eql(error, decodeError(node, nodes(100000)))
+    matches(decode(node, nodes(limit + 1))) { case Right(_) => success } &&
+    expect.same(Left(error), decode(node, nodes(limit + 2))) &&
+    expect.same(Left(error), decode(node, nodes(100000)))
   }
 
   pureTest("BinaryEncoder and BinaryDecoder should not decode records which always contain themselves") {
     val schema =
       Schema.Record(name("Loop"), Vector(Schema.Field("loop", Schema.Ref(name("Loop")))))
-    expect.eql(
-      "Unable to decode record Loop, since it always contains itself",
-      BinaryDecoder(schema).swap.value.message
+    expect.same(
+      Left("Unable to decode record Loop, since it always contains itself"),
+      BinaryDecoder(schema).left.map(_.message)
     )
   }
 
   pureTest("BinaryEncoder and BinaryDecoder should not compile invalid schemas") {
     val schema = Schema.Union(Vector(Schema.Int, Schema.Int))
     val undefined = Schema.Ref(name("Undefined"))
-    expect.eql("""Duplicate int in union ["int","int"]""", BinaryEncoder(schema).swap.value.message) &&
-    expect.eql("""Duplicate int in union ["int","int"]""", BinaryDecoder(schema).swap.value.message) &&
-    expect.eql("Undefined name Undefined", BinaryEncoder(undefined).swap.value.message) &&
-    expect.eql("Undefined name Undefined", BinaryDecoder(undefined).swap.value.message)
+    expect.same(
+      Left("""Duplicate int in union ["int","int"]"""),
+      BinaryEncoder(schema).left.map(_.message)
+    ) &&
+    expect.same(
+      Left("""Duplicate int in union ["int","int"]"""),
+      BinaryDecoder(schema).left.map(_.message)
+    ) &&
+    expect.same(Left("Undefined name Undefined"), BinaryEncoder(undefined).left.map(_.message)) &&
+    expect.same(Left("Undefined name Undefined"), BinaryDecoder(undefined).left.map(_.message))
   }
 }

@@ -9,19 +9,19 @@ package vulcan
 import io.circe.Json
 import scodec.bits.*
 import vulcan.internal.JsonPrinter
+import weaver.scalacheck.CheckConfig
 
 object JsonValueSpec extends BaseSuite {
-  private def encode(schema: Schema, value: AvroValue): String =
-    JsonPrinter.print(JsonEncoder(schema).value.encode(value).value)
+  override def checkConfig: CheckConfig =
+    super.checkConfig.withMinimumSuccessful(1000)
 
-  private def encodeError(schema: Schema, value: AvroValue): String =
-    JsonEncoder(schema).value.encode(value).swap.value.message
+  private def encode(schema: Schema, value: AvroValue): Either[String, String] =
+    JsonEncoder(schema).flatMap(_.encode(value)).left.map(_.message).map(JsonPrinter.print)
 
-  private def decode(schema: Schema, json: String): AvroValue =
-    JsonDecoder(schema).value.decode(io.circe.jawn.parse(json).value).value
-
-  private def decodeError(schema: Schema, json: String): String =
-    JsonDecoder(schema).value.decode(io.circe.jawn.parse(json).value).swap.value.message
+  private def decode(schema: Schema, json: String): Either[String, AvroValue] =
+    io.circe.jawn.parse(json).left.map(_.message).flatMap { parsed =>
+      JsonDecoder(schema).flatMap(_.decode(parsed)).left.map(_.message)
+    }
 
   /** A JSON string with the characters, for characters which do not need escaping. */
   private def string(chars: Int*): String =
@@ -53,9 +53,8 @@ object JsonValueSpec extends BaseSuite {
     )
 
   test("JsonEncoder and JsonDecoder should decode encoded values") {
-    forall.withConfig(checkConfig.withMinimumSuccessful(1000))(AvroValueGenerators.genSchemaAndValue) {
-      case (schema, value) =>
-        expect.same(value, decode(schema, encode(schema, value)))
+    forall(AvroValueGenerators.genSchemaAndValue) { case (schema, value) =>
+      expect.same(Right(value), encode(schema, value).flatMap(decode(schema, _)))
     }
   }
 
@@ -103,8 +102,8 @@ object JsonValueSpec extends BaseSuite {
       )
 
     forEach(examples) { case (schema, value, json) =>
-      expect.eql(json, encode(schema, value)) &&
-      expect.same(value, decode(schema, json))
+      expect.same(Right(json), encode(schema, value)) &&
+      expect.same(Right(value), decode(schema, json))
     }
   }
 
@@ -112,49 +111,49 @@ object JsonValueSpec extends BaseSuite {
     "JsonEncoder and JsonDecoder should encode bytes and fixed as strings with one character per byte"
   ) {
     val fixed = Schema.Fixed(name("Id"), 2)
-    expect.eql(string(0x41, 0xe9, 0xff), encode(Schema.Bytes, AvroValue.Bytes(hex"41e9ff"))) &&
-    expect.same(AvroValue.Bytes(hex"41e9ff"), decode(Schema.Bytes, string(0x41, 0xe9, 0xff))) &&
-    expect.eql("\"AB\"", encode(fixed, AvroValue.Fixed(hex"4142"))) &&
-    expect.same(AvroValue.Fixed(hex"4142"), decode(fixed, "\"AB\""))
+    expect.same(Right(string(0x41, 0xe9, 0xff)), encode(Schema.Bytes, AvroValue.Bytes(hex"41e9ff"))) &&
+    expect.same(Right(AvroValue.Bytes(hex"41e9ff")), decode(Schema.Bytes, string(0x41, 0xe9, 0xff))) &&
+    expect.same(Right("\"AB\""), encode(fixed, AvroValue.Fixed(hex"4142"))) &&
+    expect.same(Right(AvroValue.Fixed(hex"4142")), decode(fixed, "\"AB\""))
   }
 
   pureTest("JsonEncoder and JsonDecoder should encode floats and doubles which are not finite as strings") {
-    expect.eql("\"NaN\"", encode(Schema.Float, AvroValue.Float(Float.NaN))) &&
-    expect.eql("\"Infinity\"", encode(Schema.Float, AvroValue.Float(Float.PositiveInfinity))) &&
-    expect.eql("\"-Infinity\"", encode(Schema.Double, AvroValue.Double(Double.NegativeInfinity)))
+    expect.same(Right("\"NaN\""), encode(Schema.Float, AvroValue.Float(Float.NaN))) &&
+    expect.same(Right("\"Infinity\""), encode(Schema.Float, AvroValue.Float(Float.PositiveInfinity))) &&
+    expect.same(Right("\"-Infinity\""), encode(Schema.Double, AvroValue.Double(Double.NegativeInfinity)))
   }
 
   pureTest("JsonEncoder and JsonDecoder should decode the same as the Java Avro library") {
     val aliased =
       Schema.Record(name("test"), Vector(Schema.Field("a", Schema.Long).withAliases(Vector("x"))))
 
-    expect.same(AvroValue.Int(1), decode(Schema.Int, "1.0")) &&
-    expect.same(AvroValue.Long(100L), decode(Schema.Long, "1e2")) &&
-    expect.same(AvroValue.Float(Float.PositiveInfinity), decode(Schema.Float, "\"INF\"")) &&
-    expect.same(AvroValue.Double(Double.NegativeInfinity), decode(Schema.Double, "\"-INF\"")) &&
-    expect.same(AvroValue.Double(Double.NaN), decode(Schema.Double, "\"NaN\"")) &&
-    expect.same(AvroValue.Union(0, AvroValue.Null), decode(nullableString, """{"null":null}""")) &&
+    expect.same(Right(AvroValue.Int(1)), decode(Schema.Int, "1.0")) &&
+    expect.same(Right(AvroValue.Long(100L)), decode(Schema.Long, "1e2")) &&
+    expect.same(Right(AvroValue.Float(Float.PositiveInfinity)), decode(Schema.Float, "\"INF\"")) &&
+    expect.same(Right(AvroValue.Double(Double.NegativeInfinity)), decode(Schema.Double, "\"-INF\"")) &&
+    expect.same(Right(AvroValue.Double(Double.NaN)), decode(Schema.Double, "\"NaN\"")) &&
+    expect.same(Right(AvroValue.Union(0, AvroValue.Null)), decode(nullableString, """{"null":null}""")) &&
     expect.same(
-      AvroValue.Record(Vector(AvroValue.Long(27L), AvroValue.String("foo"))),
+      Right(AvroValue.Record(Vector(AvroValue.Long(27L), AvroValue.String("foo")))),
       decode(record, """{"b":"foo","a":27}""")
     ) &&
-    expect.same(AvroValue.Record(Vector(AvroValue.Long(1L))), decode(aliased, """{"x":1}"""))
+    expect.same(Right(AvroValue.Record(Vector(AvroValue.Long(1L)))), decode(aliased, """{"x":1}"""))
   }
 
   pureTest("JsonEncoder and JsonDecoder should not encode values which do not match the schema") {
-    expect.eql("Invalid int value for long", encodeError(Schema.Long, AvroValue.Int(1))) &&
-    expect.eql(
-      "Invalid record with 1 values for record test with 2 fields",
-      encodeError(record, AvroValue.Record(Vector(AvroValue.Long(1L))))
+    expect.same(Left("Invalid int value for long"), encode(Schema.Long, AvroValue.Int(1))) &&
+    expect.same(
+      Left("Invalid record with 1 values for record test with 2 fields"),
+      encode(record, AvroValue.Record(Vector(AvroValue.Long(1L))))
     ) &&
-    expect.eql("Invalid symbol E for enum Foo", encodeError(enumeration, AvroValue.Enum("E"))) &&
-    expect.eql(
-      "Invalid fixed with 3 bytes for fixed Id with size 2",
-      encodeError(Schema.Fixed(name("Id"), 2), AvroValue.Fixed(hex"010203"))
+    expect.same(Left("Invalid symbol E for enum Foo"), encode(enumeration, AvroValue.Enum("E"))) &&
+    expect.same(
+      Left("Invalid fixed with 3 bytes for fixed Id with size 2"),
+      encode(Schema.Fixed(name("Id"), 2), AvroValue.Fixed(hex"010203"))
     ) &&
-    expect.eql(
-      "Invalid index 2 for union with 2 types",
-      encodeError(nullableString, AvroValue.Union(2, AvroValue.Null))
+    expect.same(
+      Left("Invalid index 2 for union with 2 types"),
+      encode(nullableString, AvroValue.Union(2, AvroValue.Null))
     )
   }
 
@@ -165,27 +164,27 @@ object JsonValueSpec extends BaseSuite {
         Vector(Schema.Field("a", Schema.Long).withAliases(Vector("b")), Schema.Field("b", Schema.Long))
       )
 
-    expect.eql("Invalid number 1.5 for int", decodeError(Schema.Int, "1.5")) &&
-    expect.eql("Invalid string for long", decodeError(Schema.Long, "\"1\"")) &&
-    expect.eql("Invalid number 1 for string", decodeError(Schema.String, "1")) &&
-    expect.eql("Invalid object for array", decodeError(Schema.Array(Schema.Int), "{}")) &&
-    expect.eql("Missing field b for record test", decodeError(record, """{"a":27}""")) &&
-    expect.eql(
-      "Unknown fields c, d for record test",
-      decodeError(record, """{"a":27,"b":"foo","c":1,"d":2}""")
+    expect.same(Left("Invalid number 1.5 for int"), decode(Schema.Int, "1.5")) &&
+    expect.same(Left("Invalid string for long"), decode(Schema.Long, "\"1\"")) &&
+    expect.same(Left("Invalid number 1 for string"), decode(Schema.String, "1")) &&
+    expect.same(Left("Invalid object for array"), decode(Schema.Array(Schema.Int), "{}")) &&
+    expect.same(Left("Missing field b for record test"), decode(record, """{"a":27}""")) &&
+    expect.same(
+      Left("Unknown fields c, d for record test"),
+      decode(record, """{"a":27,"b":"foo","c":1,"d":2}""")
     ) &&
-    expect.eql("Unknown fields c for record test", decodeError(colliding, """{"b":1,"c":2}""")) &&
-    expect.eql("Invalid symbol E for enum Foo", decodeError(enumeration, "\"E\"")) &&
-    expect.eql(
-      "Invalid fixed with 3 bytes for fixed Id with size 2",
-      decodeError(Schema.Fixed(name("Id"), 2), "\"ABC\"")
+    expect.same(Left("Unknown fields c for record test"), decode(colliding, """{"b":1,"c":2}""")) &&
+    expect.same(Left("Invalid symbol E for enum Foo"), decode(enumeration, "\"E\"")) &&
+    expect.same(
+      Left("Invalid fixed with 3 bytes for fixed Id with size 2"),
+      decode(Schema.Fixed(name("Id"), 2), "\"ABC\"")
     ) &&
-    expect.eql("Unknown type int for union", decodeError(nullableString, """{"int":1}""")) &&
-    expect.eql(
-      "Invalid object with 2 keys for union, expected one key",
-      decodeError(nullableString, """{"null":null,"string":"a"}""")
+    expect.same(Left("Unknown type int for union"), decode(nullableString, """{"int":1}""")) &&
+    expect.same(
+      Left("Invalid object with 2 keys for union, expected one key"),
+      decode(nullableString, """{"null":null,"string":"a"}""")
     ) &&
-    expect.eql("Invalid null for union", decodeError(Schema.Union(Vector(Schema.Int)), "null"))
+    expect.same(Left("Invalid null for union"), decode(Schema.Union(Vector(Schema.Int)), "null"))
   }
 
   pureTest("JsonEncoder and JsonDecoder should limit the number of nested values of recursive schemas") {
@@ -196,19 +195,19 @@ object JsonValueSpec extends BaseSuite {
         Json.obj("value" -> Json.fromInt(0), "next" -> Json.obj("Node" -> next))
       }
 
-    val decoder = JsonDecoder(node).value
+    val decoder = JsonDecoder(node)
 
     val error =
       s"Invalid depth ${limit + 1}, exceeding the limit of $limit nested values of recursive schemas"
 
-    expect(decoder.decode(nodes(limit + 1)).isRight) &&
-    expect.eql(error, decoder.decode(nodes(limit + 2)).swap.value.message) &&
-    expect.eql(error, decoder.decode(nodes(100000)).swap.value.message)
+    matches(decoder.flatMap(_.decode(nodes(limit + 1)))) { case Right(_) => success } &&
+    expect.same(Left(error), decoder.flatMap(_.decode(nodes(limit + 2))).left.map(_.message)) &&
+    expect.same(Left(error), decoder.flatMap(_.decode(nodes(100000))).left.map(_.message))
   }
 
   pureTest("JsonEncoder and JsonDecoder should not compile invalid schemas") {
     val undefined = Schema.Ref(name("Undefined"))
-    expect.eql("Undefined name Undefined", JsonEncoder(undefined).swap.value.message) &&
-    expect.eql("Undefined name Undefined", JsonDecoder(undefined).swap.value.message)
+    expect.same(Left("Undefined name Undefined"), JsonEncoder(undefined).left.map(_.message)) &&
+    expect.same(Left("Undefined name Undefined"), JsonDecoder(undefined).left.map(_.message))
   }
 }
