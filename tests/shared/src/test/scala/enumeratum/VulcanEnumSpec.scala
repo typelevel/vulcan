@@ -26,9 +26,11 @@ object VulcanEnumSpec extends BaseSuite {
     } yield decoded
 
   pureTest("VulcanEnum schema should use an enum schema") {
-    expect.eql(
-      """{"type":"enum","name":"Suit","namespace":"com.example","doc":"The different card suits","symbols":["clubs","diamonds","hearts","spades"]}""",
-      Codec[Suit].schema.value.toString
+    expect.same(
+      Right(
+        """{"type":"enum","name":"Suit","namespace":"com.example","doc":"The different card suits","symbols":["clubs","diamonds","hearts","spades"]}"""
+      ),
+      Codec[Suit].schema.map(_.toString)
     )
   }
 
@@ -38,14 +40,16 @@ object VulcanEnumSpec extends BaseSuite {
 
   pureTest("VulcanEnum should roundtrip enum values") {
     forEach(List[Suit](Suit.Diamonds, Suit.Hearts, Suit.Spades)) { suit =>
-      expect.same(suit, encodeAndDecode(suit).value)
+      expect.same(Right(suit), encodeAndDecode(suit))
     }
   }
 
   pureTest("VulcanEnum should error if withNameOption does not handle schema symbol") {
-    expect.eql(
-      "Error decoding com.example.Suit: clubs is not a member of Suit (clubs, diamonds, hearts, spades)",
-      encodeAndDecode[Suit](Suit.Clubs).swap.value.message
+    expect.same(
+      Left(
+        "Error decoding com.example.Suit: clubs is not a member of Suit (clubs, diamonds, hearts, spades)"
+      ),
+      encodeAndDecode[Suit](Suit.Clubs).left.map(_.message)
     )
   }
 

@@ -8,6 +8,7 @@ package vulcan.generic
 
 import vulcan.AvroValue
 import vulcan.BaseSuite
+import vulcan.Codec
 import vulcan.CodecSpecHelpers
 import vulcan.Schema
 import vulcan.generic.examples.*
@@ -94,53 +95,55 @@ object GenericDerivationCodecSpec extends BaseSuite with CodecSpecHelpers {
   pureTest("Codec derive caseClass encode should encode value class using encoder for underlying type") {
     expectEncodeIs[CaseClassValueClass](
       CaseClassValueClass(0),
-      Right(unsafeEncode(0))
+      Right(AvroValue.Int(0))
     )
   }
 
   pureTest("Codec derive caseClass encode should encode as record") {
     expectEncodeIs[CaseClassField](
       CaseClassField(0),
-      Right(AvroValue.Record(Vector(unsafeEncode(0))))
+      Right(AvroValue.Record(Vector(AvroValue.Int(0))))
     )
   }
 
   pureTest("Codec derive caseClass encode should encode as record with multiple fields") {
     expectEncodeIs[CaseClassTwoFields](
       CaseClassTwoFields("the-name", 0),
-      Right(AvroValue.Record(Vector(unsafeEncode("the-name"), unsafeEncode(0))))
+      Right(AvroValue.Record(Vector(AvroValue.String("the-name"), AvroValue.Int(0))))
     )
   }
 
   pureTest("Codec derive caseClass decode should decode value class using decoder for underlying type") {
     expectDecodeIs[CaseClassValueClass](
-      unsafeEncode(123),
+      Codec[Int].encode(123),
       Right(CaseClassValueClass(123))
     )
   }
 
   pureTest("Codec derive caseClass decode should error if schema is not record") {
     expectDecodeError[CaseClassField](
-      unsafeEncode(CaseClassField(123)),
-      unsafeSchema[String],
+      Codec[CaseClassField].encode(CaseClassField(123)),
+      Codec[String].schema,
       "Error decoding vulcan.generic.examples.CaseClassField: Got unexpected schema type string, expected schema type record"
     )
   }
 
   pureTest("Codec derive caseClass decode should error if value is not record") {
     expectDecodeError[CaseClassField](
-      unsafeEncode(123),
-      unsafeSchema[CaseClassField],
+      Codec[Int].encode(123),
+      Codec[CaseClassField].schema,
       "Error decoding vulcan.generic.examples.CaseClassField: Invalid int value for record vulcan.generic.examples.CaseClassField"
     )
   }
 
   pureTest("Codec derive caseClass decode should error if any field is missing in writer schema") {
     expectDecodeError[CaseClassField](
-      AvroValue.Record(Vector(unsafeEncode(123))),
-      Schema.Record(
-        Schema.Name("CaseClassField", Some("vulcan.generic.examples")),
-        Vector(Schema.Field("other", unsafeSchema[Int]))
+      Right(AvroValue.Record(Vector(AvroValue.Int(123)))),
+      Right(
+        Schema.Record(
+          Schema.Name("CaseClassField", Some("vulcan.generic.examples")),
+          Vector(Schema.Field("other", Schema.Int))
+        )
       ),
       "Error decoding vulcan.generic.examples.CaseClassField: Record writer schema is missing field 'value'"
     )
@@ -148,7 +151,7 @@ object GenericDerivationCodecSpec extends BaseSuite with CodecSpecHelpers {
 
   pureTest("Codec derive caseClass decode should decode as case class") {
     expectDecodeIs[CaseClassField](
-      unsafeEncode(CaseClassField(123)),
+      Codec[CaseClassField].encode(CaseClassField(123)),
       Right(CaseClassField(123))
     )
   }
@@ -189,53 +192,53 @@ object GenericDerivationCodecSpec extends BaseSuite with CodecSpecHelpers {
     val value = CaseClassInSealedTrait(0)
     expectEncodeIs[SealedTraitCaseClass](
       value,
-      Right(AvroValue.Union(0, unsafeEncode(value)))
+      Right(AvroValue.Union(0, AvroValue.Record(Vector(AvroValue.Int(0)))))
     )
   }
 
   pureTest("Codec derive sealedTrait decode should error if schema is not in union") {
     expectDecodeError[SealedTraitCaseClass](
-      unsafeEncode[SealedTraitCaseClass](CaseClassInSealedTrait(0)),
-      unsafeSchema[String],
+      Codec[SealedTraitCaseClass].encode(CaseClassInSealedTrait(0)),
+      Codec[String].schema,
       "Error decoding vulcan.generic.examples.SealedTraitCaseClass: Missing alternative for string in union"
     )
   }
 
   pureTest("Codec derive sealedTrait decode should decode if schema is part of union") {
     expectDecodeIs[SealedTraitCaseClass](
-      unsafeEncode(CaseClassInSealedTrait(0)),
+      Codec[CaseClassInSealedTrait].encode(CaseClassInSealedTrait(0)),
       Right(CaseClassInSealedTrait(0)),
-      Some(unsafeSchema[CaseClassInSealedTrait])
+      Codec[CaseClassInSealedTrait].schema
     )
   }
 
   pureTest("Codec derive sealedTrait decode should error if value is not a union value") {
     expectDecodeError[SealedTraitCaseClass](
-      unsafeEncode(123),
-      unsafeSchema[SealedTraitCaseClass],
+      Codec[Int].encode(123),
+      Codec[SealedTraitCaseClass].schema,
       "Invalid int value for union"
     )
   }
 
   pureTest("Codec derive sealedTrait decode should error if no schema in union with container name") {
     expectDecodeError[SealedTraitCaseObject](
-      unsafeEncode[SealedTraitCaseObject](CaseObjectInSealedTrait),
-      unsafeSchema[SealedTraitCaseClass],
+      Codec[SealedTraitCaseObject].encode(CaseObjectInSealedTrait),
+      Codec[SealedTraitCaseClass].schema,
       "Error decoding vulcan.generic.examples.SealedTraitCaseObject: Missing alternative for record vulcan.generic.examples.CaseClassInSealedTrait in union"
     )
   }
 
   pureTest("Codec derive sealedTrait decode should error if no subtype with container name") {
     expectDecodeError[SealedTraitCaseClass](
-      unsafeEncode[SealedTraitCaseObject](CaseObjectInSealedTrait),
-      unsafeSchema[SealedTraitCaseObject],
+      Codec[SealedTraitCaseObject].encode(CaseObjectInSealedTrait),
+      Codec[SealedTraitCaseObject].schema,
       "Error decoding vulcan.generic.examples.SealedTraitCaseClass: Missing alternative for record vulcan.generic.examples.CaseObjectInSealedTrait in union"
     )
   }
 
   pureTest("Codec derive sealedTrait decode should decode using schema and decoder for subtype") {
     expectDecodeIs[SealedTraitCaseClass](
-      unsafeEncode[SealedTraitCaseClass](CaseClassInSealedTrait(0)),
+      Codec[SealedTraitCaseClass].encode(CaseClassInSealedTrait(0)),
       Right(CaseClassInSealedTrait(0))
     )
   }

@@ -60,12 +60,12 @@ object LogicalTypeSpec extends BaseSuite {
   pureTest(
     "LogicalType decimal should only use integers without fraction and exponent, same as the Java Avro library"
   ) {
-    def logicalType(params: String): Option[LogicalType] =
-      Schema.parse(s"""{"type":"bytes","logicalType":"decimal",$params}""").value.logicalType
+    def logicalType(params: String): Either[AvroException, Option[LogicalType]] =
+      Schema.parse(s"""{"type":"bytes","logicalType":"decimal",$params}""").map(_.logicalType)
 
-    expect.same(Some(LogicalType.decimal(4, 2)), logicalType(""""precision":4,"scale":2""")) &&
-    expect(logicalType(""""precision":4.0,"scale":2""").isEmpty) &&
-    expect(logicalType(""""precision":4e0,"scale":2""").isEmpty) &&
-    expect(logicalType(""""precision":4,"scale":2.0""").isEmpty)
+    expect.same(Right(Some(LogicalType.decimal(4, 2))), logicalType(""""precision":4,"scale":2""")) &&
+    expect.same(Right(None), logicalType(""""precision":4.0,"scale":2""")) &&
+    expect.same(Right(None), logicalType(""""precision":4e0,"scale":2""")) &&
+    expect.same(Right(None), logicalType(""""precision":4,"scale":2.0"""))
   }
 }

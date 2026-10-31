@@ -237,7 +237,7 @@ object SchemaJavaSpec extends BaseSuite {
   LogicalTypes.foreach { json =>
     pureTest(s"Schema logicalType should be the same as the Java Avro library for $json") {
       val expected = Option(new JavaSchema.Parser().parse(json).getLogicalType).map(_.getName)
-      expect.eql(expected, Schema.parse(json).value.logicalType.map(_.name))
+      expect.same(Right(expected), Schema.parse(json).map(_.logicalType.map(_.name)))
     }
   }
 

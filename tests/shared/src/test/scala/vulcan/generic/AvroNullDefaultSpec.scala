@@ -41,25 +41,28 @@ object AvroNullDefaultSpec extends BaseSuite {
         f("int", _.int).map { WriterCaseClass(_) }
       }
 
-    val decoder = Codec[CaseClassAvroNullDefault].binaryDecoder(writerCodec.schema.value).value
-    val decoded = writerCodec.binaryEncoder.value.encode(WriterCaseClass(3)).flatMap(decoder.decode)
+    val decoded =
+      for {
+        schema <- writerCodec.schema
+        binary <- writerCodec.binaryEncoder.flatMap(_.encode(WriterCaseClass(3)))
+        decoded <- Codec[CaseClassAvroNullDefault].binaryDecoder(schema).flatMap(_.decode(binary))
+      } yield decoded
 
-    expect.same(CaseClassAvroNullDefault(Some(3), None, None, None, None, None, None), decoded.value)
+    expect.same(Right(CaseClassAvroNullDefault(Some(3), None, None, None, None, None, None)), decoded)
   }
 
   pureTest("AvroNullDefault should only include null defaults for fields with null values") {
-    val schema = Codec[NullableFields].schema.value
-    val defaults = schema.asInstanceOf[Schema.Record].fields.map(field => (field.name, field.default))
-
-    expect.eql(
-      Vector(
-        "option" -> Some(Json.Null),
-        "unit" -> Some(Json.Null),
-        "none" -> Some(Json.Null),
-        "either" -> None
-      ),
-      defaults
-    )
+    matches(Codec[NullableFields].schema) { case Right(record: Schema.Record) =>
+      expect.eql(
+        Vector(
+          "option" -> Some(Json.Null),
+          "unit" -> Some(Json.Null),
+          "none" -> Some(Json.Null),
+          "either" -> None
+        ),
+        record.fields.map(field => (field.name, field.default))
+      )
+    }
   }
 
   @AvroNullDefault(true)

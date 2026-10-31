@@ -20,19 +20,23 @@ object JsonValueJavaSpec extends BaseSuite {
     forall.withConfig(checkConfig.withMinimumSuccessful(1000))(genSchemaAndValue) { case (schema, value) =>
       val javaSchema = JavaAvro.schema(schema)
       val javaJson = JavaAvro.writeJson(javaSchema, JavaAvro.toJava(value, schema, javaSchema))
-      expect.same(Right(io.circe.jawn.parse(javaJson).value), JsonEncoder(schema).value.encode(value))
+      whenSuccess(io.circe.jawn.parse(javaJson)) { json =>
+        expect.same(Right(json), JsonEncoder(schema).flatMap(_.encode(value)))
+      }
     }
   }
 
   test("JsonEncoder should encode values which the Java Avro library decodes") {
     forall.withConfig(checkConfig.withMinimumSuccessful(1000))(genSchemaAndValue) { case (schema, value) =>
       val javaSchema = JavaAvro.schema(schema)
-      val json = JsonPrinter.print(JsonEncoder(schema).value.encode(value).value)
-      val javaBytes = JavaAvro.writeBinary(javaSchema, JavaAvro.readJson(javaSchema, json))
-      expect.same(
-        Right(JavaAvro.sortMaps(value)),
-        BinaryDecoder(schema).value.decode(javaBytes).map(JavaAvro.sortMaps)
-      )
+      whenSuccess(JsonEncoder(schema).flatMap(_.encode(value))) { json =>
+        val javaBytes =
+          JavaAvro.writeBinary(javaSchema, JavaAvro.readJson(javaSchema, JsonPrinter.print(json)))
+        expect.same(
+          Right(JavaAvro.sortMaps(value)),
+          BinaryDecoder(schema).flatMap(_.decode(javaBytes)).map(JavaAvro.sortMaps)
+        )
+      }
     }
   }
 
@@ -40,8 +44,9 @@ object JsonValueJavaSpec extends BaseSuite {
     forall.withConfig(checkConfig.withMinimumSuccessful(1000))(genSchemaAndValue) { case (schema, value) =>
       val javaSchema = JavaAvro.schema(schema)
       val javaJson = JavaAvro.writeJson(javaSchema, JavaAvro.toJava(value, schema, javaSchema))
-      val json = io.circe.jawn.parse(javaJson).value
-      expect.same(Right(value), JsonDecoder(schema).value.decode(json))
+      whenSuccess(io.circe.jawn.parse(javaJson)) { json =>
+        expect.same(Right(value), JsonDecoder(schema).flatMap(_.decode(json)))
+      }
     }
   }
 }

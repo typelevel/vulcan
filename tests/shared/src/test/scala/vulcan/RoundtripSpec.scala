@@ -65,8 +65,14 @@ object RoundtripSpec extends BaseSuite with RoundtripHelpers {
     val codec = Codec[Double]
     val bits = java.lang.Double.doubleToRawLongBits(-0.0d)
     val decoded = List(
-      codec.binaryEncoder.value.encode(-0.0d).flatMap(codec.binaryDecoder(Schema.Double).value.decode),
-      codec.jsonEncoder.value.encode(-0.0d).flatMap(codec.jsonDecoder(Schema.Double).value.decode)
+      for {
+        binary <- codec.binaryEncoder.flatMap(_.encode(-0.0d))
+        decoded <- codec.binaryDecoder(Schema.Double).flatMap(_.decode(binary))
+      } yield decoded,
+      for {
+        json <- codec.jsonEncoder.flatMap(_.encode(-0.0d))
+        decoded <- codec.jsonDecoder(Schema.Double).flatMap(_.decode(json))
+      } yield decoded
     )
     forEach(decoded)(double => expect.same(Right(bits), double.map(java.lang.Double.doubleToRawLongBits)))
   }
@@ -83,8 +89,14 @@ object RoundtripSpec extends BaseSuite with RoundtripHelpers {
     val codec = Codec[Float]
     val bits = java.lang.Float.floatToRawIntBits(-0.0f)
     val decoded = List(
-      codec.binaryEncoder.value.encode(-0.0f).flatMap(codec.binaryDecoder(Schema.Float).value.decode),
-      codec.jsonEncoder.value.encode(-0.0f).flatMap(codec.jsonDecoder(Schema.Float).value.decode)
+      for {
+        binary <- codec.binaryEncoder.flatMap(_.encode(-0.0f))
+        decoded <- codec.binaryDecoder(Schema.Float).flatMap(_.decode(binary))
+      } yield decoded,
+      for {
+        json <- codec.jsonEncoder.flatMap(_.encode(-0.0f))
+        decoded <- codec.jsonDecoder(Schema.Float).flatMap(_.decode(json))
+      } yield decoded
     )
     forEach(decoded)(float => expect.same(Right(bits), float.map(java.lang.Float.floatToRawIntBits)))
   }

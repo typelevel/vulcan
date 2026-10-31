@@ -11,6 +11,6 @@ import scodec.bits.ByteVector
 import weaver.SimpleIOSuite
 import weaver.scalacheck.Checkers
 
-abstract class BaseSuite extends SimpleIOSuite with Checkers with EitherValues {
+abstract class BaseSuite extends SimpleIOSuite with Checkers {
   implicit val byteVectorShow: Show[ByteVector] = Show.fromToString
 }

@@ -15,8 +15,8 @@ import vulcan.generic.examples.AvroRecordDefault.*
 
 object AvroFieldDefaultSpec extends BaseSuite with CodecSpecHelpers {
   private def fieldDefault[A](name: String)(implicit codec: Codec[A]): Option[Json] =
-    unsafeSchema[A] match {
-      case record: Schema.Record => record.fields.find(_.name == name).flatMap(_.default)
+    codec.schema match {
+      case Right(record: Schema.Record) => record.fields.find(_.name == name).flatMap(_.default)
       case _ => None
     }
 
@@ -41,18 +41,24 @@ object AvroFieldDefaultSpec extends BaseSuite with CodecSpecHelpers {
   }
 
   pureTest("AvroFieldDefault should succeed with the first member of a union") {
-    val decoder = Codec[HasUnion].decoder(unsafeSchema[Empty]).value
     expectSchemaIs[HasUnion](
       """{"type":"record","name":"HasUnion","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"u","type":[{"type":"record","name":"A","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"a","type":"int"}]},{"type":"record","name":"B","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"b","type":"string"}]}],"default":{"a":1}}]}"""
     ) &&
-    expect.same(Right(HasUnion(Union.A(1))), decoder.decode(unsafeEncode(Empty())))
+    expectDecodeIs[HasUnion](
+      Codec[Empty].encode(Empty()),
+      Right(HasUnion(Union.A(1))),
+      Codec[Empty].schema
+    )
   }
 
   pureTest("AvroFieldDefault should succeed with the second member of a union") {
-    val decoder = Codec[HasUnionSecond].decoder(unsafeSchema[Empty]).value
     expectSchemaIs[HasUnionSecond](
       """{"type":"record","name":"HasUnionSecond","namespace":"vulcan.generic.examples.AvroRecordDefault","fields":[{"name":"u","type":[{"type":"record","name":"A","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"a","type":"int"}]},{"type":"record","name":"B","namespace":"vulcan.generic.examples.AvroRecordDefault.Union","fields":[{"name":"b","type":"string"}]}],"default":{"b":"foo"}}]}"""
     ) &&
-    expect.same(Right(HasUnionSecond(Union.B("foo"))), decoder.decode(unsafeEncode(Empty())))
+    expectDecodeIs[HasUnionSecond](
+      Codec[Empty].encode(Empty()),
+      Right(HasUnionSecond(Union.B("foo"))),
+      Codec[Empty].schema
+    )
   }
 }

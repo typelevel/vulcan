@@ -47,27 +47,31 @@ object AvroExceptionSpec extends BaseSuite {
   }
 
   pureTest("AvroException ErrorDecodingType should have the exception decoding the type as cause") {
-    val decoder = Codec[Int].decoder(Schema.Boolean).value
-    val exception = decoder.decode(AvroValue.Boolean(true)).swap.value
-    expect(exception.isInstanceOf[AvroException.ErrorDecodingType]) &&
-    expect(exception.getCause().isInstanceOf[AvroException.UnexpectedSchemaType])
+    val decoder = Codec[Int].decoder(Schema.Boolean)
+    matches(decoder.flatMap(_.decode(AvroValue.Boolean(true)))) { case Left(exception) =>
+      expect(exception.isInstanceOf[AvroException.ErrorDecodingType]) &&
+      expect(exception.getCause().isInstanceOf[AvroException.UnexpectedSchemaType])
+    }
   }
 
   pureTest("AvroException InvalidBinary should be the exception for invalid binary") {
-    val decoder = Codec[Int].binaryDecoder(Schema.Int).value
-    val exception = decoder.decode(ByteVector.empty).swap.value
-    expect(exception.isInstanceOf[AvroException.InvalidBinary])
+    val decoder = Codec[Int].binaryDecoder(Schema.Int)
+    matches(decoder.flatMap(_.decode(ByteVector.empty))) { case Left(exception) =>
+      expect(exception.isInstanceOf[AvroException.InvalidBinary])
+    }
   }
 
   pureTest("AvroException InvalidJson should be the exception for invalid JSON") {
-    val decoder = Codec[Int].jsonDecoder(Schema.Int).value
-    val exception = decoder.decode(Json.fromString("1")).swap.value
-    expect(exception.isInstanceOf[AvroException.InvalidJson])
+    val decoder = Codec[Int].jsonDecoder(Schema.Int)
+    matches(decoder.flatMap(_.decode(Json.fromString("1")))) { case Left(exception) =>
+      expect(exception.isInstanceOf[AvroException.InvalidJson])
+    }
   }
 
   pureTest("AvroException InvalidSchema should have the parsing failure as cause for invalid JSON") {
-    val exception = Schema.parse("{").swap.value
-    expect(exception.isInstanceOf[AvroException.InvalidSchema]) &&
-    expect(exception.getCause().isInstanceOf[ParsingFailure])
+    matches(Schema.parse("{")) { case Left(exception) =>
+      expect(exception.isInstanceOf[AvroException.InvalidSchema]) &&
+      expect(exception.getCause().isInstanceOf[ParsingFailure])
+    }
   }
 }
