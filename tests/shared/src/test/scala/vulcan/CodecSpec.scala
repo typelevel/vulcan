@@ -3271,4 +3271,79 @@ object CodecSpec extends BaseSuite {
       )
     }
   }
+
+  locally {
+    case class Nanos(value: Long)
+
+    object Nanos {
+      implicit val nanosCodec: Codec[Nanos] =
+        Codec.long.imap(Nanos(_))(_.value).withLogicalType(LogicalType.timestampNanos)
+    }
+
+    pureTest("Codec withLogicalType schema should add the logical type") {
+      expectSchema[Nanos] {
+        """{"type":"long","logicalType":"timestamp-nanos"}"""
+      }
+    }
+
+    pureTest("Codec withLogicalType decode should decode values written with the logical type") {
+      expectDecode[Nanos](
+        Codec[Long].encode(1L),
+        Right(Schema.Long.withLogicalType(LogicalType.timestampNanos)),
+        Nanos(1L)
+      )
+    }
+
+    pureTest("Codec withLogicalType decode should error if the writer schema has no logical type") {
+      expectDecodeError[Nanos](
+        Codec[Long].encode(1L),
+        Right(Schema.Long),
+        "Got unexpected missing logical type"
+      )
+    }
+  }
+
+  locally {
+    case class Id(value: ByteVector)
+
+    object Id {
+      implicit val idCodec: Codec[Id] =
+        Codec
+          .fixed[Id]("Id", "com.example", 16, _.value, bytes => Right(Id(bytes)))
+          .withLogicalType(LogicalType.uuid)
+    }
+
+    pureTest("Codec withLogicalType schema should add the logical type to fixed") {
+      expectSchema[Id] {
+        """{"type":"fixed","name":"Id","namespace":"com.example","size":16,"logicalType":"uuid"}"""
+      }
+    }
+
+    pureTest("Codec withLogicalType should roundtrip fixed with the logical type") {
+      expectRoundtrip(Id(ByteVector.fill(16L)(1)))
+    }
+  }
+
+  pureTest("Codec withLogicalType schema should error if the logical type is invalid for the type") {
+    implicit val codec: Codec[String] =
+      Codec.string.withLogicalType(LogicalType.timestampMillis)
+
+    expectSchemaError[String]("Unable to add logical type timestamp-millis to string")
+  }
+
+  pureTest("Codec withLogicalType schema should error if the schema already has a logical type") {
+    implicit val codec: Codec[Instant] =
+      Codec.instant.withLogicalType(LogicalType.timestampMicros)
+
+    expectSchemaError[Instant](
+      "Unable to add logical type timestamp-micros to long with logical type timestamp-millis"
+    )
+  }
+
+  pureTest("Codec withLogicalType schema should error if the type has no logical types") {
+    implicit val codec: Codec[Boolean] =
+      Codec.boolean.withLogicalType(LogicalType.uuid)
+
+    expectSchemaError[Boolean]("Unable to add logical type uuid to boolean")
+  }
 }

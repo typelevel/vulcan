@@ -162,6 +162,17 @@ sealed abstract class Codec[A] {
   final def exmap[B](f: A => Either[AvroException, B])(g: B => Either[AvroException, A]): Codec[B] =
     new Codec.Exmap(this, f, g)
 
+  /**
+    * Returns a new [[Codec]] with the logical type added to its schema.
+    *
+    * The schema is an error if the logical type is invalid for the type
+    * of the schema, or if the schema already has a logical type.
+    *
+    * Decoding requires writer schemas to have the same logical type.
+    */
+  final def withLogicalType(logicalType: LogicalType): Codec[A] =
+    new Codec.LogicalTypeCodec(this, logicalType)
+
   /** Attempts to encode the specified value. */
   private[vulcan] def encode(a: A): Either[AvroException, AvroValue]
 
@@ -207,9 +218,6 @@ sealed abstract class Codec[A] {
     */
   private[vulcan] final def withTypeName(typeName: String): Codec[A] =
     new Codec.WithTypeName(this, typeName)
-
-  private[vulcan] final def withLogicalType(logicalType: LogicalType): Codec[A] =
-    new Codec.LogicalTypeCodec(this, logicalType)
 
   /** Encodes the value as JSON for defaults in schemas, where unions are without the type. */
   private[vulcan] final def encodeForSchema(a: A): Either[AvroException, Json] =
@@ -1699,16 +1707,23 @@ object Codec {
     loop()
   }
 
-  private def addLogicalType(schema: Schema, logicalType: LogicalType): Either[AvroException, Schema] =
-    schema match {
-      case int: Schema.Int => Right(int.withLogicalType(logicalType))
-      case long: Schema.Long => Right(long.withLogicalType(logicalType))
-      case bytes: Schema.Bytes => Right(bytes.withLogicalType(logicalType))
-      case string: Schema.String => Right(string.withLogicalType(logicalType))
-      case fixed: Schema.Fixed => Right(fixed.withLogicalType(logicalType))
-      case _ =>
-        Left(new UnsupportedLogicalType(logicalType, schema))
-    }
+  /** The schema with the logical type, unless it has a logical type or the logical type is invalid. */
+  private def addLogicalType(schema: Schema, logicalType: LogicalType): Either[AvroException, Schema] = {
+    val added: Option[Schema] =
+      schema match {
+        case _ if schema.props.contains("logicalType") => None
+        case int: Schema.Int => Some(int.withLogicalType(logicalType))
+        case long: Schema.Long => Some(long.withLogicalType(logicalType))
+        case bytes: Schema.Bytes => Some(bytes.withLogicalType(logicalType))
+        case string: Schema.String => Some(string.withLogicalType(logicalType))
+        case fixed: Schema.Fixed => Some(fixed.withLogicalType(logicalType))
+        case _ => None
+      }
+
+    added
+      .filter(_.logicalType.contains(logicalType))
+      .toRight(new UnsupportedLogicalType(logicalType, schema))
+  }
 
   /** Decodes the decimal using the scale, and checks that it does not exceed the precision. */
   private def decodeDecimal(
