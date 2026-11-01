@@ -17,6 +17,6 @@ package object refined {
     refType: RefType[F]
   ): Codec[F[T, P]] = {
     val refine = refType.refine[P]
-    codec.imapError(refine(_).leftMap(AvroException(_)))(refType.unwrap)
+    codec.narrow(refine(_).leftMap(AvroException(_)))(refType.unwrap)
   }
 }
