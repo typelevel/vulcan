@@ -3346,4 +3346,35 @@ object CodecSpec extends BaseSuite {
 
     expectSchemaError[Boolean]("Unable to add logical type uuid to boolean")
   }
+
+  locally {
+    case class Test(value: Int)
+
+    object Test {
+      implicit val testCodec: Codec[Test] =
+        Codec.int
+          .exmap[Test](_ => Left(AvroException("error")))(_ => Left(AvroException("error")))
+          .withTypeName("Test")
+    }
+
+    pureTest("Codec withTypeName schema should use the schema of the underlying codec") {
+      expectSchema[Test] {
+        """"int""""
+      }
+    }
+
+    pureTest("Codec withTypeName encode should include the type name in errors") {
+      expectEncodeError[Test](
+        Test(1),
+        "Error encoding Test: error"
+      )
+    }
+
+    pureTest("Codec withTypeName decode should include the type name in errors") {
+      expectDecodeError[Test](
+        Codec[Int].encode(1),
+        "Error decoding Test: error"
+      )
+    }
+  }
 }

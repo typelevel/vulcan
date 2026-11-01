@@ -173,6 +173,10 @@ sealed abstract class Codec[A] {
   final def withLogicalType(logicalType: LogicalType): Codec[A] =
     new Codec.LogicalTypeCodec(this, logicalType)
 
+  /** Returns a new [[Codec]] that includes the type name in errors when encoding and decoding. */
+  final def withTypeName(typeName: String): Codec[A] =
+    new Codec.WithTypeName(this, typeName)
+
   /** Attempts to encode the specified value. */
   private[vulcan] def encode(a: A): Either[AvroException, AvroValue]
 
@@ -209,15 +213,6 @@ sealed abstract class Codec[A] {
       case _ =>
         resolve(writerSchema, definitions)
     }
-
-  /**
-    * Returns a codec which includes the type name in errors when encoding and decoding.
-    *
-    * The generic module calls this, so changing the signature breaks binary compatibility
-    * between modules, which MiMa does not check for package-private members.
-    */
-  private[vulcan] final def withTypeName(typeName: String): Codec[A] =
-    new Codec.WithTypeName(this, typeName)
 
   /** Encodes the value as JSON for defaults in schemas, where unions are without the type. */
   private[vulcan] final def encodeForSchema(a: A): Either[AvroException, Json] =
