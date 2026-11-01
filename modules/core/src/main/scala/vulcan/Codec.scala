@@ -34,7 +34,6 @@ import scala.collection.immutable.ArraySeq
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable
-import scala.util.Try
 import scodec.bits.ByteVector
 import vulcan.AvroException.*
 import vulcan.internal.*
@@ -132,16 +131,27 @@ sealed abstract class Codec[A] {
     * back-and-forth between types `A` and `B`.
     */
   final def imap[B](f: A => B)(g: B => A): Codec[B] =
-    imapErrors(a => Right(f(a)))(b => Right(g(b)))
+    exmap(a => Right(f(a)))(b => Right(g(b)))
 
   /**
     * Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
     * back-and-forth between types `A` and `B`.
     *
-    * Similar to [[Codec#imap]], except the mapping from `A` to `B` might be unsuccessful.
+    * Similar to [[Codec#imap]], except the mapping from `A` to `B` might be unsuccessful,
+    * since `B` is narrower than `A`.
     */
-  final def imapError[B](f: A => Either[AvroException, B])(g: B => A): Codec[B] =
-    imapErrors(f)(b => Right(g(b)))
+  final def narrow[B](f: A => Either[AvroException, B])(g: B => A): Codec[B] =
+    exmap(f)(b => Right(g(b)))
+
+  /**
+    * Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
+    * back-and-forth between types `A` and `B`.
+    *
+    * Similar to [[Codec#imap]], except the mapping from `B` to `A` might be unsuccessful,
+    * since `B` is wider than `A`.
+    */
+  final def widen[B](f: A => B)(g: B => Either[AvroException, A]): Codec[B] =
+    exmap(a => Right(f(a)))(g)
 
   /**
     * Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
@@ -149,17 +159,23 @@ sealed abstract class Codec[A] {
     *
     * Similar to [[Codec#imap]], except the mappings in both directions might be unsuccessful.
     */
-  final def imapErrors[B](f: A => Either[AvroException, B])(g: B => Either[AvroException, A]): Codec[B] =
-    new Codec.ImapErrors(this, f, g)
+  final def exmap[B](f: A => Either[AvroException, B])(g: B => Either[AvroException, A]): Codec[B] =
+    new Codec.Exmap(this, f, g)
 
   /**
-    * Returns a new [[Codec]] which uses this [[Codec]] for encoding and decoding, mapping
-    * back-and-forth between types `A` and `B`.
+    * Returns a new [[Codec]] with the logical type added to its schema.
     *
-    * Similar to [[Codec#imap]], except the mapping from `A` to `B` might be unsuccessful.
+    * The schema is an error if the logical type is invalid for the type
+    * of the schema, or if the schema already has a logical type.
+    *
+    * Decoding requires writer schemas to have the same logical type.
     */
-  final def imapTry[B](f: A => Try[B])(g: B => A): Codec[B] =
-    imapError(f(_).toEither.left.map(e => AvroException(e.toString, e)))(g)
+  final def withLogicalType(logicalType: LogicalType): Codec[A] =
+    new Codec.LogicalTypeCodec(this, logicalType)
+
+  /** Returns a new [[Codec]] that includes the type name in errors when encoding and decoding. */
+  final def withTypeName(typeName: String): Codec[A] =
+    new Codec.WithTypeName(this, typeName)
 
   /** Attempts to encode the specified value. */
   private[vulcan] def encode(a: A): Either[AvroException, AvroValue]
@@ -197,18 +213,6 @@ sealed abstract class Codec[A] {
       case _ =>
         resolve(writerSchema, definitions)
     }
-
-  /**
-    * Returns a codec which includes the type name in errors when encoding and decoding.
-    *
-    * The generic module calls this, so changing the signature breaks binary compatibility
-    * between modules, which MiMa does not check for package-private members.
-    */
-  private[vulcan] final def withTypeName(typeName: String): Codec[A] =
-    new Codec.WithTypeName(this, typeName)
-
-  private[vulcan] final def withLogicalType(logicalType: LogicalType): Codec[A] =
-    new Codec.LogicalTypeCodec(this, logicalType)
 
   /** Encodes the value as JSON for defaults in schemas, where unions are without the type. */
   private[vulcan] final def encodeForSchema(a: A): Either[AvroException, Json] =
@@ -283,7 +287,7 @@ object Codec {
     */
   implicit lazy val byte: Codec[Byte] =
     Codec.int
-      .imapError { int =>
+      .narrow { int =>
         if (int.isValidByte) Right(int.toByte)
         else Left(new ValueOutOfRange("Int", int.toLong, Byte.MinValue.toLong, Byte.MaxValue.toLong))
       }(_.toInt)
@@ -307,7 +311,7 @@ object Codec {
     */
   implicit lazy val char: Codec[Char] =
     Codec.string
-      .imapError { string =>
+      .narrow { string =>
         if (string.length == 1) Right(string.charAt(0))
         else Left(new InvalidChar(string.length))
       }(_.toString)
@@ -416,7 +420,7 @@ object Codec {
     */
   implicit lazy val instant: Codec[Instant] =
     Codec.long
-      .imapErrors(millis => Right(Instant.ofEpochMilli(millis))) { instant =>
+      .widen(Instant.ofEpochMilli(_)) { instant =>
         epochTime(instant, "milliseconds")(instant.toEpochMilli)
       }
       .withLogicalType(LogicalType.timestampMillis)
@@ -459,7 +463,7 @@ object Codec {
     */
   implicit lazy val instantMicros: Codec[InstantMicros] =
     Codec.long
-      .imapErrors(micros => Right(InstantMicros.fromEpochMicro(micros))) { instantMicros =>
+      .widen(InstantMicros.fromEpochMicro(_)) { instantMicros =>
         epochTime(instantMicros.value, "microseconds")(instantMicros.toEpochMicro)
       }
       .withLogicalType(LogicalType.timestampMicros)
@@ -489,7 +493,7 @@ object Codec {
     */
   implicit lazy val localDate: Codec[LocalDate] =
     Codec.int
-      .imapErrors(days => Right(LocalDate.ofEpochDay(days.toLong))) { date =>
+      .widen(days => LocalDate.ofEpochDay(days.toLong)) { date =>
         val days = date.toEpochDay
         if (days.isValidInt) Right(days.toInt)
         else Left(new DateSizeExceeded(days))
@@ -502,8 +506,8 @@ object Codec {
     */
   implicit lazy val localDateTime: Codec[LocalDateTime] =
     Codec.long
-      .imapErrors { millis =>
-        Right(LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneOffset.UTC))
+      .widen { millis =>
+        LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneOffset.UTC)
       } { dateTime =>
         epochTime(dateTime, "milliseconds")(dateTime.toInstant(ZoneOffset.UTC).toEpochMilli)
       }
@@ -515,7 +519,7 @@ object Codec {
     */
   final lazy val localTimeMicros: Codec[LocalTime] =
     Codec.long
-      .imapError { micros =>
+      .narrow { micros =>
         if (micros >= 0 && micros < MicrosPerDay) Right(LocalTime.ofNanoOfDay(micros * 1000L))
         else Left(new ValueOutOfRange("Long", micros, 0L, MicrosPerDay - 1L))
       }(_.toNanoOfDay / 1000L)
@@ -527,7 +531,7 @@ object Codec {
     */
   final lazy val localTimeMillis: Codec[LocalTime] =
     Codec.int
-      .imapError { millis =>
+      .narrow { millis =>
         if (millis >= 0 && millis < MillisPerDay) Right(LocalTime.ofNanoOfDay(millis * 1000000L))
         else Left(new ValueOutOfRange("Int", millis.toLong, 0L, MillisPerDay - 1L))
       }(time => (time.toNanoOfDay / 1000000L).toInt)
@@ -559,7 +563,7 @@ object Codec {
   implicit final def nonEmptyChain[A](implicit codec: Codec[A]): Codec[NonEmptyChain[A]] = {
     val items = initialized(codec, "NonEmptyChain items")
     new ArrayCodec[A, Chain[A]](items, _.length.toInt, _.iterator, chainBuilder)
-      .imapError(NonEmptyChain.fromChain(_).toRight(new EmptyCollection()))(_.toChain)
+      .narrow(NonEmptyChain.fromChain(_).toRight(new EmptyCollection()))(_.toChain)
       .withTypeName("NonEmptyChain")
   }
 
@@ -569,7 +573,7 @@ object Codec {
   implicit final def nonEmptyList[A](implicit codec: Codec[A]): Codec[NonEmptyList[A]] = {
     val items = initialized(codec, "NonEmptyList items")
     new ArrayCodec[A, List[A]](items, _.length, _.iterator, _ => List.newBuilder)
-      .imapError(NonEmptyList.fromList(_).toRight(new EmptyCollection()))(_.toList)
+      .narrow(NonEmptyList.fromList(_).toRight(new EmptyCollection()))(_.toList)
       .withTypeName("NonEmptyList")
   }
 
@@ -579,7 +583,7 @@ object Codec {
   implicit final def nonEmptyMap[A](implicit codec: Codec[A]): Codec[NonEmptyMap[String, A]] = {
     val values = initialized(codec, "NonEmptyMap values")
     new MapCodec[A, SortedMap[String, A]](values, _.size, _.iterator, _ => SortedMap.newBuilder)
-      .imapError(NonEmptyMap.fromMap(_).toRight(new EmptyCollection()))(_.toSortedMap)
+      .narrow(NonEmptyMap.fromMap(_).toRight(new EmptyCollection()))(_.toSortedMap)
       .withTypeName("NonEmptyMap")
   }
 
@@ -592,7 +596,7 @@ object Codec {
   ): Codec[NonEmptySet[A]] = {
     val items = initialized(codec, "NonEmptySet items")
     new ArrayCodec[A, SortedSet[A]](items, _.size, _.iterator, _ => SortedSet.newBuilder)
-      .imapError(NonEmptySet.fromSet(_).toRight(new EmptyCollection()))(_.toSortedSet)
+      .narrow(NonEmptySet.fromSet(_).toRight(new EmptyCollection()))(_.toSortedSet)
       .withTypeName("NonEmptySet")
   }
 
@@ -602,7 +606,7 @@ object Codec {
   implicit final def nonEmptyVector[A](implicit codec: Codec[A]): Codec[NonEmptyVector[A]] = {
     val items = initialized(codec, "NonEmptyVector items")
     new ArrayCodec[A, Vector[A]](items, _.length, _.iterator, vectorBuilder)
-      .imapError(NonEmptyVector.fromVector(_).toRight(new EmptyCollection()))(_.toVector)
+      .narrow(NonEmptyVector.fromVector(_).toRight(new EmptyCollection()))(_.toVector)
       .withTypeName("NonEmptyVector")
   }
 
@@ -661,7 +665,7 @@ object Codec {
     */
   implicit lazy val short: Codec[Short] =
     Codec.int
-      .imapError { int =>
+      .narrow { int =>
         if (int.isValidShort) Right(int.toShort)
         else Left(new ValueOutOfRange("Int", int.toLong, Short.MinValue.toLong, Short.MaxValue.toLong))
       }(_.toInt)
@@ -703,7 +707,7 @@ object Codec {
     */
   implicit lazy val uuid: Codec[UUID] =
     Codec.string
-      .imapError { string =>
+      .narrow { string =>
         try Right(UUID.fromString(string))
         catch {
           case _: IllegalArgumentException => Left(new InvalidUuid(string))
@@ -860,7 +864,7 @@ object Codec {
       Instance.asInstanceOf[FieldBuilder[A]]
   }
 
-  private[vulcan] final class ImapErrors[A, B](
+  private[vulcan] final class Exmap[A, B](
     val codec: Codec[A],
     val f: A => Either[AvroException, B],
     val g: B => Either[AvroException, A]
@@ -1698,16 +1702,23 @@ object Codec {
     loop()
   }
 
-  private def addLogicalType(schema: Schema, logicalType: LogicalType): Either[AvroException, Schema] =
-    schema match {
-      case int: Schema.Int => Right(int.withLogicalType(logicalType))
-      case long: Schema.Long => Right(long.withLogicalType(logicalType))
-      case bytes: Schema.Bytes => Right(bytes.withLogicalType(logicalType))
-      case string: Schema.String => Right(string.withLogicalType(logicalType))
-      case fixed: Schema.Fixed => Right(fixed.withLogicalType(logicalType))
-      case _ =>
-        Left(new UnsupportedLogicalType(logicalType, schema))
-    }
+  /** The schema with the logical type, unless it has a logical type or the logical type is invalid. */
+  private def addLogicalType(schema: Schema, logicalType: LogicalType): Either[AvroException, Schema] = {
+    val added: Option[Schema] =
+      schema match {
+        case _ if schema.props.contains("logicalType") => None
+        case int: Schema.Int => Some(int.withLogicalType(logicalType))
+        case long: Schema.Long => Some(long.withLogicalType(logicalType))
+        case bytes: Schema.Bytes => Some(bytes.withLogicalType(logicalType))
+        case string: Schema.String => Some(string.withLogicalType(logicalType))
+        case fixed: Schema.Fixed => Some(fixed.withLogicalType(logicalType))
+        case _ => None
+      }
+
+    added
+      .filter(_.logicalType.contains(logicalType))
+      .toRight(new UnsupportedLogicalType(logicalType, schema))
+  }
 
   /** Decodes the decimal using the scale, and checks that it does not exceed the precision. */
   private def decodeDecimal(

@@ -22,7 +22,7 @@ object Vulcan {
     val notFound = (value: ValueType) =>
       AvroException(s"$value is not a member of ${names.typeName} ($entries)")
 
-    codec.imapError(value => `enum`.withValueOpt(value).toRight(notFound(value)))(_.value)
+    codec.narrow(value => `enum`.withValueOpt(value).toRight(notFound(value)))(_.value)
   }
 
   def enumCodec[EntryType <: ValueEnumEntry[String]](

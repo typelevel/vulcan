@@ -381,12 +381,14 @@ object AvroException {
     )
 
   /**
-    * Exception raised when adding a logical type to a
-    * schema with a type which has no logical types.
+    * Exception raised when adding a logical type to a schema
+    * that already has a logical type, or that has a type
+    * for which the logical type is invalid.
     */
   final class UnsupportedLogicalType private[vulcan] (logicalType: LogicalType, schema: Schema)
     extends AvroException(
-      s"Unable to add logical type ${logicalType.name} to ${SchemaNames.describe(schema)}"
+      s"Unable to add logical type ${logicalType.name} to ${SchemaNames.describe(schema)}" +
+        schema.props("logicalType").flatMap(_.asString).fold("")(name => s" with logical type $name")
     )
 
   /**

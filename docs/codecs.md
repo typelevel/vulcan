@@ -37,7 +37,7 @@ final case class InstallationTime(value: Instant)
 Codec[Instant].imap(InstallationTime(_))(_.value)
 ```
 
-When we have a newtype where we ensure values are valid, we can use `imapError` instead.
+When we have a newtype where we ensure values are valid, we can use `narrow` instead.
 
 ```scala mdoc
 import vulcan.AvroException
@@ -51,8 +51,10 @@ object SerialNumber {
     else Left(AvroException(s"$value is not a serial number"))
 }
 
-Codec[String].imapError(SerialNumber(_))(_.value)
+Codec[String].narrow(SerialNumber(_))(_.value)
 ```
+
+When encoding might be unsuccessful instead, we can use `widen`, and when both directions might be unsuccessful, we can use `exmap`.
 
 ## Decimals
 

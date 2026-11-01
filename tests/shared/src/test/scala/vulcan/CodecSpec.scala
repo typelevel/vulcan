@@ -15,9 +15,6 @@ import java.time.*
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import org.scalacheck.Gen
-import scala.util.Failure
-import scala.util.Success
-import scala.util.Try
 import scodec.bits.*
 import vulcan.Codec.InstantMicros
 import vulcan.examples.*
@@ -1004,94 +1001,6 @@ object CodecSpec extends BaseSuite {
     )
   }
 
-  locally {
-    case class PosInt(value: Int)
-
-    object PosInt {
-      def apply(value: Int): Either[AvroException, PosInt] =
-        if (value > 0) Right(new PosInt(value) {})
-        else Left(AvroException(s"$value is not positive"))
-
-      implicit val posIntCodec: Codec[PosInt] =
-        Codec[Int].imapError(apply)(_.value)
-    }
-
-    pureTest("Codec imapError schema should use the schema of the underlying codec") {
-      expectSchema[PosInt] {
-        """"int""""
-      }
-    }
-
-    pureTest("Codec imapError encode should encode using the underlying codec") {
-      whenSuccess(PosInt(1)) { posInt =>
-        expectEncode[PosInt](
-          posInt,
-          AvroValue.Int(1)
-        )
-      }
-    }
-
-    pureTest("Codec imapError decode should succeed for valid values") {
-      whenSuccess(PosInt(1)) { posInt =>
-        expectDecode[PosInt](
-          Codec[Int].encode(1),
-          posInt
-        )
-      }
-    }
-
-    pureTest("Codec imapError decode should error for invalid values") {
-      expectDecodeError[PosInt](
-        Codec[Int].encode(0),
-        "0 is not positive"
-      )
-    }
-  }
-
-  locally {
-    case class PosInt(value: Int)
-
-    object PosInt {
-      def apply(value: Int): Try[PosInt] =
-        if (value > 0) Success(new PosInt(value) {})
-        else Failure(new RuntimeException(s"$value is not positive"))
-
-      implicit val posIntCodec: Codec[PosInt] =
-        Codec[Int].imapTry(apply)(_.value)
-    }
-
-    pureTest("Codec imapTry schema should use the schema of the underlying codec") {
-      expectSchema[PosInt] {
-        """"int""""
-      }
-    }
-
-    pureTest("Codec imapTry encode should encode using the underlying codec") {
-      whenSuccess(PosInt(1)) { posInt =>
-        expectEncode[PosInt](
-          posInt,
-          AvroValue.Int(1)
-        )
-      }
-    }
-
-    pureTest("Codec imapTry decode should succeed for valid values") {
-      whenSuccess(PosInt(1)) { posInt =>
-        expectDecode[PosInt](
-          Codec[Int].encode(1),
-          posInt
-        )
-      }
-    }
-
-    pureTest("Codec imapTry decode should error for invalid values") {
-      expectDecodeError[PosInt](
-        Codec[Int].encode(0),
-        "java.lang.RuntimeException: 0 is not positive"
-      )
-    }
-  }
-
   pureTest("Codec instant schema should be encoded as long with logical type timestamp-millis") {
     expectSchema[Instant] {
       """{"type":"long","logicalType":"timestamp-millis"}"""
@@ -1339,7 +1248,7 @@ object CodecSpec extends BaseSuite {
 
   pureTest("Codec list encode should error if an item cannot be encoded") {
     implicit val intCodec: Codec[Int] =
-      Codec.int.imapErrors(Right(_))(_ => Left(AvroException("error")))
+      Codec.int.widen(int => int)(_ => Left(AvroException("error")))
 
     expectEncodeError[List[Int]](
       List(1, 2, 3),
@@ -1656,6 +1565,50 @@ object CodecSpec extends BaseSuite {
       Codec[Map[String, Int]].encode(Map("key" -> 1)),
       Map("key" -> 1)
     )
+  }
+
+  locally {
+    case class PosInt(value: Int)
+
+    object PosInt {
+      def apply(value: Int): Either[AvroException, PosInt] =
+        if (value > 0) Right(new PosInt(value) {})
+        else Left(AvroException(s"$value is not positive"))
+
+      implicit val posIntCodec: Codec[PosInt] =
+        Codec[Int].narrow(apply)(_.value)
+    }
+
+    pureTest("Codec narrow schema should use the schema of the underlying codec") {
+      expectSchema[PosInt] {
+        """"int""""
+      }
+    }
+
+    pureTest("Codec narrow encode should encode using the underlying codec") {
+      whenSuccess(PosInt(1)) { posInt =>
+        expectEncode[PosInt](
+          posInt,
+          AvroValue.Int(1)
+        )
+      }
+    }
+
+    pureTest("Codec narrow decode should succeed for valid values") {
+      whenSuccess(PosInt(1)) { posInt =>
+        expectDecode[PosInt](
+          Codec[Int].encode(1),
+          posInt
+        )
+      }
+    }
+
+    pureTest("Codec narrow decode should error for invalid values") {
+      expectDecodeError[PosInt](
+        Codec[Int].encode(0),
+        "0 is not positive"
+      )
+    }
   }
 
   pureTest("Codec none schema should be encoded as null") {
@@ -2147,7 +2100,7 @@ object CodecSpec extends BaseSuite {
 
     pureTest("Codec record schema should error if default value can't be encoded") {
       implicit val intCodec: Codec[Int] =
-        Codec.int.imapErrors(_ => Left(AvroException("error")))(_ => Left(AvroException("error")))
+        Codec.int.exmap(_ => Left(AvroException("error")))(_ => Left(AvroException("error")))
 
       implicit val caseClassFieldCodec: Codec[CaseClassField] =
         Codec.record[CaseClassField]("CaseClassField", "") { field =>
@@ -2487,7 +2440,7 @@ object CodecSpec extends BaseSuite {
 
       implicit val testCodec: Codec[Test] =
         Codec.record("Test", "") { field =>
-          field("value", _.value)(Codec.int.imapErrors(Right(_))(_ => Left(AvroException("error"))))
+          field("value", _.value)(Codec.int.widen(int => int)(_ => Left(AvroException("error"))))
             .map(Test(_))
         }
 
@@ -3276,6 +3229,151 @@ object CodecSpec extends BaseSuite {
       expectDecode[Vector[Int]](
         Codec[Vector[Int]].encode(value),
         value
+      )
+    }
+  }
+
+  locally {
+    case class Count(value: Long)
+
+    object Count {
+      implicit val countCodec: Codec[Count] =
+        Codec[Int].widen(int => Count(int.toLong)) { count =>
+          if (count.value.isValidInt) Right(count.value.toInt)
+          else Left(AvroException(s"${count.value} does not fit in an int"))
+        }
+    }
+
+    pureTest("Codec widen schema should use the schema of the underlying codec") {
+      expectSchema[Count] {
+        """"int""""
+      }
+    }
+
+    pureTest("Codec widen encode should succeed for valid values") {
+      expectEncode[Count](
+        Count(1L),
+        AvroValue.Int(1)
+      )
+    }
+
+    pureTest("Codec widen encode should error for invalid values") {
+      expectEncodeError[Count](
+        Count(Long.MaxValue),
+        "9223372036854775807 does not fit in an int"
+      )
+    }
+
+    pureTest("Codec widen decode should decode using the underlying codec") {
+      expectDecode[Count](
+        Codec[Int].encode(1),
+        Count(1L)
+      )
+    }
+  }
+
+  locally {
+    case class Nanos(value: Long)
+
+    object Nanos {
+      implicit val nanosCodec: Codec[Nanos] =
+        Codec.long.imap(Nanos(_))(_.value).withLogicalType(LogicalType.timestampNanos)
+    }
+
+    pureTest("Codec withLogicalType schema should add the logical type") {
+      expectSchema[Nanos] {
+        """{"type":"long","logicalType":"timestamp-nanos"}"""
+      }
+    }
+
+    pureTest("Codec withLogicalType decode should decode values written with the logical type") {
+      expectDecode[Nanos](
+        Codec[Long].encode(1L),
+        Right(Schema.Long.withLogicalType(LogicalType.timestampNanos)),
+        Nanos(1L)
+      )
+    }
+
+    pureTest("Codec withLogicalType decode should error if the writer schema has no logical type") {
+      expectDecodeError[Nanos](
+        Codec[Long].encode(1L),
+        Right(Schema.Long),
+        "Got unexpected missing logical type"
+      )
+    }
+  }
+
+  locally {
+    case class Id(value: ByteVector)
+
+    object Id {
+      implicit val idCodec: Codec[Id] =
+        Codec
+          .fixed[Id]("Id", "com.example", 16, _.value, bytes => Right(Id(bytes)))
+          .withLogicalType(LogicalType.uuid)
+    }
+
+    pureTest("Codec withLogicalType schema should add the logical type to fixed") {
+      expectSchema[Id] {
+        """{"type":"fixed","name":"Id","namespace":"com.example","size":16,"logicalType":"uuid"}"""
+      }
+    }
+
+    pureTest("Codec withLogicalType should roundtrip fixed with the logical type") {
+      expectRoundtrip(Id(ByteVector.fill(16L)(1)))
+    }
+  }
+
+  pureTest("Codec withLogicalType schema should error if the logical type is invalid for the type") {
+    implicit val codec: Codec[String] =
+      Codec.string.withLogicalType(LogicalType.timestampMillis)
+
+    expectSchemaError[String]("Unable to add logical type timestamp-millis to string")
+  }
+
+  pureTest("Codec withLogicalType schema should error if the schema already has a logical type") {
+    implicit val codec: Codec[Instant] =
+      Codec.instant.withLogicalType(LogicalType.timestampMicros)
+
+    expectSchemaError[Instant](
+      "Unable to add logical type timestamp-micros to long with logical type timestamp-millis"
+    )
+  }
+
+  pureTest("Codec withLogicalType schema should error if the type has no logical types") {
+    implicit val codec: Codec[Boolean] =
+      Codec.boolean.withLogicalType(LogicalType.uuid)
+
+    expectSchemaError[Boolean]("Unable to add logical type uuid to boolean")
+  }
+
+  locally {
+    case class Test(value: Int)
+
+    object Test {
+      implicit val testCodec: Codec[Test] =
+        Codec.int
+          .exmap[Test](_ => Left(AvroException("error")))(_ => Left(AvroException("error")))
+          .withTypeName("Test")
+    }
+
+    pureTest("Codec withTypeName schema should use the schema of the underlying codec") {
+      expectSchema[Test] {
+        """"int""""
+      }
+    }
+
+    pureTest("Codec withTypeName encode should include the type name in errors") {
+      expectEncodeError[Test](
+        Test(1),
+        "Error encoding Test: error"
+      )
+    }
+
+    pureTest("Codec withTypeName decode should include the type name in errors") {
+      expectDecodeError[Test](
+        Codec[Int].encode(1),
+        "Error decoding Test: error"
       )
     }
   }

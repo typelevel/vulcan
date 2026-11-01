@@ -12,7 +12,6 @@ import io.circe.Json
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.LocalDate
-import scala.util.Failure
 import scodec.bits.ByteVector
 import vulcan.Codec.InstantMicros
 import vulcan.examples.*
@@ -218,7 +217,7 @@ object RegressionSpec extends BaseSuite {
     final case class Thing(value: String)
 
     implicit val thingCodec: Codec[Thing] =
-      Codec.string.imapError { string =>
+      Codec.string.narrow { string =>
         if (string == "thing") Right(Thing(string)) else Left(AvroException(s"$string is not a thing"))
       }(_.value)
 
@@ -287,7 +286,7 @@ object RegressionSpec extends BaseSuite {
 
   pureTest("#320: errors from exceptions should preserve the exception as cause") {
     val exception = new IllegalArgumentException("invalid")
-    val codec = Codec[Int].imapTry[Int](_ => Failure(exception))(identity)
+    val codec = Codec[Int].narrow[Int](_ => Left(AvroException("invalid", exception)))(identity)
     matches(codec.decoder(Schema.Int).flatMap(_.decode(AvroValue.Int(1)))) { case Left(error) =>
       expect(clue(error.getCause) eq exception)
     }
