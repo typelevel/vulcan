@@ -1,0 +1,32 @@
+/*
+ * Copyright 2019 OVO Energy Limited
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.typelevel.vulcan.generic.examples
+
+import java.time.LocalDate
+import org.scalacheck.Arbitrary
+import org.typelevel.vulcan.Codec
+import org.typelevel.vulcan.generic.*
+
+@AvroNullDefault(true)
+final case class CaseClassAvroNullDefault(
+  int: Option[Int],
+  long: Option[Long],
+  string: Option[String],
+  date: Option[LocalDate],
+  map: Option[Map[String, String]],
+  caseClassValueClass: Option[CaseClassValueClass],
+  sealedTraitEnumDerived: Option[SealedTraitEnumDerived]
+)
+
+object CaseClassAvroNullDefault {
+
+  implicit val caseClassAvroNullDefaultArbitrary: Arbitrary[CaseClassAvroNullDefault] =
+    Arbitrary(CaseClassNullableFields.genFieldProduct.map((apply _).tupled))
+
+  implicit val codec: Codec[CaseClassAvroNullDefault] =
+    Codec.derive
+}

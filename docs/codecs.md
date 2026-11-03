@@ -1,25 +1,25 @@
 # Codecs
 
-@:api(vulcan.Codec) is the central concept in the library. @:api(vulcan.Codec)s represent an Avro `schema`, together with encoders and decoders for converting between Scala types and Avro. There are default @:api(vulcan.Codec)s defined for many standard library types. For example, we can check what the default `Option[Instant]` encoding is by asking for a @:api(vulcan.Codec) instance.
+@:api(org.typelevel.vulcan.Codec) is the central concept in the library. @:api(org.typelevel.vulcan.Codec)s represent an Avro `schema`, together with encoders and decoders for converting between Scala types and Avro. There are default @:api(org.typelevel.vulcan.Codec)s defined for many standard library types. For example, we can check what the default `Option[Instant]` encoding is by asking for a @:api(org.typelevel.vulcan.Codec) instance.
 
 ```scala mdoc:reset-object
 import java.time.Instant
-import vulcan.Codec
+import org.typelevel.vulcan.Codec
 
 Codec[Option[Instant]]
 ```
 
-In some cases, it's not possible to generate Avro schemas. This is why @:api(vulcan.Codec) `schema`s are wrapped in `Either` with error type @:api(vulcan.AvroException). For example, Avro doesn't support nested unions, so what would happen when we try to ask for a @:api(vulcan.Codec) for `Option[Option[Instant]]`?
+In some cases, it's not possible to generate Avro schemas. This is why @:api(org.typelevel.vulcan.Codec) `schema`s are wrapped in `Either` with error type @:api(org.typelevel.vulcan.AvroException). For example, Avro doesn't support nested unions, so what would happen when we try to ask for a @:api(org.typelevel.vulcan.Codec) for `Option[Option[Instant]]`?
 
 ```scala mdoc
 Codec[Option[Option[Instant]]]
 ```
 
-A @:api(vulcan.Codec) compiles encoders for its schema, and decoders for the schema values were written with, called the writer schema. They are compiled when requested, so request them once and reuse them for any number of values. Encoding and decoding might also be unsuccessful, so results are wrapped in `Either` with error type @:api(vulcan.AvroException). For example, what happens if we try to decode `Int`s written using a `Boolean` schema?
+A @:api(org.typelevel.vulcan.Codec) compiles encoders for its schema, and decoders for the schema values were written with, called the writer schema. They are compiled when requested, so request them once and reuse them for any number of values. Encoding and decoding might also be unsuccessful, so results are wrapped in `Either` with error type @:api(org.typelevel.vulcan.AvroException). For example, what happens if we try to decode `Int`s written using a `Boolean` schema?
 
 ```scala mdoc
-import vulcan.AvroValue
-import vulcan.Schema
+import org.typelevel.vulcan.AvroValue
+import org.typelevel.vulcan.Schema
 
 for {
   decoder <- Codec[Int].decoder(Schema.Boolean)
@@ -27,9 +27,9 @@ for {
 } yield result
 ```
 
-@:api(vulcan.Codec)s encode Scala types as `AvroValue`s, and decode `AvroValue`s using the schema they were written with. Encoded values are not checked against the schema until they are written as Avro binary or JSON, so tests should be used to ensure @:api(vulcan.Codec)s work as intended. This becomes important when we define @:api(vulcan.Codec)s from scratch.
+@:api(org.typelevel.vulcan.Codec)s encode Scala types as `AvroValue`s, and decode `AvroValue`s using the schema they were written with. Encoded values are not checked against the schema until they are written as Avro binary or JSON, so tests should be used to ensure @:api(org.typelevel.vulcan.Codec)s work as intended. This becomes important when we define @:api(org.typelevel.vulcan.Codec)s from scratch.
 
-@:api(vulcan.Codec)s form [invariant functors][invariant], which means you can easily use an existing @:api(vulcan.Codec) to encode and decode a different type, by mapping back-and-forth between the @:api(vulcan.Codec)'s existing type argument and the new type. This becomes useful when dealing with newtypes, like `InstallationTime` in the following example.
+@:api(org.typelevel.vulcan.Codec)s form [invariant functors][invariant], which means you can easily use an existing @:api(org.typelevel.vulcan.Codec) to encode and decode a different type, by mapping back-and-forth between the @:api(org.typelevel.vulcan.Codec)'s existing type argument and the new type. This becomes useful when dealing with newtypes, like `InstallationTime` in the following example.
 
 ```scala mdoc
 final case class InstallationTime(value: Instant)
@@ -40,7 +40,7 @@ Codec[Instant].imap(InstallationTime(_))(_.value)
 When we have a newtype where we ensure values are valid, we can use `narrow` instead.
 
 ```scala mdoc
-import vulcan.AvroException
+import org.typelevel.vulcan.AvroException
 
 sealed abstract case class SerialNumber(value: String)
 
@@ -60,7 +60,7 @@ When encoding might be unsuccessful instead, we can use `widen`, and when both d
 
 Avro decimals closely correspond to `BigDecimal`s with a fixed precision and scale.
 
-`Codec.decimal` can be used to create a @:api(vulcan.Codec) for `BigDecimal` given the precision and scale. When encoding, the @:api(vulcan.Codec) checks the precision and scale of the `BigDecimal` to make sure it matches the precision and scale defined in the schema. When decoding, we check the precision is not exceeded.
+`Codec.decimal` can be used to create a @:api(org.typelevel.vulcan.Codec) for `BigDecimal` given the precision and scale. When encoding, the @:api(org.typelevel.vulcan.Codec) checks the precision and scale of the `BigDecimal` to make sure it matches the precision and scale defined in the schema. When decoding, we check the precision is not exceeded.
 
 ```scala mdoc
 Codec.decimal(precision = 10, scale = 2)

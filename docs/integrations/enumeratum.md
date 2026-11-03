@@ -1,6 +1,6 @@
 # enumeratum
 
-The `@ENUMERATUM_MODULE_NAME@` module provides @:api(vulcan.Codec)s for [Enumeratum](https://github.com/lloydmeta/enumeratum) enumerations.
+The `@ENUMERATUM_MODULE_NAME@` module provides @:api(org.typelevel.vulcan.Codec)s for [Enumeratum](https://github.com/lloydmeta/enumeratum) enumerations.
 
 ## Getting Started
 
@@ -12,13 +12,14 @@ libraryDependencies += "@ORGANIZATION@" %% "@ENUMERATUM_MODULE_NAME@" % "@VERSIO
 
 ## Usage
 
-For regular `Enum`s, also mix in `VulcanEnum` to derive a @:api(vulcan.Codec) instance.
+For regular `Enum`s, also mix in `VulcanEnum` to derive a @:api(org.typelevel.vulcan.Codec) instance.
 
 ```scala mdoc:reset-object
-import enumeratum.{Enum, EnumEntry, VulcanEnum}
+import enumeratum.{Enum, EnumEntry}
 import enumeratum.EnumEntry.Lowercase
-import vulcan.Codec
-import vulcan.generic.{AvroDoc, AvroNamespace}
+import org.typelevel.vulcan.Codec
+import org.typelevel.vulcan.enumeratum.VulcanEnum
+import org.typelevel.vulcan.generic.{AvroDoc, AvroNamespace}
 
 @AvroNamespace("com.example")
 @AvroDoc("The different card suits")
@@ -38,10 +39,11 @@ Codec[Suit]
 
 Annotations like `@AvroDoc` can be used to customize the derivation.
 
-For `ValueEnum`s, also mix in the matching `VulcanValueEnum` to derive a @:api(vulcan.Codec) instance.
+For `ValueEnum`s, also mix in the matching `VulcanValueEnum` to derive a @:api(org.typelevel.vulcan.Codec) instance.
 
 ```scala mdoc
-import enumeratum.values.{StringEnum, StringEnumEntry, StringVulcanEnum}
+import enumeratum.values.{StringEnum, StringEnumEntry}
+import org.typelevel.vulcan.enumeratum.values.StringVulcanEnum
 
 @AvroNamespace("com.example")
 @AvroDoc("The available colors")
@@ -61,7 +63,8 @@ Codec[Color]
 For `StringVulcanEnum`, the enumeration is encoded as an Avro enumeration. For the other `VulcanValueEnum`s (`ByteVulcanEnum`, `CharVulcanEnum`, `IntVulcanEnum`, `LongVulcanEnum`, and `ShortVulcanEnum`), the encoding relies on the encoding of the enumeration's value type (`Byte`, `Char`, `Int`, `Long`, and `Short`).
 
 ```scala mdoc
-import enumeratum.values.{IntEnum, IntEnumEntry, IntVulcanEnum}
+import enumeratum.values.{IntEnum, IntEnumEntry}
+import org.typelevel.vulcan.enumeratum.values.IntVulcanEnum
 
 sealed abstract class Day(val value: Int) extends IntEnumEntry
 
