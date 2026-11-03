@@ -187,7 +187,7 @@ object JsonValueSpec extends BaseSuite {
     expect.eql(Left("Invalid null for union"), decode(Schema.Union(Vector(Schema.Int)), "null"))
   }
 
-  pureTest("JsonEncoder and JsonDecoder should limit the number of nested values of recursive schemas") {
+  pureTest("JsonEncoder and JsonDecoder should limit the depth of nested records, arrays and maps") {
     val limit = JsonDecoder.MaxDepth
 
     def nodes(count: Int): Json =
@@ -195,14 +195,27 @@ object JsonValueSpec extends BaseSuite {
         Json.obj("value" -> Json.fromInt(0), "next" -> Json.obj("Node" -> next))
       }
 
-    val decoder = JsonDecoder(node)
+    val arrays = (1 to 300).foldLeft[Schema](Schema.Ref(name("Deep")))((items, _) => Schema.Array(items))
+    val deep =
+      Schema.Record(name("Deep"), Vector(Schema.Field("next", Schema.Union(Vector(Schema.Null, arrays)))))
+
+    def deepRecords(count: Int): Json =
+      (1 until count).foldLeft(Json.obj("next" -> Json.Null)) { (next, _) =>
+        val nested = (1 to 300).foldLeft(next)((items, _) => Json.arr(items))
+        Json.obj("next" -> Json.obj("array" -> nested))
+      }
+
+    def decodeJson(schema: Schema, json: Json): Either[String, AvroValue] =
+      JsonDecoder(schema).flatMap(_.decode(json)).left.map(_.message)
 
     val error =
-      s"Invalid depth ${limit + 1}, exceeding the limit of $limit nested values of recursive schemas"
+      s"Invalid depth ${limit + 1}, exceeding the limit of $limit nested records, arrays and maps"
 
-    matches(decoder.flatMap(_.decode(nodes(limit + 1)))) { case Right(_) => success } &&
-    expect.eql(Left(error), decoder.flatMap(_.decode(nodes(limit + 2))).left.map(_.message)) &&
-    expect.eql(Left(error), decoder.flatMap(_.decode(nodes(100000))).left.map(_.message))
+    matches(decodeJson(node, nodes(limit))) { case Right(_) => success } &&
+    expect.eql(Left(error), decodeJson(node, nodes(limit + 1))) &&
+    expect.eql(Left(error), decodeJson(node, nodes(100000))) &&
+    matches(decodeJson(deep, deepRecords(2))) { case Right(_) => success } &&
+    expect.eql(Left(error), decodeJson(deep, deepRecords(50)))
   }
 
   pureTest("JsonEncoder and JsonDecoder should not compile invalid schemas") {

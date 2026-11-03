@@ -87,10 +87,10 @@ sealed abstract class Codec[A] {
     * Returns a `BinaryDecoder` for Avro binary written using the provided
     * writer schema, or an error if the schema or writer schema is invalid.
     *
-    * To protect against invalid input, decoding fails for values nested
-    * more than 512 levels deep in recursive schemas, and for values with
-    * more than 1,000,000 array or map items which are encoded using zero
-    * bytes, like nulls and empty records.
+    * To protect against invalid input, decoding fails for values with
+    * records, arrays and maps nested more than 512 levels deep, and for
+    * values with more than 1,000,000 array or map items which are encoded
+    * using zero bytes, like nulls and empty records.
     */
   final def binaryDecoder(writerSchema: Schema): Either[AvroException, BinaryDecoder[A]] =
     (schema >> BinaryDecoder(writerSchema)).map { compiled =>
@@ -114,8 +114,8 @@ sealed abstract class Codec[A] {
     * Returns a `JsonDecoder` for Avro `Json` written using the provided
     * writer schema, or an error if the schema or writer schema is invalid.
     *
-    * To protect against invalid input, decoding fails for values nested
-    * more than 512 levels deep in recursive schemas.
+    * To protect against invalid input, decoding fails for values with
+    * records, arrays and maps nested more than 512 levels deep.
     */
   final def jsonDecoder(writerSchema: Schema): Either[AvroException, JsonDecoder[A]] =
     (schema >> JsonDecoder(writerSchema)).map { compiled =>
@@ -547,9 +547,11 @@ object Codec {
   /**
     * @group Collection
     */
-  implicit final def map[A](implicit codec: Codec[A]): Codec[Map[String, A]] =
-    new MapCodec[A, Map[String, A]](initialized(codec, "Map values"), _.size, _.iterator, _ => Map.newBuilder)
+  implicit final def map[A](implicit codec: Codec[A]): Codec[Map[String, A]] = {
+    val values = initialized(codec, "Map values")
+    new MapCodec[A, Map[String, A]](values, _.size, _.iterator, _ => Map.newBuilder, hashed = true)
       .withTypeName("Map")
+  }
 
   /**
     * @group General
@@ -656,9 +658,11 @@ object Codec {
   /**
     * @group Collection
     */
-  implicit final def set[A](implicit codec: Codec[A]): Codec[Set[A]] =
-    new ArrayCodec[A, Set[A]](initialized(codec, "Set items"), _.size, _.iterator, _ => Set.newBuilder)
+  implicit final def set[A](implicit codec: Codec[A]): Codec[Set[A]] = {
+    val items = initialized(codec, "Set items")
+    new ArrayCodec[A, Set[A]](items, _.size, _.iterator, _ => Set.newBuilder, hashed = true)
       .withTypeName("Set")
+  }
 
   /**
     * @group General
@@ -934,7 +938,8 @@ object Codec {
     val items: Codec[A],
     val size: C => Int,
     val iterator: C => Iterator[A],
-    val newBuilder: Int => mutable.Builder[A, C]
+    val newBuilder: Int => mutable.Builder[A, C],
+    val hashed: Boolean = false
   ) extends Codec[C] {
     override lazy val schema: Either[AvroException, Schema] =
       items.schema.map(Schema.Array(_))
@@ -952,6 +957,13 @@ object Codec {
           val decode = items.resolveDecoder(array.items, definitions)
           value =>
             value match {
+              case AvroValue.Array(values) if hashed && values.size > MaxEqualHashCodes =>
+                build(values.iterator, vectorBuilder[A](values.size))(decode).flatMap { decoded =>
+                  if (hashCollisions(decoded.size)(decoded(_)))
+                    Left(new HashCollisionsExceeded("items", MaxEqualHashCodes))
+                  else Right((newBuilder(decoded.size) ++= decoded).result())
+                }
+
               case AvroValue.Array(values) =>
                 build(values.iterator, newBuilder(values.size))(decode)
 
@@ -964,12 +976,16 @@ object Codec {
       }
   }
 
-  /** Codec for maps with string keys, with a builder for the number of entries. */
+  /**
+    * Codec for maps with string keys, with a builder for the number of entries. Decoding hashed
+    * maps fails for keys with the same hash code beyond the limit.
+    */
   private[vulcan] final class MapCodec[A, M](
     val values: Codec[A],
     val size: M => Int,
     val iterator: M => Iterator[(String, A)],
-    val newBuilder: Int => mutable.Builder[(String, A), M]
+    val newBuilder: Int => mutable.Builder[(String, A), M],
+    val hashed: Boolean = false
   ) extends Codec[M] {
     override lazy val schema: Either[AvroException, Schema] =
       values.schema.map(Schema.Map(_))
@@ -988,6 +1004,9 @@ object Codec {
           val decode = values.resolveDecoder(map.values, definitions)
           value =>
             value match {
+              case AvroValue.Map(entries) if hashed && hashCollisions(entries.size)(entries(_)._1) =>
+                Left(new HashCollisionsExceeded("keys", MaxEqualHashCodes))
+
               case AvroValue.Map(entries) =>
                 build(entries.iterator, newBuilder(entries.size)) { case (key, entryValue) =>
                   decode(entryValue).map((key, _))
@@ -1702,6 +1721,42 @@ object Codec {
     loop()
   }
 
+  /** The limit for distinct map keys and set items with the same hash code, added in quadratic time. */
+  private[vulcan] final val MaxEqualHashCodes: Int = 64
+
+  /**
+    * Returns `true` if more than [[MaxEqualHashCodes]] distinct keys have the same hash code. Sorts
+    * the hash codes, since counting them in a hash table could be slowed down by crafted keys too.
+    */
+  private def hashCollisions(size: Int)(key: Int => Any): Boolean =
+    size > MaxEqualHashCodes && {
+      // Hash codes in the high bits and indices in the low bits, so equal hash codes become adjacent
+      val sorted = Array.tabulate(size)(index => (key(index).##.toLong << 32) | index.toLong)
+      Arrays.sort(sorted)
+
+      def distinctKeys(start: Int, end: Int): Int = {
+        val keys = mutable.ArrayBuffer.empty[Any]
+        var index = start
+        while (index < end && keys.size <= MaxEqualHashCodes) {
+          val next = key(sorted(index).toInt)
+          if (!keys.contains(next)) keys += next
+          index += 1
+        }
+        keys.size
+      }
+
+      @tailrec def loop(start: Int): Boolean =
+        if (start == size) false
+        else {
+          var end = start + 1
+          while (end < size && (sorted(end) >> 32) == (sorted(start) >> 32)) end += 1
+          if (end - start > MaxEqualHashCodes && distinctKeys(start, end) > MaxEqualHashCodes) true
+          else loop(end)
+        }
+
+      loop(0)
+    }
+
   /** The schema with the logical type, unless it has a logical type or the logical type is invalid. */
   private def addLogicalType(schema: Schema, logicalType: LogicalType): Either[AvroException, Schema] = {
     val added: Option[Schema] =
@@ -1729,9 +1784,17 @@ object Codec {
     if (bytes.isEmpty) Left(new EmptyDecimal())
     else {
       val unscaled = new java.math.BigInteger(bytes.toArray)
-      val decimal = BigDecimal(new java.math.BigDecimal(unscaled, scale))
-      if (decimal.precision <= precision) Right(decimal)
-      else Left(new DecodeDecimalPrecisionExceeded(decimal.precision, precision))
+
+      // The magnitude is at least 2^(bitLength - 1), so with 0.30102 below log10(2), it has at least
+      // this many digits. Checked first, since computing the precision of large numbers is slow
+      val minDigits = (unscaled.bitLength - 1L) * 30102L / 100000L + 1L
+
+      if (minDigits > precision) Left(new DecodeDecimalPrecisionExceeded(precision))
+      else {
+        val decimal = BigDecimal(new java.math.BigDecimal(unscaled, scale))
+        if (decimal.precision <= precision) Right(decimal)
+        else Left(new DecodeDecimalPrecisionExceeded(precision))
+      }
     }
 
   /** The time since the epoch in the unit, or an error if it exceeds a long. */

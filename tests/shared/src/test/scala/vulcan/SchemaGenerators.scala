@@ -62,6 +62,15 @@ object SchemaGenerators {
       "fixed"
     )
 
+  /**
+    * Records `R1` to `Rn` with fields `a` and `b` of the previous record, starting
+    * from `R0` with the given fields, so the schema unfolds to 2^n copies of `R0`.
+    */
+  def sharedRecords(levels: Int, fields: Vector[Schema.Field]): Schema.Record =
+    (1 to levels).foldLeft(Schema.Record(Schema.Name("R0"), fields)) { (record, level) =>
+      Schema.Record(Schema.Name(s"R$level"), Vector(Schema.Field("a", record), Schema.Field("b", record)))
+    }
+
   def genSchema: Gen[Schema] =
     Gen.frequency(
       3 -> Gen.choose(0, 3).flatMap(depth => genSchema(depth, None, "0")),

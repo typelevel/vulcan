@@ -8,7 +8,6 @@ package vulcan.internal
 
 import cats.syntax.all.*
 import io.circe.Json
-import io.circe.JsonNumber
 import io.circe.JsonObject
 import scala.collection.mutable
 import vulcan.AvroException
@@ -42,15 +41,17 @@ private[vulcan] object SchemaValidator {
 
   /** The value of an integral number which fits in an `Int`, same as the Java Avro library. */
   def intValue(json: Json): Option[Int] =
-    json.asNumber.filter(isIntegral).flatMap(_.toInt)
+    integralText(json).flatMap(_.toIntOption)
 
   /** The value of an integral number which fits in a `Long`, same as the Java Avro library. */
   def longValue(json: Json): Option[Long] =
-    json.asNumber.filter(isIntegral).flatMap(_.toLong)
+    integralText(json).flatMap(_.toLongOption)
 
-  /** Returns `true` if the number is written without fraction and exponent. */
-  private def isIntegral(number: JsonNumber): Boolean =
-    Json.fromJsonNumber(number).noSpaces.forall(char => char == '-' || (char >= '0' && char <= '9'))
+  /** The text of a number written without fraction and exponent. */
+  private def integralText(json: Json): Option[String] =
+    json.asNumber
+      .map(number => Json.fromJsonNumber(number).noSpaces)
+      .filter(_.forall(char => char == '-' || (char >= '0' && char <= '9')))
 
   /** The definition without docs and aliases, with named schemas replaced by references. */
   private def definition(named: Schema.Named): Schema.Named =

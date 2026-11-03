@@ -47,7 +47,7 @@ object BinaryDecoder {
   private[vulcan] val MaxZeroByteItems: Long =
     1000000L
 
-  /** The limit for the number of nested values of recursive schemas, to avoid stack overflows. */
+  /** The limit for nested records, arrays and maps, to avoid stack overflows. */
   private[vulcan] val MaxDepth: Int =
     512
 
@@ -71,35 +71,49 @@ object BinaryDecoder {
   private[vulcan] def reader(writerSchema: Schema): Either[AvroException, BinaryReader => AvroValue] =
     SchemaValidator.validate(writerSchema, validateDefaults = false).flatMap { _ =>
       val definitions = SchemaNames.definitions(writerSchema)
+      val minSizes = new MinSizes(definitions)
 
       definitions.values.collectFirst {
-        case record: Schema.Record if minSize(record, definitions, Set.empty) == Unbounded =>
+        case record: Schema.Record if minSizes(record) == Unbounded =>
           record
       } match {
         case Some(record) =>
           Left(new InfiniteRecord(record))
 
         case None =>
-          val root = new Compilation(definitions).compile(writerSchema)
+          val root = new Compilation(minSizes).compile(writerSchema)
           Right((reader: BinaryReader) => root.read(new Input(reader)))
       }
     }
 
   /**
     * The state of reading a value, including the number of zero byte items
-    * read so far, and the number of nested values read for recursive schemas.
+    * read so far, and the number of records, arrays and maps being read.
     */
   private final class Input(val reader: BinaryReader) {
     var zeroByteItems: Long = 0L
 
-    var depth: Int = 0
+    private[this] var depth: Int = 0
+
+    /** Starts reading a nested record, array or map, failing beyond the depth limit. */
+    def enter(): Unit = {
+      if (depth == MaxDepth)
+        throw new InvalidBinary(
+          s"Invalid depth ${MaxDepth + 1} at position ${reader.position}, exceeding the limit of $MaxDepth nested records, arrays and maps"
+        )
+
+      depth += 1
+    }
+
+    def exit(): Unit =
+      depth -= 1
   }
 
   private sealed abstract class Node {
     def read(input: Input): AvroValue
   }
 
-  private final class Compilation(definitions: collection.Map[String, Schema.Named]) {
+  private final class Compilation(minSizes: MinSizes) {
     private val compiled = mutable.Map.empty[String, Reference]
 
     def compile(schema: Schema): Node =
@@ -113,10 +127,10 @@ object BinaryDecoder {
         case _: Schema.Bytes => BytesNode
         case _: Schema.String => StringNode
         case array: Schema.Array =>
-          new ArrayNode(compile(array.items), minSize(array.items, definitions, Set.empty))
+          new ArrayNode(compile(array.items), minSizes(array.items))
         case map: Schema.Map =>
           // Keys are strings, which are encoded using at least one byte
-          new MapNode(compile(map.values), add(1L, minSize(map.values, definitions, Set.empty)))
+          new MapNode(compile(map.values), add(1L, minSizes(map.values)))
         case union: Schema.Union =>
           new UnionNode(union.types.map(compile).toArray)
         case named: Schema.Named =>
@@ -132,11 +146,15 @@ object BinaryDecoder {
       val node =
         named match {
           case record: Schema.Record =>
-            new RecordNode(record.fields.map(field => compile(field.schema)).toArray)
+            val fields = record.fields.map(field => compile(field.schema))
+            val constants = fields.collect { case constant: ConstantNode => constant.value }
+            if (constants.size == fields.size) new ConstantNode(AvroValue.Record(constants))
+            else new RecordNode(fields.toArray)
           case enumeration: Schema.Enum =>
             new EnumNode(enumeration.fullName, enumeration.symbols.toArray)
           case fixed: Schema.Fixed =>
-            new FixedNode(fixed.size)
+            if (fixed.size == 0) new ConstantNode(AvroValue.Fixed(ByteVector.empty))
+            else new FixedNode(fixed.size)
         }
 
       reference.node = node
@@ -144,33 +162,24 @@ object BinaryDecoder {
     }
   }
 
-  /**
-    * A named schema, which is being compiled if references are recursive. Since references
-    * are only used for recursive schemas, reading them limits the depth of nested values.
-    */
+  /** A named schema, which is being compiled if references are recursive. */
   private final class Reference extends Node {
     var node: Node = null
 
     def resolved: Node =
       if (node != null) node else this
 
-    override def read(input: Input): AvroValue = {
-      if (input.depth == MaxDepth)
-        throw new InvalidBinary(
-          s"Invalid depth ${MaxDepth + 1} at position ${input.reader.position}, exceeding the limit of $MaxDepth nested values of recursive schemas"
-        )
-
-      input.depth += 1
-      val value = node.read(input)
-      input.depth -= 1
-      value
-    }
-  }
-
-  private object NullNode extends Node {
     override def read(input: Input): AvroValue =
-      AvroValue.Null
+      node.read(input)
   }
+
+  private final class ConstantNode(val value: AvroValue) extends Node {
+    override def read(input: Input): AvroValue =
+      value
+  }
+
+  private val NullNode: ConstantNode =
+    new ConstantNode(AvroValue.Null)
 
   private object BooleanNode extends Node {
     override def read(input: Input): AvroValue =
@@ -209,12 +218,14 @@ object BinaryDecoder {
 
   private final class RecordNode(fields: Array[Node]) extends Node {
     override def read(input: Input): AvroValue = {
+      input.enter()
       val values = new Array[AnyRef](fields.length)
       var index = 0
       while (index < fields.length) {
         values(index) = fields(index).read(input)
         index += 1
       }
+      input.exit()
       AvroValue.Record(Vector.from(arraySeq[AvroValue](values)))
     }
   }
@@ -241,31 +252,36 @@ object BinaryDecoder {
     protected def readItem(input: Input): A
 
     protected final def readItems(input: Input): Vector[A] = {
+      input.enter()
       var count = readBlockCount(input, minItemSize)
-      if (count == 0) Vector.empty
-      else {
-        val first = new Array[AnyRef](count.toInt)
-        var index = 0
-        while (index < first.length) {
-          first(index) = readItem(input)
-          index += 1
+      val items =
+        if (count == 0) Vector.empty
+        else {
+          val first = new Array[AnyRef](count.toInt)
+          var index = 0
+          while (index < first.length) {
+            first(index) = readItem(input)
+            index += 1
+          }
+
+          count = readBlockCount(input, minItemSize)
+          if (count == 0) Vector.from(arraySeq[A](first))
+          else {
+            val items = Vector.newBuilder[A] ++= arraySeq[A](first)
+            while (count > 0) {
+              var index = 0L
+              while (index < count) {
+                items += readItem(input)
+                index += 1
+              }
+              count = readBlockCount(input, minItemSize)
+            }
+            items.result()
+          }
         }
 
-        count = readBlockCount(input, minItemSize)
-        if (count == 0) Vector.from(arraySeq[A](first))
-        else {
-          val items = Vector.newBuilder[A] ++= arraySeq[A](first)
-          while (count > 0) {
-            var index = 0L
-            while (index < count) {
-              items += readItem(input)
-              index += 1
-            }
-            count = readBlockCount(input, minItemSize)
-          }
-          items.result()
-        }
-      }
+      input.exit()
+      items
     }
   }
 
@@ -324,31 +340,40 @@ object BinaryDecoder {
   private val Unbounded: Long =
     Long.MaxValue
 
-  /** The minimum number of bytes needed to encode a value of the schema. */
-  private def minSize(
-    schema: Schema,
-    definitions: collection.Map[String, Schema.Named],
-    enclosing: Set[String]
-  ): Long =
-    schema match {
-      case _: Schema.Null => 0L
-      case _: Schema.Float => 4L
-      case _: Schema.Double => 8L
-      case fixed: Schema.Fixed => fixed.size.toLong
-      case record: Schema.Record =>
-        if (enclosing.contains(record.fullName)) Unbounded
-        else {
-          val fieldsEnclosing = enclosing + record.fullName
-          record.fields.foldLeft(0L) { (size, field) =>
-            add(size, minSize(field.schema, definitions, fieldsEnclosing))
-          }
-        }
-      case ref: Schema.Ref =>
-        minSize(definitions(ref.fullName), definitions, enclosing)
-      // Other types are encoded using at least one byte, including union indices and block counts
-      case _ =>
-        1L
-    }
+  /**
+    * The minimum number of bytes needed to encode values of schemas, computed once for each record.
+    *
+    * A record reached again while computing its size always contains itself, so it is unbounded.
+    * Records computed meanwhile are only unbounded if they always contain that record, so they
+    * are unbounded wherever they occur.
+    */
+  private final class MinSizes(definitions: collection.Map[String, Schema.Named]) {
+    private val recordSizes = mutable.Map.empty[String, Long]
+
+    def apply(schema: Schema): Long =
+      schema match {
+        case _: Schema.Null => 0L
+        case _: Schema.Float => 4L
+        case _: Schema.Double => 8L
+        case fixed: Schema.Fixed => fixed.size.toLong
+        case record: Schema.Record => recordSize(record)
+        case ref: Schema.Ref => apply(definitions(ref.fullName))
+        // Other types are encoded using at least one byte, including union indices and block counts
+        case _ => 1L
+      }
+
+    private def recordSize(record: Schema.Record): Long =
+      recordSizes.get(record.fullName) match {
+        case Some(size) =>
+          size
+
+        case None =>
+          recordSizes.update(record.fullName, Unbounded)
+          val size = record.fields.foldLeft(0L)((size, field) => add(size, apply(field.schema)))
+          recordSizes.update(record.fullName, size)
+          size
+      }
+  }
 
   private def add(first: Long, second: Long): Long =
     if (first > Long.MaxValue - second) Long.MaxValue else first + second

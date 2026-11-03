@@ -383,6 +383,14 @@ object CodecSpec extends BaseSuite {
       )
     }
 
+    pureTest("Codec custom decode should pass writer schemas which reuse records to other codecs") {
+      val delegating =
+        Codec.custom[Int](Right(Schema.Int), int => Right(AvroValue.Int(int)), codec.decoder)
+
+      val writerSchema = SchemaGenerators.sharedRecords(40, Vector(Schema.Field("value", Schema.Int)))
+      matches(delegating.decoder(writerSchema)) { case Right(_) => success }
+    }
+
     pureTest("Codec custom decode should error if the decoder function errors") {
       expect.same(
         Left(s"Got schema ${Schema.String}"),
@@ -513,8 +521,26 @@ object CodecSpec extends BaseSuite {
       expectDecodeError[BigDecimal](
         Codec[BigDecimal].encode(BigDecimal("123.45678")),
         Right(Schema.Bytes.withLogicalType(LogicalType.decimal(6, 5))),
-        "Error decoding BigDecimal: Unable to decode decimal with precision 8 exceeding schema precision 6"
+        "Error decoding BigDecimal: Unable to decode decimal exceeding schema precision 6"
       )
+    }
+
+    pureTest("Codec decimal decode should decode values with at most the schema precision") {
+      val max = BigInt(10).pow(10) - 1
+
+      // The unscaled value in two's complement, optionally with sign extension bytes first
+      def bytes(unscaled: BigInt, padding: ByteVector = ByteVector.empty): Either[AvroException, AvroValue] =
+        Right(AvroValue.Bytes(padding ++ ByteVector(unscaled.toByteArray)))
+
+      val error = "Error decoding BigDecimal: Unable to decode decimal exceeding schema precision 10"
+
+      expectDecode[BigDecimal](bytes(max), BigDecimal(max, 5)) &&
+      expectDecode[BigDecimal](bytes(-max), BigDecimal(-max, 5)) &&
+      expectDecode[BigDecimal](bytes(max, hex"0000"), BigDecimal(max, 5)) &&
+      expectDecode[BigDecimal](bytes(-max, hex"ffff"), BigDecimal(-max, 5)) &&
+      expectDecodeError[BigDecimal](bytes(max + 1), error) &&
+      expectDecodeError[BigDecimal](bytes(-max - 1), error) &&
+      expectDecodeError[BigDecimal](Right(AvroValue.Bytes(ByteVector.fill(1000000L)(1))), error)
     }
 
     pureTest("Codec decimal decode should error if bytes are empty") {
@@ -1564,6 +1590,27 @@ object CodecSpec extends BaseSuite {
     expectDecode[Map[String, Int]](
       Codec[Map[String, Int]].encode(Map("key" -> 1)),
       Map("key" -> 1)
+    )
+  }
+
+  pureTest("Codec map decode should decode at most 64 distinct keys with the same hash code") {
+    val colliding = collidingStrings(Codec.MaxEqualHashCodes)
+    val distinct = Vector.tabulate(1000)(index => s"key$index")
+
+    expectDecode[Map[String, Int]](
+      Right(AvroValue.Map((colliding ++ colliding).map(_ -> AvroValue.Int(1)))),
+      colliding.map(_ -> 1).toMap
+    ) &&
+    expectDecode[Map[String, Int]](
+      Right(AvroValue.Map(distinct.map(_ -> AvroValue.Int(1)))),
+      distinct.map(_ -> 1).toMap
+    )
+  }
+
+  pureTest("Codec map decode should error for more than 64 distinct keys with the same hash code") {
+    expectDecodeError[Map[String, Int]](
+      Right(AvroValue.Map(collidingStrings(Codec.MaxEqualHashCodes + 1).map(_ -> AvroValue.Int(1)))),
+      "Error decoding Map: Got more than 64 keys with the same hash code"
     )
   }
 
@@ -2738,6 +2785,27 @@ object CodecSpec extends BaseSuite {
     )
   }
 
+  pureTest("Codec set decode should decode at most 64 distinct items with the same hash code") {
+    val colliding = collidingStrings(Codec.MaxEqualHashCodes)
+    val distinct = Vector.tabulate(1000)(index => s"item$index")
+
+    expectDecode[Set[String]](
+      Right(AvroValue.Array((colliding ++ colliding).map(AvroValue.String(_)))),
+      colliding.toSet
+    ) &&
+    expectDecode[Set[String]](
+      Right(AvroValue.Array(distinct.map(AvroValue.String(_)))),
+      distinct.toSet
+    )
+  }
+
+  pureTest("Codec set decode should error for more than 64 distinct items with the same hash code") {
+    expectDecodeError[Set[String]](
+      Right(AvroValue.Array(collidingStrings(Codec.MaxEqualHashCodes + 1).map(AvroValue.String(_)))),
+      "Error decoding Set: Got more than 64 items with the same hash code"
+    )
+  }
+
   pureTest("Codec short schema should be encoded as int") {
     expectSchema[Short] {
       """"int""""
@@ -3377,4 +3445,8 @@ object CodecSpec extends BaseSuite {
       )
     }
   }
+
+  /** Distinct strings of the blocks "Aa" and "BB", which have the same hash code, for at most 128 strings. */
+  private def collidingStrings(count: Int): Vector[String] =
+    Vector.tabulate(count)(n => (0 until 7).map(bit => if ((n >> bit & 1) == 0) "Aa" else "BB").mkString)
 }

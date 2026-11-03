@@ -40,6 +40,14 @@ object BinaryEncoder {
         }
     }
 
+  /**
+    * The limit for the initial capacity, so a large value does
+    * not make the next encodes allocate too much, while larger
+    * values grow the buffer by doubling.
+    */
+  private val MaxInitialCapacity: Int =
+    64 * 1024
+
   /** Returns an encoder for values of the schema, if the schema is valid. */
   private[vulcan] def apply(schema: Schema): Either[AvroException, BinaryEncoder[AvroValue]] =
     SchemaValidator.validate(schema, validateDefaults = false).map { _ =>
@@ -53,7 +61,7 @@ object BinaryEncoder {
         private[this] var lastSize: Int = 64
 
         override def encode(value: AvroValue): Either[AvroException, ByteVector] = {
-          val writer = new BinaryWriter(lastSize + lastSize / 8)
+          val writer = new BinaryWriter(math.min(lastSize + lastSize / 8, MaxInitialCapacity))
           try {
             root.write(value, writer)
             val bytes = writer.toByteVector

@@ -241,6 +241,10 @@ object BinaryValueSpec extends BaseSuite {
       decode(nulls, blockCounts(limit + 1, 0L))
     ) &&
     expect.eql(
+      Left(s"Invalid block count ${limit + 1} at position 0, exceeding the limit of $limit zero byte items"),
+      decode(Schema.Array(Schema.Record(name("Empty"), Vector.empty)), blockCounts(limit + 1, 0L))
+    ) &&
+    expect.eql(
       Left(
         s"Invalid block count $second at position $position, exceeding the limit of $limit zero byte items"
       ),
@@ -254,7 +258,7 @@ object BinaryValueSpec extends BaseSuite {
     )
   }
 
-  pureTest("BinaryEncoder and BinaryDecoder should limit the number of nested values of recursive schemas") {
+  pureTest("BinaryEncoder and BinaryDecoder should limit the depth of nested records, arrays and maps") {
     val limit = BinaryDecoder.MaxDepth
 
     def nodes(count: Int): ByteVector = {
@@ -268,12 +272,22 @@ object BinaryValueSpec extends BaseSuite {
       writer.toByteVector
     }
 
-    val error =
-      s"Invalid depth ${limit + 1} at position ${2 * (limit + 1)}, exceeding the limit of $limit nested values of recursive schemas"
+    // Records whose next record is within 300 nested arrays, encoded as a union index and block counts
+    val arrays = (1 to 300).foldLeft[Schema](Schema.Ref(name("Deep")))((items, _) => Schema.Array(items))
+    val deep =
+      Schema.Record(name("Deep"), Vector(Schema.Field("next", Schema.Union(Vector(Schema.Null, arrays)))))
 
-    matches(decode(node, nodes(limit + 1))) { case Right(_) => success } &&
-    expect.eql(Left(error), decode(node, nodes(limit + 2))) &&
-    expect.eql(Left(error), decode(node, nodes(100000)))
+    def deepRecords(count: Int): ByteVector =
+      ByteVector.fill(301L * (count - 1))(2) ++ ByteVector(0) ++ ByteVector.fill(300L * (count - 1))(0)
+
+    def error(position: Int): String =
+      s"Invalid depth ${limit + 1} at position $position, exceeding the limit of $limit nested records, arrays and maps"
+
+    matches(decode(node, nodes(limit))) { case Right(_) => success } &&
+    expect.eql(Left(error(2 * limit)), decode(node, nodes(limit + 1))) &&
+    expect.eql(Left(error(2 * limit)), decode(node, nodes(100000))) &&
+    matches(decode(deep, deepRecords(2))) { case Right(_) => success } &&
+    expect.eql(Left(error(limit)), decode(deep, deepRecords(50)))
   }
 
   pureTest("BinaryEncoder and BinaryDecoder should not decode records which always contain themselves") {
@@ -281,6 +295,49 @@ object BinaryValueSpec extends BaseSuite {
       Schema.Record(name("Loop"), Vector(Schema.Field("loop", Schema.Ref(name("Loop")))))
     expect.same(
       Left("Unable to decode record Loop, since it always contains itself"),
+      BinaryDecoder(schema).left.map(_.message)
+    )
+  }
+
+  pureTest("BinaryEncoder and BinaryDecoder should compile schemas which reuse records") {
+    val records = SchemaGenerators.sharedRecords(40, Vector(Schema.Field("value", Schema.Int)))
+    forEach(List(records, Schema.Array(records), Schema.Map(records))) { schema =>
+      matches(BinaryDecoder(schema)) { case Right(_) => success }
+    }
+  }
+
+  pureTest("BinaryEncoder and BinaryDecoder should decode records encoded using zero bytes") {
+    val empty = Schema.Fixed(name("Empty"), 0)
+    val fields = Vector(Schema.Field("null", Schema.Null), Schema.Field("empty", empty))
+
+    val inner = AvroValue.Record(Vector(AvroValue.Null, AvroValue.Fixed(ByteVector.empty)))
+    val outer = AvroValue.Record(Vector(inner, inner))
+
+    expect.eql(
+      Right(AvroValue.Record(Vector(outer, outer))),
+      decode(SchemaGenerators.sharedRecords(2, fields), ByteVector.empty)
+    )
+  }
+
+  pureTest(
+    "BinaryEncoder and BinaryDecoder should decode records encoded using zero bytes which reuse records"
+  ) {
+    // Not printing values on failure, since they unfold to 2^64 records
+    decode(SchemaGenerators.sharedRecords(64, Vector.empty), ByteVector.empty) match {
+      case Right(AvroValue.Record(Vector(first, second))) => expect(first eq second)
+      case Right(_) => failure("Got unexpected value")
+      case Left(error) => failure(error)
+    }
+  }
+
+  pureTest("BinaryEncoder and BinaryDecoder should not decode records which contain each other") {
+    val schema =
+      Schema.Record(
+        name("A"),
+        Vector(Schema.Field("b", Schema.Record(name("B"), Vector(Schema.Field("a", Schema.Ref(name("A")))))))
+      )
+    expect.same(
+      Left("Unable to decode record A, since it always contains itself"),
       BinaryDecoder(schema).left.map(_.message)
     )
   }

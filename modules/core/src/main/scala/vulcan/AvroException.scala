@@ -74,10 +74,8 @@ object AvroException {
     * Exception raised when decoding a decimal with a precision
     * exceeding the precision of the schema.
     */
-  final class DecodeDecimalPrecisionExceeded private[vulcan] (precision: Int, expectedPrecision: Int)
-    extends AvroException(
-      s"Unable to decode decimal with precision $precision exceeding schema precision $expectedPrecision"
-    )
+  final class DecodeDecimalPrecisionExceeded private[vulcan] (expectedPrecision: Int)
+    extends AvroException(s"Unable to decode decimal exceeding schema precision $expectedPrecision")
 
   /**
     * Exception raised when decoding a fixed value with a number
@@ -175,6 +173,14 @@ object AvroException {
     */
   final class ExhaustedAlternatives private[vulcan] ()
     extends AvroException("Exhausted alternatives for union")
+
+  /**
+    * Exception raised when decoding a map or set where more distinct keys or
+    * items than the limit have the same hash code, since hash maps and sets
+    * add them in quadratic time.
+    */
+  final class HashCollisionsExceeded private[vulcan] (elements: String, limit: Int)
+    extends AvroException(s"Got more than $limit $elements with the same hash code")
 
   /**
     * Exception raised when a schema for Avro binary decoding has a

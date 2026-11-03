@@ -27,7 +27,6 @@ inThisBuild(
     semanticdbVersion := scalafixSemanticdb.revision,
     startYear := Some(2019),
     tlBaseVersion := "2.0",
-    tlFatalWarnings := false,
     tlSiteKeepFiles := false,
     // The website is published from series/1.x until the 2.0.0 release
     tlSitePublishBranch := None,

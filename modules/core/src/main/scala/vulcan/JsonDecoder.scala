@@ -44,7 +44,7 @@ object JsonDecoder {
         fa.decode(input)
     }
 
-  /** The limit for the number of nested values of recursive schemas, to avoid stack overflows. */
+  /** The limit for nested records, arrays and maps, to avoid stack overflows. */
   private[vulcan] val MaxDepth: Int =
     512
 
@@ -58,7 +58,7 @@ object JsonDecoder {
       }
     }
 
-  /** Decodes values, where the depth is the number of nested values of recursive schemas. */
+  /** Decodes values, where the depth is the number of records, arrays and maps being decoded. */
   private sealed abstract class Node {
     def decode(json: Json, depth: Int): Either[AvroException, AvroValue]
   }
@@ -129,10 +129,7 @@ object JsonDecoder {
     }
   }
 
-  /**
-    * A named schema, which is being compiled if references are recursive. Since references
-    * are only used for recursive schemas, decoding them limits the depth of nested values.
-    */
+  /** A named schema, which is being compiled if references are recursive. */
   private final class Reference extends Node {
     var node: Node = null
 
@@ -140,13 +137,7 @@ object JsonDecoder {
       if (node != null) node else this
 
     override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
-      if (depth == MaxDepth)
-        Left(
-          new InvalidJson(
-            s"Invalid depth ${MaxDepth + 1}, exceeding the limit of $MaxDepth nested values of recursive schemas"
-          )
-        )
-      else node.decode(json, depth + 1)
+      node.decode(json, depth)
   }
 
   private object NullNode extends Node {
@@ -213,6 +204,9 @@ object JsonDecoder {
 
     override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asObject match {
+        case Some(_) if depth == MaxDepth =>
+          tooDeep
+
         case Some(obj) =>
           val builder = Codec.vectorBuilder[AvroValue](fields.length)
 
@@ -222,7 +216,7 @@ object JsonDecoder {
               val field = fields(index)
               field.value(obj) match {
                 case Some(fieldJson) =>
-                  field.node.decode(fieldJson, depth) match {
+                  field.node.decode(fieldJson, depth + 1) match {
                     case Right(value) =>
                       builder += value
                       loop(index + 1)
@@ -286,13 +280,16 @@ object JsonDecoder {
   private final class ArrayNode(items: Node) extends Node {
     override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asArray match {
+        case Some(_) if depth == MaxDepth =>
+          tooDeep
+
         case Some(values) =>
           val builder = Codec.vectorBuilder[AvroValue](values.size)
 
           // Decodes values in a loop, so nested values use few stack frames
           @tailrec def loop(index: Int): Either[AvroException, AvroValue] =
             if (index < values.size)
-              items.decode(values(index), depth) match {
+              items.decode(values(index), depth + 1) match {
                 case Right(value) =>
                   builder += value
                   loop(index + 1)
@@ -312,6 +309,9 @@ object JsonDecoder {
   private final class MapNode(values: Node) extends Node {
     override def decode(json: Json, depth: Int): Either[AvroException, AvroValue] =
       json.asObject match {
+        case Some(_) if depth == MaxDepth =>
+          tooDeep
+
         case Some(obj) =>
           val entries = obj.toIterable.iterator
           val builder = Codec.vectorBuilder[(String, AvroValue)](obj.size)
@@ -320,7 +320,7 @@ object JsonDecoder {
           @tailrec def loop(): Either[AvroException, AvroValue] =
             if (entries.hasNext) {
               val entry = entries.next()
-              values.decode(entry._2, depth) match {
+              values.decode(entry._2, depth + 1) match {
                 case Right(value) =>
                   builder += ((entry._1, value))
                   loop()
@@ -379,6 +379,13 @@ object JsonDecoder {
 
   private def invalid(json: Json, schema: String): Either[AvroException, AvroValue] =
     Left(invalidError(json, schema))
+
+  private def tooDeep: Either[AvroException, AvroValue] =
+    Left(
+      new InvalidJson(
+        s"Invalid depth ${MaxDepth + 1}, exceeding the limit of $MaxDepth nested records, arrays and maps"
+      )
+    )
 
   private def invalidError(json: Json, schema: String): AvroException =
     new InvalidJson(s"Invalid ${describe(json)} for $schema")

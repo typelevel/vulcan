@@ -23,12 +23,22 @@ private[vulcan] final class Definitions(writerSchema: Schema) {
     */
   def expanded(schema: Schema): Schema = {
     val defined = mutable.Set.empty[String]
+    val records = mutable.Map.empty[String, Schema.Record]
 
     def expand(schema: Schema): Schema =
       schema match {
         case record: Schema.Record =>
-          defined += record.fullName
-          record.withFields(record.fields.map(field => field.withSchema(expand(field.schema))))
+          records.get(record.fullName) match {
+            case Some(expanded) =>
+              expanded
+
+            case None =>
+              defined += record.fullName
+              val fields = record.fields.map(field => field.withSchema(expand(field.schema)))
+              val expanded = record.withFields(fields)
+              records.update(record.fullName, expanded)
+              expanded
+          }
 
         case named: Schema.Named =>
           defined += named.fullName

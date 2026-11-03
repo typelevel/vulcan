@@ -89,6 +89,39 @@ object SchemaSpec extends BaseSuite {
     expect(clue(Schema.Int.withProps(JsonObject("custom" -> Json.True))) != clue(Schema.Int))
   }
 
+  pureTest("Schema equality should compare schemas which reuse records") {
+    val ints = Vector(Schema.Field("value", Schema.Int))
+    val longs = Vector(Schema.Field("value", Schema.Long))
+
+    val first = SchemaGenerators.sharedRecords(64, ints)
+    val second = SchemaGenerators.sharedRecords(64, ints)
+
+    expect(clue(first) ne clue(second)) &&
+    expect.eql[Schema](first, second) &&
+    expect.eql(first.hashCode, second.hashCode) &&
+    expect(clue(first) != clue(SchemaGenerators.sharedRecords(64, longs)))
+  }
+
+  pureTest("Schema equality should compare record fields") {
+    val record = Schema.Record(Schema.Name("Record"), Vector(Schema.Field("field", Schema.Int)))
+    val field = record.fields.head
+
+    forEach(
+      List(
+        record.withFields(Vector(field.withSchema(Schema.Long))),
+        record.withFields(Vector(field.withDoc(Some("doc")))),
+        record.withFields(Vector(field.withDefault(Some(Json.fromInt(0))))),
+        record.withFields(Vector(field.withOrder(Schema.Field.Order.Descending))),
+        record.withFields(Vector(field.withAliases(Vector("alias")))),
+        record.withFields(Vector(field.withProps(props))),
+        record.withFields(Vector(field, field)),
+        record.withDoc(Some("doc")),
+        record.withAliases(Vector("alias")),
+        record.withProps(props)
+      )
+    )(other => expect(clue(record) != clue(other)))
+  }
+
   pureTest("Schema primitive should be the companion object without props") {
     expect.eql(JsonObject.empty, Schema.String.props) &&
     expect(clue(Schema.String.withProps(JsonObject.empty)) eq Schema.String) &&
