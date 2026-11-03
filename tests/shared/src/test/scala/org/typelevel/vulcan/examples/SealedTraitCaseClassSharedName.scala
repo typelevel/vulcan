@@ -1,0 +1,63 @@
+/*
+ * Copyright 2019 OVO Energy Limited
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.typelevel.vulcan.examples
+
+import org.scalacheck.Arbitrary
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
+import org.typelevel.vulcan.Codec
+
+sealed trait SealedTraitCaseClassSharedName
+
+object SealedTraitCaseClassSharedName {
+  implicit val sealedTraitCaseClassCodec: Codec[SealedTraitCaseClassSharedName] =
+    Codec.union { alt =>
+      alt[First.SharedNameSealedTraitCaseClass] ++ alt[Second.SharedNameSealedTraitCaseClass]
+    }
+
+  implicit val sealedTraitCaseClassArbitrary: Arbitrary[SealedTraitCaseClassSharedName] =
+    Arbitrary {
+      Gen.oneOf[SealedTraitCaseClassSharedName](
+        arbitrary[Int].map(First.SharedNameSealedTraitCaseClass(_)),
+        arbitrary[String].map(Second.SharedNameSealedTraitCaseClass(_))
+      )
+    }
+}
+
+object First {
+  final case class SharedNameSealedTraitCaseClass(value: Int) extends SealedTraitCaseClassSharedName
+
+  object SharedNameSealedTraitCaseClass {
+    implicit val codec: Codec[SharedNameSealedTraitCaseClass] =
+      Codec.record(
+        name = "SharedNameSealedTraitCaseClass",
+        namespace = "com.example.first"
+      ) { field =>
+        field("value", _.value).map(apply)
+      }
+
+    implicit val arb: Arbitrary[SharedNameSealedTraitCaseClass] =
+      Arbitrary(arbitrary[Int].map(apply))
+  }
+}
+
+object Second {
+  final case class SharedNameSealedTraitCaseClass(value: String) extends SealedTraitCaseClassSharedName
+
+  object SharedNameSealedTraitCaseClass {
+    implicit val codec: Codec[SharedNameSealedTraitCaseClass] =
+      Codec.record(
+        name = "SharedNameSealedTraitCaseClass",
+        namespace = "com.example.second"
+      ) { field =>
+        field("value", _.value).map(apply)
+      }
+
+    implicit val arb: Arbitrary[SharedNameSealedTraitCaseClass] =
+      Arbitrary(arbitrary[String].map(apply))
+  }
+}

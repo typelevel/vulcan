@@ -186,7 +186,7 @@ lazy val docs = project
         val gitHubUrl = "https://github.com/typelevel/vulcan"
 
         val projectLinks = List(
-          IconLink.internal(Root / "api" / "vulcan.html", HeliumIcon.api),
+          IconLink.internal(Root / "api" / "org" / "typelevel" / "vulcan.html", HeliumIcon.api),
           IconLink.external(gitHubUrl, HeliumIcon.github),
           IconLink.external("https://discord.gg/Q8KBnyC776", HeliumIcon.chat)
         )

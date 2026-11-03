@@ -1,0 +1,226 @@
+/*
+ * Copyright 2019 OVO Energy Limited
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.typelevel.vulcan
+
+import io.circe.Json
+import org.typelevel.vulcan.internal.JsonPrinter
+import scodec.bits.*
+import weaver.scalacheck.CheckConfig
+
+object JsonValueSpec extends BaseSuite {
+  override def checkConfig: CheckConfig =
+    super.checkConfig.withMinimumSuccessful(1000)
+
+  private def encode(schema: Schema, value: AvroValue): Either[String, String] =
+    JsonEncoder(schema).flatMap(_.encode(value)).left.map(_.message).map(JsonPrinter.print)
+
+  private def decode(schema: Schema, json: String): Either[String, AvroValue] =
+    io.circe.jawn.parse(json).left.map(_.message).flatMap { parsed =>
+      JsonDecoder(schema).flatMap(_.decode(parsed)).left.map(_.message)
+    }
+
+  /** A JSON string with the characters, for characters which do not need escaping. */
+  private def string(chars: Int*): String =
+    JsonPrinter.print(Json.fromString(chars.map(_.toChar).mkString))
+
+  private def name(name: String): Schema.Name =
+    Schema.Name(name)
+
+  private val record: Schema =
+    Schema.Record(
+      name("test"),
+      Vector(Schema.Field("a", Schema.Long), Schema.Field("b", Schema.String))
+    )
+
+  private val enumeration: Schema =
+    Schema.Enum(name("Foo"), Vector("A", "B", "C", "D"))
+
+  private val nullableString: Schema =
+    Schema.Union(Vector(Schema.Null, Schema.String))
+
+  /** A linked list of ints. */
+  private val node: Schema =
+    Schema.Record(
+      name("Node"),
+      Vector(
+        Schema.Field("value", Schema.Int),
+        Schema.Field("next", Schema.Union(Vector(Schema.Null, Schema.Ref(name("Node")))))
+      )
+    )
+
+  test("JsonEncoder and JsonDecoder should decode encoded values") {
+    forall(AvroValueGenerators.genSchemaAndValue) { case (schema, value) =>
+      expect.eql(Right(value), encode(schema, value).flatMap(decode(schema, _)))
+    }
+  }
+
+  pureTest("JsonEncoder and JsonDecoder should encode values in the Avro JSON encoding") {
+    val examples =
+      List(
+        (Schema.Null, AvroValue.Null, "null"),
+        (Schema.Boolean, AvroValue.Boolean(true), "true"),
+        (Schema.Int, AvroValue.Int(-1), "-1"),
+        (Schema.Long, AvroValue.Long(Long.MaxValue), Long.MaxValue.toString),
+        (Schema.Float, AvroValue.Float(1.5f), "1.5"),
+        (Schema.Double, AvroValue.Double(-2.5), "-2.5"),
+        (Schema.String, AvroValue.String("foo"), "\"foo\""),
+        (
+          record,
+          AvroValue.Record(Vector(AvroValue.Long(27L), AvroValue.String("foo"))),
+          """{"a":27,"b":"foo"}"""
+        ),
+        (enumeration, AvroValue.Enum("D"), "\"D\""),
+        (
+          Schema.Array(Schema.Long),
+          AvroValue.Array(Vector(AvroValue.Long(3L), AvroValue.Long(27L))),
+          "[3,27]"
+        ),
+        (
+          Schema.Map(Schema.Long),
+          AvroValue.Map(Vector("a" -> AvroValue.Long(1L))),
+          """{"a":1}"""
+        ),
+        (nullableString, AvroValue.Union(0, AvroValue.Null), "null"),
+        (nullableString, AvroValue.Union(1, AvroValue.String("a")), """{"string":"a"}"""),
+        (
+          node,
+          AvroValue.Record(
+            Vector(
+              AvroValue.Int(1),
+              AvroValue.Union(
+                1,
+                AvroValue.Record(Vector(AvroValue.Int(2), AvroValue.Union(0, AvroValue.Null)))
+              )
+            )
+          ),
+          """{"value":1,"next":{"Node":{"value":2,"next":null}}}"""
+        )
+      )
+
+    forEach(examples) { case (schema, value, json) =>
+      expect.same(Right(json), encode(schema, value)) &&
+      expect.eql(Right(value), decode(schema, json))
+    }
+  }
+
+  pureTest(
+    "JsonEncoder and JsonDecoder should encode bytes and fixed as strings with one character per byte"
+  ) {
+    val fixed = Schema.Fixed(name("Id"), 2)
+    expect.same(Right(string(0x41, 0xe9, 0xff)), encode(Schema.Bytes, AvroValue.Bytes(hex"41e9ff"))) &&
+    expect.eql(Right(AvroValue.Bytes(hex"41e9ff")), decode(Schema.Bytes, string(0x41, 0xe9, 0xff))) &&
+    expect.same(Right("\"AB\""), encode(fixed, AvroValue.Fixed(hex"4142"))) &&
+    expect.eql(Right(AvroValue.Fixed(hex"4142")), decode(fixed, "\"AB\""))
+  }
+
+  pureTest("JsonEncoder and JsonDecoder should encode floats and doubles which are not finite as strings") {
+    expect.same(Right("\"NaN\""), encode(Schema.Float, AvroValue.Float(Float.NaN))) &&
+    expect.same(Right("\"Infinity\""), encode(Schema.Float, AvroValue.Float(Float.PositiveInfinity))) &&
+    expect.same(Right("\"-Infinity\""), encode(Schema.Double, AvroValue.Double(Double.NegativeInfinity)))
+  }
+
+  pureTest("JsonEncoder and JsonDecoder should decode the same as the Java Avro library") {
+    val aliased =
+      Schema.Record(name("test"), Vector(Schema.Field("a", Schema.Long).withAliases(Vector("x"))))
+
+    expect.eql(Right(AvroValue.Int(1)), decode(Schema.Int, "1.0")) &&
+    expect.eql(Right(AvroValue.Long(100L)), decode(Schema.Long, "1e2")) &&
+    expect.eql(Right(AvroValue.Float(Float.PositiveInfinity)), decode(Schema.Float, "\"INF\"")) &&
+    expect.eql(Right(AvroValue.Double(Double.NegativeInfinity)), decode(Schema.Double, "\"-INF\"")) &&
+    expect.eql(Right(AvroValue.Double(Double.NaN)), decode(Schema.Double, "\"NaN\"")) &&
+    expect.eql(Right(AvroValue.Union(0, AvroValue.Null)), decode(nullableString, """{"null":null}""")) &&
+    expect.eql(
+      Right(AvroValue.Record(Vector(AvroValue.Long(27L), AvroValue.String("foo")))),
+      decode(record, """{"b":"foo","a":27}""")
+    ) &&
+    expect.eql(Right(AvroValue.Record(Vector(AvroValue.Long(1L)))), decode(aliased, """{"x":1}"""))
+  }
+
+  pureTest("JsonEncoder and JsonDecoder should not encode values which do not match the schema") {
+    expect.same(Left("Invalid int value for long"), encode(Schema.Long, AvroValue.Int(1))) &&
+    expect.same(
+      Left("Invalid record with 1 values for record test with 2 fields"),
+      encode(record, AvroValue.Record(Vector(AvroValue.Long(1L))))
+    ) &&
+    expect.same(Left("Invalid symbol E for enum Foo"), encode(enumeration, AvroValue.Enum("E"))) &&
+    expect.same(
+      Left("Invalid fixed with 3 bytes for fixed Id with size 2"),
+      encode(Schema.Fixed(name("Id"), 2), AvroValue.Fixed(hex"010203"))
+    ) &&
+    expect.same(
+      Left("Invalid index 2 for union with 2 types"),
+      encode(nullableString, AvroValue.Union(2, AvroValue.Null))
+    )
+  }
+
+  pureTest("JsonEncoder and JsonDecoder should not decode values which do not match the schema") {
+    val colliding =
+      Schema.Record(
+        name("test"),
+        Vector(Schema.Field("a", Schema.Long).withAliases(Vector("b")), Schema.Field("b", Schema.Long))
+      )
+
+    expect.eql(Left("Invalid number 1.5 for int"), decode(Schema.Int, "1.5")) &&
+    expect.eql(Left("Invalid string for long"), decode(Schema.Long, "\"1\"")) &&
+    expect.eql(Left("Invalid number 1 for string"), decode(Schema.String, "1")) &&
+    expect.eql(Left("Invalid object for array"), decode(Schema.Array(Schema.Int), "{}")) &&
+    expect.eql(Left("Missing field b for record test"), decode(record, """{"a":27}""")) &&
+    expect.eql(
+      Left("Unknown fields c, d for record test"),
+      decode(record, """{"a":27,"b":"foo","c":1,"d":2}""")
+    ) &&
+    expect.eql(Left("Unknown fields c for record test"), decode(colliding, """{"b":1,"c":2}""")) &&
+    expect.eql(Left("Invalid symbol E for enum Foo"), decode(enumeration, "\"E\"")) &&
+    expect.eql(
+      Left("Invalid fixed with 3 bytes for fixed Id with size 2"),
+      decode(Schema.Fixed(name("Id"), 2), "\"ABC\"")
+    ) &&
+    expect.eql(Left("Unknown type int for union"), decode(nullableString, """{"int":1}""")) &&
+    expect.eql(
+      Left("Invalid object with 2 keys for union, expected one key"),
+      decode(nullableString, """{"null":null,"string":"a"}""")
+    ) &&
+    expect.eql(Left("Invalid null for union"), decode(Schema.Union(Vector(Schema.Int)), "null"))
+  }
+
+  pureTest("JsonEncoder and JsonDecoder should limit the depth of nested records, arrays and maps") {
+    val limit = JsonDecoder.MaxDepth
+
+    def nodes(count: Int): Json =
+      (1 until count).foldLeft(Json.obj("value" -> Json.fromInt(0), "next" -> Json.Null)) { (next, _) =>
+        Json.obj("value" -> Json.fromInt(0), "next" -> Json.obj("Node" -> next))
+      }
+
+    val arrays = (1 to 300).foldLeft[Schema](Schema.Ref(name("Deep")))((items, _) => Schema.Array(items))
+    val deep =
+      Schema.Record(name("Deep"), Vector(Schema.Field("next", Schema.Union(Vector(Schema.Null, arrays)))))
+
+    def deepRecords(count: Int): Json =
+      (1 until count).foldLeft(Json.obj("next" -> Json.Null)) { (next, _) =>
+        val nested = (1 to 300).foldLeft(next)((items, _) => Json.arr(items))
+        Json.obj("next" -> Json.obj("array" -> nested))
+      }
+
+    def decodeJson(schema: Schema, json: Json): Either[String, AvroValue] =
+      JsonDecoder(schema).flatMap(_.decode(json)).left.map(_.message)
+
+    val error =
+      s"Invalid depth ${limit + 1}, exceeding the limit of $limit nested records, arrays and maps"
+
+    matches(decodeJson(node, nodes(limit))) { case Right(_) => success } &&
+    expect.eql(Left(error), decodeJson(node, nodes(limit + 1))) &&
+    expect.eql(Left(error), decodeJson(node, nodes(100000))) &&
+    matches(decodeJson(deep, deepRecords(2))) { case Right(_) => success } &&
+    expect.eql(Left(error), decodeJson(deep, deepRecords(50)))
+  }
+
+  pureTest("JsonEncoder and JsonDecoder should not compile invalid schemas") {
+    val undefined = Schema.Ref(name("Undefined"))
+    expect.same(Left("Undefined name Undefined"), JsonEncoder(undefined).left.map(_.message)) &&
+    expect.same(Left("Undefined name Undefined"), JsonDecoder(undefined).left.map(_.message))
+  }
+}

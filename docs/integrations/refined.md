@@ -1,6 +1,6 @@
 # refined
 
-The `@REFINED_MODULE_NAME@` module provides @:api(vulcan.Codec)s for [refined](https://github.com/fthomas/refined) refinement types.
+The `@REFINED_MODULE_NAME@` module provides @:api(org.typelevel.vulcan.Codec)s for [refined](https://github.com/fthomas/refined) refinement types.
 
 ## Getting Started
 
@@ -12,14 +12,14 @@ libraryDependencies += "@ORGANIZATION@" %% "@REFINED_MODULE_NAME@" % "@VERSION@"
 
 ## Usage
 
-Refinement types are encoded using their base type (e.g. `Int` for `PosInt`). When decoding, @:api(vulcan.Codec)s check to ensure values conform to the predicate of the refinement type (e.g. `Positive` for `PosInt`), and raise an error for values which do not conform.
+Refinement types are encoded using their base type (e.g. `Int` for `PosInt`). When decoding, @:api(org.typelevel.vulcan.Codec)s check to ensure values conform to the predicate of the refinement type (e.g. `Positive` for `PosInt`), and raise an error for values which do not conform.
 
 ```scala mdoc:reset-object
 import eu.timepit.refined.types.numeric.PosInt
-import vulcan.AvroValue
-import vulcan.Codec
-import vulcan.Schema
-import vulcan.refined._
+import org.typelevel.vulcan.AvroValue
+import org.typelevel.vulcan.Codec
+import org.typelevel.vulcan.Schema
+import org.typelevel.vulcan.refined._
 
 Codec[PosInt]
 
