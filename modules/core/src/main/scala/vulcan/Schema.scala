@@ -10,6 +10,8 @@ import cats.Hash
 import cats.Show
 import io.circe.Json
 import io.circe.JsonObject
+import scala.collection.mutable
+import scala.util.hashing.MurmurHash3
 import vulcan.AvroException.InvalidSchema
 import vulcan.internal.JsonPrinter
 import vulcan.internal.SchemaDecoder
@@ -207,6 +209,20 @@ object Schema {
     aliases: Vector[Predef.String],
     props: JsonObject
   ) extends Record {
+
+    /** The hash code, computed once since nested records can occur many times. */
+    private lazy val hash: scala.Int =
+      MurmurHash3.caseClassHash(this)
+
+    override def hashCode: scala.Int =
+      hash
+
+    override def equals(that: Any): scala.Boolean =
+      that match {
+        case that: RecordImpl => (this eq that) || (hash == that.hash && equalRecords(this, that))
+        case _ => false
+      }
+
     override def withFields(fields: Vector[Field]): Record =
       copy(fields = fields)
 
@@ -491,6 +507,62 @@ object Schema {
     namespace: Option[Predef.String]
   ) extends Name {
     override def toString: Predef.String = s"Name($fullName)"
+  }
+
+  /**
+    * Returns `true` if the records are equal, comparing each pair of nested records once, since
+    * nested records can occur many times. Pairs already compared, or being compared, are equal,
+    * since the comparison stops at the first difference.
+    */
+  private def equalRecords(first: RecordImpl, second: RecordImpl): scala.Boolean = {
+    val compared = mutable.Set.empty[RecordPair]
+
+    def equalSchemas(first: Schema, second: Schema): scala.Boolean =
+      (first, second) match {
+        case (first: RecordImpl, second: RecordImpl) =>
+          (first eq second) || (first.hashCode == second.hashCode && equalContents(first, second))
+        case (first: ArrayImpl, second: ArrayImpl) =>
+          first.props == second.props && equalSchemas(first.items, second.items)
+        case (first: MapImpl, second: MapImpl) =>
+          first.props == second.props && equalSchemas(first.values, second.values)
+        case (first: UnionImpl, second: UnionImpl) =>
+          first.types.size == second.types.size && first.types.lazyZip(second.types).forall(equalSchemas)
+        // Other schemas do not contain records
+        case _ =>
+          first == second
+      }
+
+    def equalFields(first: Field, second: Field): scala.Boolean =
+      first.name == second.name &&
+        first.doc == second.doc &&
+        first.default == second.default &&
+        first.order == second.order &&
+        first.aliases == second.aliases &&
+        first.props == second.props &&
+        equalSchemas(first.schema, second.schema)
+
+    def equalContents(first: RecordImpl, second: RecordImpl): scala.Boolean =
+      !compared.add(new RecordPair(first, second)) || {
+        first.name == second.name &&
+        first.doc == second.doc &&
+        first.aliases == second.aliases &&
+        first.props == second.props &&
+        first.fields.size == second.fields.size &&
+        first.fields.lazyZip(second.fields).forall(equalFields)
+      }
+
+    equalContents(first, second)
+  }
+
+  private final class RecordPair(val first: RecordImpl, val second: RecordImpl) {
+    override def equals(that: Any): scala.Boolean =
+      that match {
+        case that: RecordPair => (first eq that.first) && (second eq that.second)
+        case _ => false
+      }
+
+    override def hashCode: scala.Int =
+      31 * System.identityHashCode(first) + System.identityHashCode(second)
   }
 
   private def addLogicalType(props: JsonObject, logicalType: LogicalType): JsonObject =
