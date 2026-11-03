@@ -175,6 +175,14 @@ object AvroException {
     extends AvroException("Exhausted alternatives for union")
 
   /**
+    * Exception raised when decoding a map or set where more distinct keys or
+    * items than the limit have the same hash code, since hash maps and sets
+    * add them in quadratic time.
+    */
+  final class HashCollisionsExceeded private[vulcan] (elements: String, limit: Int)
+    extends AvroException(s"Got more than $limit $elements with the same hash code")
+
+  /**
     * Exception raised when a schema for Avro binary decoding has a
     * record which always contains itself, so values are infinite.
     */

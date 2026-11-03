@@ -1593,6 +1593,27 @@ object CodecSpec extends BaseSuite {
     )
   }
 
+  pureTest("Codec map decode should decode at most 64 distinct keys with the same hash code") {
+    val colliding = collidingStrings(Codec.MaxEqualHashCodes)
+    val distinct = Vector.tabulate(1000)(index => s"key$index")
+
+    expectDecode[Map[String, Int]](
+      Right(AvroValue.Map((colliding ++ colliding).map(_ -> AvroValue.Int(1)))),
+      colliding.map(_ -> 1).toMap
+    ) &&
+    expectDecode[Map[String, Int]](
+      Right(AvroValue.Map(distinct.map(_ -> AvroValue.Int(1)))),
+      distinct.map(_ -> 1).toMap
+    )
+  }
+
+  pureTest("Codec map decode should error for more than 64 distinct keys with the same hash code") {
+    expectDecodeError[Map[String, Int]](
+      Right(AvroValue.Map(collidingStrings(Codec.MaxEqualHashCodes + 1).map(_ -> AvroValue.Int(1)))),
+      "Error decoding Map: Got more than 64 keys with the same hash code"
+    )
+  }
+
   locally {
     case class PosInt(value: Int)
 
@@ -2764,6 +2785,27 @@ object CodecSpec extends BaseSuite {
     )
   }
 
+  pureTest("Codec set decode should decode at most 64 distinct items with the same hash code") {
+    val colliding = collidingStrings(Codec.MaxEqualHashCodes)
+    val distinct = Vector.tabulate(1000)(index => s"item$index")
+
+    expectDecode[Set[String]](
+      Right(AvroValue.Array((colliding ++ colliding).map(AvroValue.String(_)))),
+      colliding.toSet
+    ) &&
+    expectDecode[Set[String]](
+      Right(AvroValue.Array(distinct.map(AvroValue.String(_)))),
+      distinct.toSet
+    )
+  }
+
+  pureTest("Codec set decode should error for more than 64 distinct items with the same hash code") {
+    expectDecodeError[Set[String]](
+      Right(AvroValue.Array(collidingStrings(Codec.MaxEqualHashCodes + 1).map(AvroValue.String(_)))),
+      "Error decoding Set: Got more than 64 items with the same hash code"
+    )
+  }
+
   pureTest("Codec short schema should be encoded as int") {
     expectSchema[Short] {
       """"int""""
@@ -3403,4 +3445,8 @@ object CodecSpec extends BaseSuite {
       )
     }
   }
+
+  /** Distinct strings of the blocks "Aa" and "BB", which have the same hash code, for at most 128 strings. */
+  private def collidingStrings(count: Int): Vector[String] =
+    Vector.tabulate(count)(n => (0 until 7).map(bit => if ((n >> bit & 1) == 0) "Aa" else "BB").mkString)
 }
