@@ -71,16 +71,17 @@ object BinaryDecoder {
   private[vulcan] def reader(writerSchema: Schema): Either[AvroException, BinaryReader => AvroValue] =
     SchemaValidator.validate(writerSchema, validateDefaults = false).flatMap { _ =>
       val definitions = SchemaNames.definitions(writerSchema)
+      val minSizes = new MinSizes(definitions)
 
       definitions.values.collectFirst {
-        case record: Schema.Record if minSize(record, definitions, Set.empty) == Unbounded =>
+        case record: Schema.Record if minSizes(record) == Unbounded =>
           record
       } match {
         case Some(record) =>
           Left(new InfiniteRecord(record))
 
         case None =>
-          val root = new Compilation(definitions).compile(writerSchema)
+          val root = new Compilation(definitions, minSizes).compile(writerSchema)
           Right((reader: BinaryReader) => root.read(new Input(reader)))
       }
     }
@@ -99,7 +100,7 @@ object BinaryDecoder {
     def read(input: Input): AvroValue
   }
 
-  private final class Compilation(definitions: collection.Map[String, Schema.Named]) {
+  private final class Compilation(definitions: collection.Map[String, Schema.Named], minSizes: MinSizes) {
     private val compiled = mutable.Map.empty[String, Reference]
 
     def compile(schema: Schema): Node =
@@ -113,10 +114,10 @@ object BinaryDecoder {
         case _: Schema.Bytes => BytesNode
         case _: Schema.String => StringNode
         case array: Schema.Array =>
-          new ArrayNode(compile(array.items), minSize(array.items, definitions, Set.empty))
+          new ArrayNode(compile(array.items), minSizes(array.items))
         case map: Schema.Map =>
           // Keys are strings, which are encoded using at least one byte
-          new MapNode(compile(map.values), add(1L, minSize(map.values, definitions, Set.empty)))
+          new MapNode(compile(map.values), add(1L, minSizes(map.values)))
         case union: Schema.Union =>
           new UnionNode(union.types.map(compile).toArray)
         case named: Schema.Named =>
@@ -324,31 +325,40 @@ object BinaryDecoder {
   private val Unbounded: Long =
     Long.MaxValue
 
-  /** The minimum number of bytes needed to encode a value of the schema. */
-  private def minSize(
-    schema: Schema,
-    definitions: collection.Map[String, Schema.Named],
-    enclosing: Set[String]
-  ): Long =
-    schema match {
-      case _: Schema.Null => 0L
-      case _: Schema.Float => 4L
-      case _: Schema.Double => 8L
-      case fixed: Schema.Fixed => fixed.size.toLong
-      case record: Schema.Record =>
-        if (enclosing.contains(record.fullName)) Unbounded
-        else {
-          val fieldsEnclosing = enclosing + record.fullName
-          record.fields.foldLeft(0L) { (size, field) =>
-            add(size, minSize(field.schema, definitions, fieldsEnclosing))
-          }
-        }
-      case ref: Schema.Ref =>
-        minSize(definitions(ref.fullName), definitions, enclosing)
-      // Other types are encoded using at least one byte, including union indices and block counts
-      case _ =>
-        1L
-    }
+  /**
+    * The minimum number of bytes needed to encode values of schemas, computed once for each record.
+    *
+    * A record reached again while computing its size always contains itself, so it is unbounded.
+    * Records computed meanwhile are only unbounded if they always contain that record, so they
+    * are unbounded wherever they occur.
+    */
+  private final class MinSizes(definitions: collection.Map[String, Schema.Named]) {
+    private val recordSizes = mutable.Map.empty[String, Long]
+
+    def apply(schema: Schema): Long =
+      schema match {
+        case _: Schema.Null => 0L
+        case _: Schema.Float => 4L
+        case _: Schema.Double => 8L
+        case fixed: Schema.Fixed => fixed.size.toLong
+        case record: Schema.Record => recordSize(record)
+        case ref: Schema.Ref => apply(definitions(ref.fullName))
+        // Other types are encoded using at least one byte, including union indices and block counts
+        case _ => 1L
+      }
+
+    private def recordSize(record: Schema.Record): Long =
+      recordSizes.get(record.fullName) match {
+        case Some(size) =>
+          size
+
+        case None =>
+          recordSizes.update(record.fullName, Unbounded)
+          val size = record.fields.foldLeft(0L)((size, field) => add(size, apply(field.schema)))
+          recordSizes.update(record.fullName, size)
+          size
+      }
+  }
 
   private def add(first: Long, second: Long): Long =
     if (first > Long.MaxValue - second) Long.MaxValue else first + second

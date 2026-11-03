@@ -285,6 +285,25 @@ object BinaryValueSpec extends BaseSuite {
     )
   }
 
+  pureTest("BinaryEncoder and BinaryDecoder should compile schemas which reuse records") {
+    val records = SchemaGenerators.sharedRecords(40, Vector(Schema.Field("value", Schema.Int)))
+    forEach(List(records, Schema.Array(records), Schema.Map(records))) { schema =>
+      matches(BinaryDecoder(schema)) { case Right(_) => success }
+    }
+  }
+
+  pureTest("BinaryEncoder and BinaryDecoder should not decode records which contain each other") {
+    val schema =
+      Schema.Record(
+        name("A"),
+        Vector(Schema.Field("b", Schema.Record(name("B"), Vector(Schema.Field("a", Schema.Ref(name("A")))))))
+      )
+    expect.same(
+      Left("Unable to decode record A, since it always contains itself"),
+      BinaryDecoder(schema).left.map(_.message)
+    )
+  }
+
   pureTest("BinaryEncoder and BinaryDecoder should not compile invalid schemas") {
     val schema = Schema.Union(Vector(Schema.Int, Schema.Int))
     val undefined = Schema.Ref(name("Undefined"))

@@ -383,6 +383,14 @@ object CodecSpec extends BaseSuite {
       )
     }
 
+    pureTest("Codec custom decode should pass writer schemas which reuse records to other codecs") {
+      val delegating =
+        Codec.custom[Int](Right(Schema.Int), int => Right(AvroValue.Int(int)), codec.decoder)
+
+      val writerSchema = SchemaGenerators.sharedRecords(40, Vector(Schema.Field("value", Schema.Int)))
+      matches(delegating.decoder(writerSchema)) { case Right(_) => success }
+    }
+
     pureTest("Codec custom decode should error if the decoder function errors") {
       expect.same(
         Left(s"Got schema ${Schema.String}"),
