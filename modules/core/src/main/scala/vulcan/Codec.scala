@@ -87,10 +87,10 @@ sealed abstract class Codec[A] {
     * Returns a `BinaryDecoder` for Avro binary written using the provided
     * writer schema, or an error if the schema or writer schema is invalid.
     *
-    * To protect against invalid input, decoding fails for values nested
-    * more than 512 levels deep in recursive schemas, and for values with
-    * more than 1,000,000 array or map items which are encoded using zero
-    * bytes, like nulls and empty records.
+    * To protect against invalid input, decoding fails for values with
+    * records, arrays and maps nested more than 512 levels deep, and for
+    * values with more than 1,000,000 array or map items which are encoded
+    * using zero bytes, like nulls and empty records.
     */
   final def binaryDecoder(writerSchema: Schema): Either[AvroException, BinaryDecoder[A]] =
     (schema >> BinaryDecoder(writerSchema)).map { compiled =>
@@ -114,8 +114,8 @@ sealed abstract class Codec[A] {
     * Returns a `JsonDecoder` for Avro `Json` written using the provided
     * writer schema, or an error if the schema or writer schema is invalid.
     *
-    * To protect against invalid input, decoding fails for values nested
-    * more than 512 levels deep in recursive schemas.
+    * To protect against invalid input, decoding fails for values with
+    * records, arrays and maps nested more than 512 levels deep.
     */
   final def jsonDecoder(writerSchema: Schema): Either[AvroException, JsonDecoder[A]] =
     (schema >> JsonDecoder(writerSchema)).map { compiled =>

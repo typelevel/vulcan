@@ -258,7 +258,7 @@ object BinaryValueSpec extends BaseSuite {
     )
   }
 
-  pureTest("BinaryEncoder and BinaryDecoder should limit the number of nested values of recursive schemas") {
+  pureTest("BinaryEncoder and BinaryDecoder should limit the depth of nested records, arrays and maps") {
     val limit = BinaryDecoder.MaxDepth
 
     def nodes(count: Int): ByteVector = {
@@ -272,12 +272,22 @@ object BinaryValueSpec extends BaseSuite {
       writer.toByteVector
     }
 
-    val error =
-      s"Invalid depth ${limit + 1} at position ${2 * (limit + 1)}, exceeding the limit of $limit nested values of recursive schemas"
+    // Records whose next record is within 300 nested arrays, encoded as a union index and block counts
+    val arrays = (1 to 300).foldLeft[Schema](Schema.Ref(name("Deep")))((items, _) => Schema.Array(items))
+    val deep =
+      Schema.Record(name("Deep"), Vector(Schema.Field("next", Schema.Union(Vector(Schema.Null, arrays)))))
 
-    matches(decode(node, nodes(limit + 1))) { case Right(_) => success } &&
-    expect.eql(Left(error), decode(node, nodes(limit + 2))) &&
-    expect.eql(Left(error), decode(node, nodes(100000)))
+    def deepRecords(count: Int): ByteVector =
+      ByteVector.fill(301L * (count - 1))(2) ++ ByteVector(0) ++ ByteVector.fill(300L * (count - 1))(0)
+
+    def error(position: Int): String =
+      s"Invalid depth ${limit + 1} at position $position, exceeding the limit of $limit nested records, arrays and maps"
+
+    matches(decode(node, nodes(limit))) { case Right(_) => success } &&
+    expect.eql(Left(error(2 * limit)), decode(node, nodes(limit + 1))) &&
+    expect.eql(Left(error(2 * limit)), decode(node, nodes(100000))) &&
+    matches(decode(deep, deepRecords(2))) { case Right(_) => success } &&
+    expect.eql(Left(error(limit)), decode(deep, deepRecords(50)))
   }
 
   pureTest("BinaryEncoder and BinaryDecoder should not decode records which always contain themselves") {
