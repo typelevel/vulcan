@@ -336,6 +336,15 @@ object SchemaParseSpec extends BaseSuite {
     }
   }
 
+  pureTest("Schema parse should ignore long numbers for sizes and decimal parameters") {
+    val digits = "1" * 1000000
+    val fixed = s"""{"type":"fixed","name":"Id","size":$digits}"""
+    val decimal = s"""{"type":"bytes","logicalType":"decimal","precision":$digits,"scale":0}"""
+
+    expect.eql(Left(s"Missing or invalid size in fixed $fixed"), parse(fixed)) &&
+    matches(parse(decimal)) { case Right(schema) => expect.eql(None, schema.logicalType) }
+  }
+
   test("Schema fromJson should decode the same as parse") {
     forall(SchemaGenerators.genSchema) { schema =>
       expect.same(Right(schema.toString), Schema.fromJson(schema.toJson).map(_.toString))
