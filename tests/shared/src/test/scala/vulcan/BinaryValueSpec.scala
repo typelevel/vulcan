@@ -241,6 +241,10 @@ object BinaryValueSpec extends BaseSuite {
       decode(nulls, blockCounts(limit + 1, 0L))
     ) &&
     expect.eql(
+      Left(s"Invalid block count ${limit + 1} at position 0, exceeding the limit of $limit zero byte items"),
+      decode(Schema.Array(Schema.Record(name("Empty"), Vector.empty)), blockCounts(limit + 1, 0L))
+    ) &&
+    expect.eql(
       Left(
         s"Invalid block count $second at position $position, exceeding the limit of $limit zero byte items"
       ),
@@ -289,6 +293,30 @@ object BinaryValueSpec extends BaseSuite {
     val records = SchemaGenerators.sharedRecords(40, Vector(Schema.Field("value", Schema.Int)))
     forEach(List(records, Schema.Array(records), Schema.Map(records))) { schema =>
       matches(BinaryDecoder(schema)) { case Right(_) => success }
+    }
+  }
+
+  pureTest("BinaryEncoder and BinaryDecoder should decode records encoded using zero bytes") {
+    val empty = Schema.Fixed(name("Empty"), 0)
+    val fields = Vector(Schema.Field("null", Schema.Null), Schema.Field("empty", empty))
+
+    val inner = AvroValue.Record(Vector(AvroValue.Null, AvroValue.Fixed(ByteVector.empty)))
+    val outer = AvroValue.Record(Vector(inner, inner))
+
+    expect.eql(
+      Right(AvroValue.Record(Vector(outer, outer))),
+      decode(SchemaGenerators.sharedRecords(2, fields), ByteVector.empty)
+    )
+  }
+
+  pureTest(
+    "BinaryEncoder and BinaryDecoder should decode records encoded using zero bytes which reuse records"
+  ) {
+    // Not printing values on failure, since they unfold to 2^64 records
+    decode(SchemaGenerators.sharedRecords(64, Vector.empty), ByteVector.empty) match {
+      case Right(AvroValue.Record(Vector(first, second))) => expect(first eq second)
+      case Right(_) => failure("Got unexpected value")
+      case Left(error) => failure(error)
     }
   }
 

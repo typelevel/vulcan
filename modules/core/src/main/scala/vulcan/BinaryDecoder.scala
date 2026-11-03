@@ -133,11 +133,15 @@ object BinaryDecoder {
       val node =
         named match {
           case record: Schema.Record =>
-            new RecordNode(record.fields.map(field => compile(field.schema)).toArray)
+            val fields = record.fields.map(field => compile(field.schema))
+            val constants = fields.collect { case constant: ConstantNode => constant.value }
+            if (constants.size == fields.size) new ConstantNode(AvroValue.Record(constants))
+            else new RecordNode(fields.toArray)
           case enumeration: Schema.Enum =>
             new EnumNode(enumeration.fullName, enumeration.symbols.toArray)
           case fixed: Schema.Fixed =>
-            new FixedNode(fixed.size)
+            if (fixed.size == 0) new ConstantNode(AvroValue.Fixed(ByteVector.empty))
+            else new FixedNode(fixed.size)
         }
 
       reference.node = node
@@ -168,10 +172,13 @@ object BinaryDecoder {
     }
   }
 
-  private object NullNode extends Node {
+  private final class ConstantNode(val value: AvroValue) extends Node {
     override def read(input: Input): AvroValue =
-      AvroValue.Null
+      value
   }
+
+  private val NullNode: ConstantNode =
+    new ConstantNode(AvroValue.Null)
 
   private object BooleanNode extends Node {
     override def read(input: Input): AvroValue =
