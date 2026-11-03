@@ -18,6 +18,8 @@ import org.apache.avro.generic.GenericDatumWriter
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.io.DecoderFactory
 import org.apache.avro.io.EncoderFactory
+import org.apache.avro.io.JsonDecoder as JavaJsonDecoder
+import org.apache.avro.io.JsonEncoder as JavaJsonEncoder
 import org.openjdk.jmh.annotations.*
 import vulcan.AvroException
 import vulcan.AvroValue
@@ -30,10 +32,11 @@ import vulcan.JsonEncoder
   *
   * The `encode` and `decode` benchmarks convert between values and circe `Json`, while the other
   * benchmarks also print and parse the JSON as UTF-8 bytes, same as the Java Avro library.
+  * Both sides reuse their encoders and decoders.
   *
   * Run using `sbt "benchmarks/Jmh/run -prof gc JsonBenchmark"`.
   */
-@State(Scope.Benchmark)
+@State(Scope.Thread)
 @BenchmarkMode(Array(Mode.Throughput))
 @OutputTimeUnit(TimeUnit.SECONDS)
 @Warmup(iterations = 3, time = 1)
@@ -64,6 +67,15 @@ class JsonBenchmark {
   private val javaReader: GenericDatumReader[GenericRecord] =
     new GenericDatumReader[GenericRecord](javaSchema)
 
+  private val javaOutput: ByteArrayOutputStream =
+    new ByteArrayOutputStream(1024)
+
+  private val javaEncoder: JavaJsonEncoder =
+    EncoderFactory.get().jsonEncoder(javaSchema, javaOutput)
+
+  private val javaDecoder: JavaJsonDecoder =
+    DecoderFactory.get().jsonDecoder(javaSchema, new ByteArrayInputStream(bytes))
+
   private val javaRecord: GenericRecord =
     decodeJava()
 
@@ -83,11 +95,11 @@ class JsonBenchmark {
 
   @Benchmark
   def encodeJava(): Array[Byte] = {
-    val output = new ByteArrayOutputStream()
-    val javaEncoder = EncoderFactory.get().jsonEncoder(javaSchema, output)
+    javaOutput.reset()
+    javaEncoder.configure(javaOutput)
     javaWriter.write(javaRecord, javaEncoder)
     javaEncoder.flush()
-    output.toByteArray
+    javaOutput.toByteArray
   }
 
   @Benchmark
@@ -99,6 +111,8 @@ class JsonBenchmark {
     io.circe.jawn.parse(new String(bytes, UTF_8)).flatMap(decoder.decode)
 
   @Benchmark
-  def decodeJava(): GenericRecord =
-    javaReader.read(null, DecoderFactory.get().jsonDecoder(javaSchema, new ByteArrayInputStream(bytes)))
+  def decodeJava(): GenericRecord = {
+    javaDecoder.configure(new ByteArrayInputStream(bytes))
+    javaReader.read(null, javaDecoder)
+  }
 }
