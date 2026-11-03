@@ -74,10 +74,8 @@ object AvroException {
     * Exception raised when decoding a decimal with a precision
     * exceeding the precision of the schema.
     */
-  final class DecodeDecimalPrecisionExceeded private[vulcan] (precision: Int, expectedPrecision: Int)
-    extends AvroException(
-      s"Unable to decode decimal with precision $precision exceeding schema precision $expectedPrecision"
-    )
+  final class DecodeDecimalPrecisionExceeded private[vulcan] (expectedPrecision: Int)
+    extends AvroException(s"Unable to decode decimal exceeding schema precision $expectedPrecision")
 
   /**
     * Exception raised when decoding a fixed value with a number

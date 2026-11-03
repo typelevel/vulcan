@@ -521,8 +521,26 @@ object CodecSpec extends BaseSuite {
       expectDecodeError[BigDecimal](
         Codec[BigDecimal].encode(BigDecimal("123.45678")),
         Right(Schema.Bytes.withLogicalType(LogicalType.decimal(6, 5))),
-        "Error decoding BigDecimal: Unable to decode decimal with precision 8 exceeding schema precision 6"
+        "Error decoding BigDecimal: Unable to decode decimal exceeding schema precision 6"
       )
+    }
+
+    pureTest("Codec decimal decode should decode values with at most the schema precision") {
+      val max = BigInt(10).pow(10) - 1
+
+      // The unscaled value in two's complement, optionally with sign extension bytes first
+      def bytes(unscaled: BigInt, padding: ByteVector = ByteVector.empty): Either[AvroException, AvroValue] =
+        Right(AvroValue.Bytes(padding ++ ByteVector(unscaled.toByteArray)))
+
+      val error = "Error decoding BigDecimal: Unable to decode decimal exceeding schema precision 10"
+
+      expectDecode[BigDecimal](bytes(max), BigDecimal(max, 5)) &&
+      expectDecode[BigDecimal](bytes(-max), BigDecimal(-max, 5)) &&
+      expectDecode[BigDecimal](bytes(max, hex"0000"), BigDecimal(max, 5)) &&
+      expectDecode[BigDecimal](bytes(-max, hex"ffff"), BigDecimal(-max, 5)) &&
+      expectDecodeError[BigDecimal](bytes(max + 1), error) &&
+      expectDecodeError[BigDecimal](bytes(-max - 1), error) &&
+      expectDecodeError[BigDecimal](Right(AvroValue.Bytes(ByteVector.fill(1000000L)(1))), error)
     }
 
     pureTest("Codec decimal decode should error if bytes are empty") {

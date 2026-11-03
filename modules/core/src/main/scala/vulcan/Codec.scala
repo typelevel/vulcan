@@ -1729,9 +1729,17 @@ object Codec {
     if (bytes.isEmpty) Left(new EmptyDecimal())
     else {
       val unscaled = new java.math.BigInteger(bytes.toArray)
-      val decimal = BigDecimal(new java.math.BigDecimal(unscaled, scale))
-      if (decimal.precision <= precision) Right(decimal)
-      else Left(new DecodeDecimalPrecisionExceeded(decimal.precision, precision))
+
+      // The magnitude is at least 2^(bitLength - 1), so with 0.30102 below log10(2), it has at least
+      // this many digits. Checked first, since computing the precision of large numbers is slow
+      val minDigits = (unscaled.bitLength - 1L) * 30102L / 100000L + 1L
+
+      if (minDigits > precision) Left(new DecodeDecimalPrecisionExceeded(precision))
+      else {
+        val decimal = BigDecimal(new java.math.BigDecimal(unscaled, scale))
+        if (decimal.precision <= precision) Right(decimal)
+        else Left(new DecodeDecimalPrecisionExceeded(precision))
+      }
     }
 
   /** The time since the epoch in the unit, or an error if it exceeds a long. */
