@@ -6,8 +6,11 @@
 
 package vulcan
 
+import cats.syntax.all.*
 import io.circe.Json
 import io.circe.JsonObject
+import vulcan.internal.SchemaDecoder
+import weaver.Expectations
 
 object SchemaParseSpec extends BaseSuite {
   private def parse(json: String): Either[String, Schema] =
@@ -18,6 +21,14 @@ object SchemaParseSpec extends BaseSuite {
 
   private def fixed(name: Schema.Name): Schema.Fixed =
     Schema.Fixed(name, 1)
+
+  private def nestedArrays(levels: Int): String =
+    """{"type":"array","items":""" * levels + "\"int\"" + "}" * levels
+
+  private def nestedRecords(levels: Int): String =
+    (0 until levels).foldLeft("\"int\"") { (inner, level) =>
+      s"""{"type":"record","name":"R$level","fields":[{"name":"f","type":$inner}]}"""
+    }
 
   test("Schema parse should parse printed schemas") {
     forall.withConfig(checkConfig.withMinimumSuccessful(1000))(SchemaGenerators.genSchema) { schema =>
@@ -343,6 +354,59 @@ object SchemaParseSpec extends BaseSuite {
 
     expect.eql(Left(s"Missing or invalid size in fixed $fixed"), parse(fixed)) &&
     matches(parse(decimal)) { case Right(schema) => expect.eql(None, schema.logicalType) }
+  }
+
+  pureTest("Schema parse should reject JSON nested more than 256 levels deep") {
+    val limit = SchemaDecoder.MaxDepth
+    val error = s"Invalid schema with JSON nested more than $limit levels deep"
+
+    val arrayOf = (items: Json) => Json.obj("type" -> Json.fromString("array"), "items" -> items)
+    val deepJson = Iterator.iterate(Json.fromString("int"))(arrayOf).drop(100000).next()
+
+    forEach(
+      List(
+        nestedArrays(limit + 1),
+        nestedArrays(4000),
+        "[" * 4000 + "]" * 4000,
+        """{"type":"int","custom":""" + "[" * 4000 + "]" * 4000 + "}"
+      )
+    )(json => expect.eql(Left(error), parse(json))) &&
+    expect.eql(Left(error), Schema.fromJson(deepJson).left.map(_.message))
+  }
+
+  pureTest("Schema parse should support schemas with JSON nested 256 levels deep") {
+    val limit = SchemaDecoder.MaxDepth
+
+    val arrays = nestedArrays(limit)
+    val records = nestedRecords(limit / 3)
+    val props = """{"type":"int","custom":""" + "[" * (limit - 1) + "]" * (limit - 1) + "}"
+    val unions = "[" * limit + "\"int\"" + "]" * limit
+
+    val arrayValue =
+      (1 to limit).foldLeft[AvroValue](AvroValue.Int(1))((value, _) => AvroValue.Array(Vector(value)))
+    val recordValue =
+      (1 to limit / 3).foldLeft[AvroValue](AvroValue.Int(1))((value, _) => AvroValue.Record(Vector(value)))
+
+    def roundtrip(schema: Schema, value: AvroValue): Expectations =
+      expect.same(
+        Right(value),
+        (BinaryEncoder(schema), BinaryDecoder(schema)).flatMapN((e, d) => e.encode(value).flatMap(d.decode))
+      ) &&
+        expect.same(
+          Right(value),
+          (JsonEncoder(schema), JsonDecoder(schema)).flatMapN((e, d) => e.encode(value).flatMap(d.decode))
+        )
+
+    forEach(List(arrays, records, props)) { json =>
+      whenSuccess((Schema.parse(json), Schema.parse(json)).tupled) { case (schema, reparsed) =>
+        expect.same(json, schema.toString) &&
+        expect.eql(schema, reparsed) &&
+        expect.same(schema.hashCode, reparsed.hashCode)
+      }
+    } &&
+    whenSuccess(Schema.parse(arrays))(roundtrip(_, arrayValue)) &&
+    whenSuccess(Schema.parse(records))(roundtrip(_, recordValue)) &&
+    expect.eql(Left(s"Unions cannot directly contain other unions: $unions"), parse(unions))
   }
 
   test("Schema fromJson should decode the same as parse") {

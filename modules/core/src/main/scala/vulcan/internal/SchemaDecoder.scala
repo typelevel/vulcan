@@ -9,6 +9,7 @@ package vulcan.internal
 import cats.syntax.all.*
 import io.circe.Json
 import io.circe.JsonObject
+import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.util.Try
 import vulcan.AvroException
@@ -28,14 +29,29 @@ private[vulcan] object SchemaDecoder {
     *
     * Field defaults are not validated, since schemas in schema registries can predate validation.
     */
-  def decode(json: Json): Either[AvroException, Schema] = {
-    val decoding = new Decoding(definedNames(json))
+  def decode(json: Json): Either[AvroException, Schema] =
+    if (nestedDeeperThan(json, MaxDepth))
+      Left(new InvalidSchema(s"Invalid schema with JSON nested more than $MaxDepth levels deep"))
+    else {
+      val decoding = new Decoding(definedNames(json))
 
-    decoding.decode(json, None).flatMap { decoded =>
-      val schema = new Resolution(decoding.definitions).resolve(decoded, Set.empty)
-      SchemaValidator.validate(schema, validateDefaults = false).as(schema)
+      decoding.decode(json, None).flatMap { decoded =>
+        val schema = new Resolution(decoding.definitions).resolve(decoded, Set.empty)
+        SchemaValidator.validate(schema, validateDefaults = false).as(schema)
+      }
     }
-  }
+
+  /** The limit for nested JSON arrays and objects, since schemas are processed recursively. */
+  private[vulcan] val MaxDepth: Int =
+    256
+
+  /** Returns `true` if arrays and objects are nested deeper than the depth, recursing at most that deep. */
+  private def nestedDeeperThan(json: Json, depth: Int): Boolean =
+    json.arrayOrObject(
+      false,
+      values => depth == 0 || values.exists(nestedDeeperThan(_, depth - 1)),
+      obj => depth == 0 || obj.values.exists(nestedDeeperThan(_, depth - 1))
+    )
 
   /** Returns the names of all named schemas defined in the schema, by full name. */
   private def definedNames(json: Json): Map[String, Schema.Name] = {
@@ -88,9 +104,31 @@ private[vulcan] object SchemaDecoder {
         _ => invalidSchema(json),
         _ => invalidSchema(json),
         name => decodeReference(name, namespace),
-        types => types.traverse(decode(_, namespace)).map(Schema.Union(_)),
+        types => decodeTypes(types, namespace).map(Schema.Union(_)),
         obj => decodeObject(obj, namespace)
       )
+
+    /** Decodes the types of a union in a loop, so nested unions use few stack frames. */
+    private def decodeTypes(
+      types: Vector[Json],
+      namespace: Option[String]
+    ): Either[AvroException, Vector[Schema]] = {
+      val decoded = Vector.newBuilder[Schema]
+
+      @tailrec def loop(index: Int): Either[AvroException, Vector[Schema]] =
+        if (index < types.size)
+          decode(types(index), namespace) match {
+            case Right(schema) =>
+              decoded += schema
+              loop(index + 1)
+
+            case Left(error) =>
+              Left(error)
+          }
+        else Right(decoded.result())
+
+      loop(0)
+    }
 
     private def decodeObject(
       obj: JsonObject,
