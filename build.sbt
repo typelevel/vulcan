@@ -11,7 +11,7 @@ val scalaJavaTimeVersion = "2.7.0"
 val scodecBitsVersion = "1.2.5"
 val slf4jNopVersion = "2.0.20"
 val vulcan1xVersion = "1.14.1"
-val weaverVersion = "0.13.0"
+val weaverVersion = "0.13.1"
 
 inThisBuild(
   Seq(
