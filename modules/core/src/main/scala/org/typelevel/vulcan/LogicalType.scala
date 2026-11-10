@@ -82,7 +82,8 @@ object LogicalType {
   implicit final val logicalTypeShow: Show[LogicalType] =
     Show.fromToString
 
-  private val knownNames: Set[String] =
+  /** The names of the logical types defined in the Avro specification. */
+  private[vulcan] val knownNames: Set[String] =
     Set(
       "big-decimal",
       "date",

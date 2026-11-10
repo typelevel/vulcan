@@ -183,6 +183,13 @@ object AvroException {
     extends AvroException(s"Got more than $limit $elements with the same hash code")
 
   /**
+    * Exception raised when creating an encoder for a writer schema
+    * which values of the codec schema cannot be converted into.
+    */
+  final class IncompatibleWriterSchema private[vulcan] (details: String)
+    extends AvroException(s"Unable to write values using the writer schema: $details")
+
+  /**
     * Exception raised when a schema for Avro binary decoding has a
     * record which always contains itself, so values are infinite.
     */

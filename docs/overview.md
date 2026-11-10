@@ -30,7 +30,7 @@ For changes between versions, please refer to the [release notes](https://github
 
 Following is an incomplete list of third-party integrations.
 
-- [fs2-kafka-vulcan](https://typelevel.org/fs2-kafka), which currently uses Vulcan 1.x.
+- [fs2-kafka-vulcan](https://github.com/typelevel/fs2-kafka-vulcan) provides Avro support for [fs2-kafka](https://typelevel.org/fs2-kafka).
 
 ### Signatures
 
