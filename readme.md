@@ -1,4 +1,4 @@
-# Vulcan
+# Vulcan <img src="docs/img/logo.svg" align="right" height="130" alt="" />
 
 [![Typelevel Organization Project](https://img.shields.io/badge/typelevel-organization%20project-ff6169)](https://typelevel.org)
 [![GitHub Actions](https://img.shields.io/github/actions/workflow/status/typelevel/vulcan/ci.yml?branch=main)](https://github.com/typelevel/vulcan/actions)
