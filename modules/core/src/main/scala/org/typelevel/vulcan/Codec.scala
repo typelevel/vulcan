@@ -52,6 +52,10 @@ sealed abstract class Codec[A] {
   /** The schema or an error if the schema could not be generated. */
   def schema: Either[AvroException, Schema]
 
+  /** The value encoded as `null`, if there is one, used as the default of nullable fields. */
+  def nullValue: Option[A] =
+    None
+
   /** Returns an `Encoder` for values, or an error if the schema is invalid. */
   final def encoder: Either[AvroException, Encoder[A]] =
     schema.flatMap(SchemaValidator.validate(_, validateDefaults = false)).map { _ =>
@@ -210,15 +214,6 @@ sealed abstract class Codec[A] {
     writerSchema: Schema,
     definitions: Definitions
   ): AvroValue => Either[AvroException, A]
-
-  /**
-    * The value encoded as `null`, if there is one, used as the default of nullable fields.
-    *
-    * The generic module calls this, so changing the signature breaks binary compatibility
-    * between modules, which MiMa does not check for package-private members.
-    */
-  private[vulcan] def nullValue: Option[A] =
-    None
 
   /** Returns a function decoding values of the writer schema, resolved once for the schema. */
   private[vulcan] final def resolveDecoder(
