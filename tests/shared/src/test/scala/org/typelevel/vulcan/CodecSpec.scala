@@ -1914,6 +1914,28 @@ object CodecSpec extends BaseSuite {
     )
   }
 
+  pureTest("Codec nullValue should be None for options") {
+    expect.eql(Some(None), Codec[Option[Int]].nullValue)
+  }
+
+  pureTest("Codec nullValue should be the value for unit and none") {
+    expect.eql(Some(()), Codec[Unit].nullValue) &&
+    expect.same(Some(None), Codec[None.type].nullValue)
+  }
+
+  pureTest("Codec nullValue should be kept by withTypeName") {
+    expect.eql(Some(()), Codec[Unit].withTypeName("Test").nullValue)
+  }
+
+  pureTest("Codec nullValue should be empty for other codecs") {
+    expect.eql(None, Codec[Int].nullValue) &&
+    expect.eql(None, Codec[Either[Unit, Int]].nullValue)
+  }
+
+  pureTest("Codec nullValue should be empty for mapped codecs") {
+    expect.eql(None, Codec[Option[Int]].imap(identity)(identity).nullValue)
+  }
+
   pureTest("Codec option schema should be encoded as union") {
     expectSchema[Option[Double]] {
       """["null","double"]"""
