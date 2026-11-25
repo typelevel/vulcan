@@ -84,6 +84,31 @@ sealed abstract class Codec[A] {
     }
 
   /**
+    * Returns a `BinaryEncoder` for Avro binary using the provided writer schema,
+    * or an error if the schema or writer schema is invalid, or if values cannot
+    * be written using the writer schema.
+    *
+    * When encoding, values are resolved into the writer schema following Avro's
+    * schema resolution, as if schema values were read using the writer schema.
+    * Fields missing in the schema use the defaults of the writer schema, and
+    * fields missing in the writer schema are left out. Values cannot be written
+    * if reading them using the writer schema could fail, for example if a field
+    * of the writer schema is missing in the schema and has no default, or if the
+    * schemas have different logical types.
+    */
+  final def binaryEncoder(writerSchema: Schema): Either[AvroException, BinaryEncoder[A]] =
+    schema.flatMap { schema =>
+      if (schema == writerSchema) binaryEncoder
+      else
+        (ValueResolver(schema, writerSchema), BinaryEncoder(writerSchema)).mapN { (resolve, compiled) =>
+          new BinaryEncoder[A] {
+            override def encode(a: A): Either[AvroException, ByteVector] =
+              Codec.this.encode(a).flatMap(resolve).flatMap(compiled.encode)
+          }
+        }
+    }
+
+  /**
     * Returns a `BinaryDecoder` for Avro binary written using the provided
     * writer schema, or an error if the schema or writer schema is invalid.
     *
