@@ -21,8 +21,8 @@ import scodec.bits.ByteVector
   * Encodes values of type `A` to Avro binary.
   *
   * Note encoders are compiled once for the schema using the
-  * [[Codec#binaryEncoder]] function, and can be reused as
-  * many times as needed, supporting concurrent encodes.
+  * `Codec#binaryEncoder` functions, and can be reused as many
+  * times as needed, supporting concurrent encodes.
   */
 trait BinaryEncoder[A] {
 
