@@ -28,6 +28,8 @@ object WriterSchemaSpec extends BaseSuite {
 
   final case class Outer(value: Int, next: Option[Inner])
 
+  final case class Node(value: Int, next: Option[Node])
+
   implicit val personCodec: Codec[Person] =
     Codec.record(name = "Person", namespace = "com.example") { field =>
       field("name", _.name).map(Person(_))
@@ -67,7 +69,12 @@ object WriterSchemaSpec extends BaseSuite {
       (field("value", _.value), field("next", _.next)).mapN(Outer(_, _))
     }
 
-  /** Recursive writer schema, which [[Outer]] and [[Inner]] can be written as. */
+  implicit val nodeCodec: Codec[Node] =
+    Codec.record(name = "Node", namespace = "com.example") { field =>
+      (field("value", _.value), field("next", _.next)).mapN(Node(_, _))
+    }
+
+  /** Recursive writer schema, which [[Outer]], [[Inner]] and [[Node]] can be written as. */
   val recursiveWriterSchema: String =
     """{"type":"record","name":"Node","namespace":"com.example","fields":[{"name":"value","type":"long"},{"name":"next","type":["null","Node"],"default":null},{"name":"label","type":"string","default":""}]}"""
 
@@ -303,6 +310,24 @@ object WriterSchemaSpec extends BaseSuite {
         ),
         value
       )
+    }
+  }
+
+  pureTest("values of recursive codecs are written using recursive writer schemas") {
+    def written(value: Long, next: AvroValue): AvroValue =
+      AvroValue.Record(Vector(AvroValue.Long(value), next, AvroValue.String("")))
+
+    val nodes = Node(1, Some(Node(2, Some(Node(3, None)))))
+
+    whenSuccess(Schema.parse(recursiveWriterSchema)) { schema =>
+      val value =
+        for {
+          bytes <- Codec[Node].binaryEncoder(schema).flatMap(_.encode(nodes))
+          value <- BinaryDecoder(schema).flatMap(_.decode(bytes))
+        } yield value
+
+      val last = written(3L, AvroValue.Union(0, AvroValue.Null))
+      expect.same(Right(written(1L, AvroValue.Union(1, written(2L, AvroValue.Union(1, last))))), value)
     }
   }
 

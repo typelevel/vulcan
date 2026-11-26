@@ -91,6 +91,12 @@ object GenericDerivationCodecSpec extends BaseSuite {
     }
   }
 
+  pureTest("Codec derive caseClass schema should refer to the enclosing record for recursive case classes") {
+    expectSchema[CaseClassRecursive] {
+      """{"type":"record","name":"CaseClassRecursive","namespace":"org.typelevel.vulcan.generic.examples","fields":[{"name":"value","type":"int"},{"name":"next","type":["null","CaseClassRecursive"]}]}"""
+    }
+  }
+
   pureTest("Codec derive caseClass encode should encode value class using encoder for underlying type") {
     expectEncode[CaseClassValueClass](
       CaseClassValueClass(0),
@@ -171,6 +177,12 @@ object GenericDerivationCodecSpec extends BaseSuite {
     expectSchema[SealedTraitCaseClassAvroNamespace](
       """[{"type":"record","name":"FirstInSealedTraitCaseClassAvroNamespace","namespace":"org.typelevel.vulcan.generic.examples","fields":[{"name":"value","type":"int"}]},{"type":"record","name":"SecondInSealedTraitCaseClassAvroNamespace","namespace":"com.example","fields":[{"name":"value","type":"string"}]}]"""
     )
+  }
+
+  pureTest("Codec derive sealedTrait schema should refer to enclosing records for recursive sealed traits") {
+    expectSchema[SealedTraitRecursive] {
+      """[{"type":"record","name":"AddInSealedTraitRecursive","namespace":"org.typelevel.vulcan.generic.examples","fields":[{"name":"left","type":["AddInSealedTraitRecursive",{"type":"record","name":"LiteralInSealedTraitRecursive","fields":[{"name":"value","type":"int"}]}]},{"name":"right","type":["AddInSealedTraitRecursive","LiteralInSealedTraitRecursive"]}]},"org.typelevel.vulcan.generic.examples.LiteralInSealedTraitRecursive"]"""
+    }
   }
 
   pureTest("Codec derive sealedTrait schema should capture errors on nested unions") {

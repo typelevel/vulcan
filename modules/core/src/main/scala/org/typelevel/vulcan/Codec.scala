@@ -6,6 +6,7 @@
 
 package org.typelevel.vulcan
 
+import cats.Defer
 import cats.Invariant
 import cats.Show
 import cats.data.Chain
@@ -27,7 +28,6 @@ import java.time.LocalTime
 import java.time.ZoneOffset
 import java.util.Arrays
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicReferenceArray
 import org.typelevel.vulcan.AvroException.*
 import org.typelevel.vulcan.internal.*
 import scala.annotation.implicitNotFound
@@ -50,7 +50,8 @@ import scodec.bits.ByteVector
 sealed abstract class Codec[A] {
 
   /** The schema or an error if the schema could not be generated. */
-  def schema: Either[AvroException, Schema]
+  final lazy val schema: Either[AvroException, Schema] =
+    schemaIn(new Codec.SchemaContext).flatMap(Codec.validated)
 
   /** The value encoded as `null`, if there is one, used as the default of nullable fields. */
   def nullValue: Option[A] =
@@ -206,6 +207,9 @@ sealed abstract class Codec[A] {
   final def withTypeName(typeName: String): Codec[A] =
     new Codec.WithTypeName(this, typeName)
 
+  /** Returns the schema without validating it, where enclosing records are references. */
+  private[vulcan] def schemaIn(context: Codec.SchemaContext): Either[AvroException, Schema]
+
   /** Attempts to encode the specified value. */
   private[vulcan] def encode(a: A): Either[AvroException, AvroValue]
 
@@ -215,7 +219,7 @@ sealed abstract class Codec[A] {
     definitions: Definitions
   ): AvroValue => Either[AvroException, A]
 
-  /** Returns a function decoding values of the writer schema, resolved once for the schema. */
+  /** Returns a function decoding values of the writer schema, resolved once for named schemas. */
   private[vulcan] final def resolveDecoder(
     writerSchema: Schema,
     definitions: Definitions
@@ -226,22 +230,16 @@ sealed abstract class Codec[A] {
 
       case ref: Schema.Ref =>
         definitions.get(ref.fullName) match {
-          case Some(named) => resolve(named, definitions)
+          case Some(named) => definitions.decoder(this, named)(resolve(named, definitions))
           case None => Codec.failing(new UndefinedName(ref.fullName))
         }
+
+      case named: Schema.Named =>
+        definitions.decoder(this, named)(resolve(named, definitions))
 
       case _ =>
         resolve(writerSchema, definitions)
     }
-
-  /** Encodes the value as JSON for defaults in schemas, where unions are without the type. */
-  private[vulcan] final def encodeForSchema(a: A): Either[AvroException, Json] =
-    for {
-      validSchema <- schema
-      encoder <- JsonEncoder.withoutUnionTypes(validSchema)
-      value <- encode(a)
-      json <- encoder.encode(value)
-    } yield json
 
   override final def toString: String =
     schema match {
@@ -403,6 +401,16 @@ object Codec {
     val enumName = Schema.Name(name, Some(namespace))
     new EnumCodec(enumName, symbols.toVector, encode, decode, default, doc, aliases.toVector, props)
       .withTypeName(enumName.fullName)
+  }
+
+  /**
+    * Returns a new [[Codec]] whose schema, encoding, and decoding fail with the specified error.
+    *
+    * @group Create
+    */
+  final def fail[A](error: AvroException): Codec[A] = {
+    val result = Left(error)
+    new CustomCodec[A](result, _ => result, _ => result)
   }
 
   /**
@@ -648,6 +656,9 @@ object Codec {
     * Fields are decoded from the writer field with the same name or the name of an alias of the
     * field, and otherwise using the default of the field. Other writer fields are ignored.
     *
+    * The fields are built when the codec is first used, so fields can use codecs defined later,
+    * including the codec itself for recursive types.
+    *
     * @group Create
     */
   final def record[A](
@@ -658,8 +669,27 @@ object Codec {
     props: JsonObject = JsonObject.empty
   )(f: FieldBuilder[A] => FreeApplicative[Field[A, *], A]): Codec[A] = {
     val recordName = Schema.Name(name, Some(namespace))
-    new RecordCodec(recordName, doc, aliases.toVector, props, f(FieldBuilder.instance))
+    new RecordCodec(recordName, doc, aliases.toVector, props, f)
       .withTypeName(recordName.fullName)
+  }
+
+  /**
+    * Returns a [[Codec]] for a recursive type, providing the
+    * returned codec for recursive references within the type.
+    *
+    * The schema generation will fail if the codec refers to
+    * itself other than within a record, since Avro schemas
+    * refer to records by name.
+    *
+    * This function is useful for codecs that are `def`s, like
+    * codecs for generic types, which would otherwise create a
+    * new codec for every nested record.
+    *
+    * @group Create
+    */
+  final def recursive[A](f: Codec[A] => Codec[A]): Codec[A] = {
+    lazy val codec: Codec[A] = f(new Deferred(() => codec))
+    codec
   }
 
   /**
@@ -746,6 +776,15 @@ object Codec {
   implicit final def vector[A](implicit codec: Codec[A]): Codec[Vector[A]] =
     new ArrayCodec[A, Vector[A]](initialized(codec, "Vector items"), _.length, _.iterator, vectorBuilder)
       .withTypeName("Vector")
+
+  /**
+    * @group Cats
+    */
+  implicit final val codecDefer: Defer[Codec] =
+    new Defer[Codec] {
+      override final def defer[A](codec: => Codec[A]): Codec[A] =
+        new Deferred(() => codec)
+    }
 
   /**
     * @group Cats
@@ -893,8 +932,8 @@ object Codec {
     val f: A => Either[AvroException, B],
     val g: B => Either[AvroException, A]
   ) extends Codec[B] {
-    override def schema: Either[AvroException, Schema] =
-      codec.schema
+    override def schemaIn(context: SchemaContext): Either[AvroException, Schema] =
+      codec.schemaIn(context)
 
     override def encode(b: B): Either[AvroException, AvroValue] =
       g(b).flatMap(codec.encode)
@@ -913,10 +952,8 @@ object Codec {
     val customEncoder: Encoder[A],
     val customDecoder: Schema => Either[AvroException, Decoder[A]]
   ) extends Codec[A] {
-    override lazy val schema: Either[AvroException, Schema] =
-      customSchema.flatMap { schema =>
-        SchemaValidator.validate(schema, validateDefaults = true).map(_ => schema)
-      }
+    override def schemaIn(context: SchemaContext): Either[AvroException, Schema] =
+      customSchema
 
     override def encode(a: A): Either[AvroException, AvroValue] =
       customEncoder.encode(a)
@@ -935,8 +972,8 @@ object Codec {
     val codec: Codec[A],
     val typeName: String
   ) extends Codec[A] {
-    override def schema: Either[AvroException, Schema] =
-      codec.schema
+    override def schemaIn(context: SchemaContext): Either[AvroException, Schema] =
+      codec.schemaIn(context)
 
     override def encode(a: A): Either[AvroException, AvroValue] =
       codec.encode(a).left.map(new ErrorEncodingType(typeName, _))
@@ -961,8 +998,8 @@ object Codec {
     val newBuilder: Int => mutable.Builder[A, C],
     val hashed: Boolean = false
   ) extends Codec[C] {
-    override lazy val schema: Either[AvroException, Schema] =
-      items.schema.map(Schema.Array(_))
+    override def schemaIn(context: SchemaContext): Either[AvroException, Schema] =
+      items.schemaIn(context).map(Schema.Array(_))
 
     override def encode(collection: C): Either[AvroException, AvroValue] =
       build(iterator(collection), vectorBuilder[AvroValue](size(collection)))(items.encode)
@@ -1007,8 +1044,8 @@ object Codec {
     val newBuilder: Int => mutable.Builder[(String, A), M],
     val hashed: Boolean = false
   ) extends Codec[M] {
-    override lazy val schema: Either[AvroException, Schema] =
-      values.schema.map(Schema.Map(_))
+    override def schemaIn(context: SchemaContext): Either[AvroException, Schema] =
+      values.schemaIn(context).map(Schema.Map(_))
 
     override def encode(map: M): Either[AvroException, AvroValue] =
       build(iterator(map), vectorBuilder[(String, AvroValue)](size(map))) { case (key, value) =>
@@ -1043,24 +1080,24 @@ object Codec {
 
   /** Codec for options, as unions with `null` first, including the types of unions. */
   private[vulcan] final class OptionCodec[A](val codec: Codec[A]) extends Codec[Option[A]] {
-    override lazy val schema: Either[AvroException, Schema] =
-      codec.schema.flatMap { schema =>
+    override def schemaIn(context: SchemaContext): Either[AvroException, Schema] =
+      codec.schemaIn(context).map { schema =>
         val types =
           schema match {
             case union: Schema.Union => union.types
             case _ => Vector(schema)
           }
 
-        validated(Schema.Union(Schema.Null +: types))
+        Schema.Union(Schema.Null +: types)
       }
 
     /** Whether the types of the union of the codec are included in the union of the option. */
-    private lazy val includesUnion: Boolean =
-      codec.schema.exists(_.isInstanceOf[Schema.Union])
+    lazy val includesUnion: Boolean =
+      isUnion(codec)
 
     override def encode(option: Option[A]): Either[AvroException, AvroValue] =
-      (schema, option) match {
-        case (Right(_), Some(a)) =>
+      option match {
+        case Some(a) =>
           codec.encode(a).flatMap {
             case AvroValue.Union(index, value) if includesUnion =>
               Right(AvroValue.Union(index + 1, value))
@@ -1072,11 +1109,8 @@ object Codec {
               Left(new InvalidValue(value, "union"))
           }
 
-        case (Right(_), None) =>
+        case None =>
           EncodedNone
-
-        case (Left(error), _) =>
-          Left(error)
       }
 
     override val nullValue: Option[Option[A]] =
@@ -1086,16 +1120,13 @@ object Codec {
       writerSchema: Schema,
       definitions: Definitions
     ): AvroValue => Either[AvroException, Option[A]] =
-      (schema, writerSchema) match {
-        case (Left(error), _) =>
-          failing(error)
-
-        case (Right(_), _: Schema.Null) => {
+      writerSchema match {
+        case _: Schema.Null => {
           case AvroValue.Null => DecodedNone
           case value => Left(invalidValue(value, writerSchema))
         }
 
-        case (Right(_), _) =>
+        case _ =>
           val decode = codec.resolve(writerSchema, definitions)
           decode(_).map(Some(_))
       }
@@ -1103,20 +1134,21 @@ object Codec {
 
   /** Codec for unions, which decodes using the alternative for the written type. */
   private[vulcan] final class UnionCodec[A](val alternatives: Chain[Alt[A]]) extends Codec[A] {
-    private val alts: Vector[Alt[A]] =
+    val alts: Vector[Alt[A]] =
       alternatives.toVector
 
     private lazy val types: Either[AvroException, Vector[Schema]] =
-      build(alts.iterator, vectorBuilder[Schema](alts.size))(_.codec.schema)
+      schema.map {
+        case union: Schema.Union => union.types
+        case schema => Vector(schema)
+      }
 
-    override lazy val schema: Either[AvroException, Schema] =
-      types.flatMap(types => validated(Schema.Union(types)))
+    override def schemaIn(context: SchemaContext): Either[AvroException, Schema] =
+      build(alts.iterator, vectorBuilder[Schema](alts.size))(_.codec.schemaIn(context))
+        .map(Schema.Union(_))
 
     override def encode(a: A): Either[AvroException, AvroValue] =
-      schema match {
-        case Right(_) => encodeWith(a, 0)
-        case Left(error) => Left(error)
-      }
+      encodeWith(a, 0)
 
     @tailrec private def encodeWith(a: A, index: Int): Either[AvroException, AvroValue] =
       if (index < alts.length) {
@@ -1131,7 +1163,7 @@ object Codec {
       writerSchema: Schema,
       definitions: Definitions
     ): AvroValue => Either[AvroException, A] =
-      (schema >> types) match {
+      types match {
         case Right(types) =>
           unionType(writerSchema, types) match {
             case Some(index) =>
@@ -1157,11 +1189,15 @@ object Codec {
     val doc: Option[String],
     val aliases: Vector[String],
     val props: JsonObject,
-    val fields: FreeApplicative[Field[A, *], A]
+    val f: FieldBuilder[A] => FreeApplicative[Field[A, *], A]
   ) extends Codec[A] {
 
+    /** The fields, built on first use, so the fields can refer to the codec itself. */
+    lazy val fields: FreeApplicative[Field[A, *], A] =
+      f(FieldBuilder.instance)
+
     /** The fields, in the order of the record. */
-    private lazy val fieldVector: Vector[Field[A, _]] =
+    lazy val fieldVector: Vector[Field[A, _]] =
       fields.analyze(new (Field[A, *] ~> λ[x => Vector[Field[A, _]]]) {
         override def apply[B](field: Field[A, B]): Vector[Field[A, _]] = Vector(field)
       })
@@ -1178,33 +1214,42 @@ object Codec {
     private lazy val encoders: Vector[A => Either[AvroException, AvroValue]] =
       fieldVector.map(fieldEncoder(_))
 
-    override lazy val schema: Either[AvroException, Schema] =
-      build(fieldVector.iterator, vectorBuilder[Schema.Field](fieldVector.size))(fieldSchema(_))
-        .flatMap { fields =>
-          validated {
-            Schema.Record(name, fields).withDoc(doc).withAliases(aliases).withProps(props)
-          }
-        }
+    override def schemaIn(context: SchemaContext): Either[AvroException, Schema] =
+      (context.enclosing.get(name.fullName), context.records.get(this)) match {
+        case (Some(enclosing), _) if enclosing eq this =>
+          Right(Schema.Ref(name))
+
+        case (Some(_), _) =>
+          Left(new RecursiveCodecMismatch(name.fullName))
+
+        case (None, Some(schema)) =>
+          Right(schema)
+
+        case (None, None) =>
+          val deferred = context.deferred
+          context.enclosing.update(name.fullName, this)
+          context.deferred = Set.empty
+          val schema = recordSchema(context)
+          context.enclosing.remove(name.fullName)
+          context.deferred = deferred
+          schema.foreach(context.records.update(this, _))
+          schema
+      }
+
+    private def recordSchema(context: SchemaContext): Either[AvroException, Schema.Record] =
+      build(fieldVector.iterator, vectorBuilder[Schema.Field](fieldVector.size))(fieldSchema(_, context))
+        .map(Schema.Record(name, _).withDoc(doc).withAliases(aliases).withProps(props))
 
     override def encode(a: A): Either[AvroException, AvroValue] =
-      schema match {
-        case Right(_) =>
-          build(encoders.iterator, vectorBuilder[AvroValue](encoders.size))(_(a))
-            .map(AvroValue.Record(_))
-
-        case Left(error) =>
-          Left(error)
-      }
+      build(encoders.iterator, vectorBuilder[AvroValue](encoders.size))(_(a))
+        .map(AvroValue.Record(_))
 
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
     ): AvroValue => Either[AvroException, A] =
-      (schema, writerSchema) match {
-        case (Left(error), _) =>
-          failing(error)
-
-        case (Right(_), record: Schema.Record) =>
+      writerSchema match {
+        case record: Schema.Record =>
           val decoders = fieldVector.map(fieldDecoder(_, record, definitions)).toArray
           value =>
             value match {
@@ -1218,7 +1263,7 @@ object Codec {
                 Left(invalidValue(value, writerSchema))
             }
 
-        case (Right(_), _) =>
+        case _ =>
           failing(new UnexpectedSchemaType(writerSchema, "record"))
       }
 
@@ -1258,8 +1303,8 @@ object Codec {
     private val symbolSet: Set[String] =
       symbols.toSet
 
-    override lazy val schema: Either[AvroException, Schema] =
-      validated {
+    private lazy val enumSchema: Either[AvroException, Schema] =
+      Right {
         Schema
           .Enum(name, symbols)
           .withDefault(default.map(encodeSymbol))
@@ -1267,6 +1312,9 @@ object Codec {
           .withAliases(aliases)
           .withProps(props)
       }
+
+    override def schemaIn(context: SchemaContext): Either[AvroException, Schema] =
+      enumSchema
 
     override def encode(a: A): Either[AvroException, AvroValue] =
       schema match {
@@ -1311,8 +1359,11 @@ object Codec {
     val aliases: Vector[String],
     val props: JsonObject
   ) extends Codec[A] {
-    override lazy val schema: Either[AvroException, Schema] =
-      validated(Schema.Fixed(name, size).withDoc(doc).withAliases(aliases).withProps(props))
+    private val fixedSchema: Either[AvroException, Schema] =
+      Right(Schema.Fixed(name, size).withDoc(doc).withAliases(aliases).withProps(props))
+
+    override def schemaIn(context: SchemaContext): Either[AvroException, Schema] =
+      fixedSchema
 
     override def encode(a: A): Either[AvroException, AvroValue] =
       schema match {
@@ -1353,13 +1404,16 @@ object Codec {
 
   /** Codec for decimals, which decodes using the precision and scale of the writer schema. */
   private[vulcan] final class DecimalCodec(val precision: Int, val scale: Int) extends Codec[BigDecimal] {
-    override val schema: Either[AvroException, Schema] =
+    private val decimalSchema: Either[AvroException, Schema] =
       if (precision <= 0)
         Left(new InvalidDecimalPrecision(precision))
       else if (scale < 0 || scale > precision)
         Left(new InvalidDecimalScale(scale, precision))
       else
         Right(Schema.Bytes.withLogicalType(LogicalType.decimal(precision, scale)))
+
+    override def schemaIn(context: SchemaContext): Either[AvroException, Schema] =
+      decimalSchema
 
     override def encode(decimal: BigDecimal): Either[AvroException, AvroValue] =
       schema match {
@@ -1405,8 +1459,8 @@ object Codec {
     val codec: Codec[A],
     val logicalType: LogicalType
   ) extends Codec[A] {
-    override lazy val schema: Either[AvroException, Schema] =
-      codec.schema.flatMap(addLogicalType(_, logicalType))
+    override def schemaIn(context: SchemaContext): Either[AvroException, Schema] =
+      codec.schemaIn(context).flatMap(addLogicalType(_, logicalType))
 
     override def encode(a: A): Either[AvroException, AvroValue] =
       codec.encode(a)
@@ -1431,8 +1485,11 @@ object Codec {
     val typeName: String,
     primitiveSchema: Schema
   ) extends Codec[A] {
-    override final val schema: Either[AvroException, Schema] =
+    private[this] val result: Either[AvroException, Schema] =
       Right(primitiveSchema)
+
+    override final def schemaIn(context: SchemaContext): Either[AvroException, Schema] =
+      result
 
     protected final def invalid(value: AvroValue, writerSchema: Schema): Either[AvroException, A] =
       Left(new ErrorDecodingType(typeName, invalidValue(value, writerSchema)))
@@ -1653,39 +1710,80 @@ object Codec {
       }
   }
 
+  /** Codec which defers to the codec of a function, called once, for recursive codecs. */
+  private[vulcan] final class Deferred[A](thunk: () => Codec[A]) extends Codec[A] {
+    private lazy val next: Codec[A] =
+      thunk()
+
+    lazy val codec: Codec[A] = {
+      val visited = mutable.Set.empty[Deferred[A]]
+
+      @tailrec def loop(deferred: Deferred[A]): Codec[A] =
+        if (!visited.add(deferred)) fail(new RecursiveCodecWithoutRecord())
+        else
+          deferred.next match {
+            case next: Deferred[A] => loop(next)
+            case next => next
+          }
+
+      loop(this)
+    }
+
+    override def schemaIn(context: SchemaContext): Either[AvroException, Schema] =
+      if (context.deferred.contains(this))
+        Left(new RecursiveCodecWithoutRecord())
+      else {
+        val deferred = context.deferred
+        context.deferred = deferred + this
+        val schema = codec.schemaIn(context)
+        context.deferred = deferred
+        schema
+      }
+
+    override def encode(a: A): Either[AvroException, AvroValue] =
+      codec.encode(a)
+
+    override def nullValue: Option[A] =
+      codec.nullValue
+
+    override def resolve(
+      writerSchema: Schema,
+      definitions: Definitions
+    ): AvroValue => Either[AvroException, A] =
+      codec.resolve(writerSchema, definitions)
+  }
+
+  private[vulcan] final class SchemaContext {
+    val enclosing: mutable.Map[String, RecordCodec[_]] =
+      mutable.Map.empty
+
+    val records: mutable.Map[RecordCodec[_], Schema.Record] =
+      mutable.Map.empty
+
+    var deferred: Set[Deferred[_]] =
+      Set.empty
+  }
+
   /** Decodes values of a writer union using the written type, resolving types when first used. */
   private final class UnionDecoder[A](
     codec: Codec[A],
     union: Schema.Union,
     definitions: Definitions
   ) extends (AvroValue => Either[AvroException, A]) {
-    private val types: Array[Schema] =
-      union.types.toArray
-
-    private val decoders =
-      new AtomicReferenceArray[AvroValue => Either[AvroException, A]](types.length)
+    private val decoders: Array[AvroValue => Either[AvroException, A]] =
+      union.types.map(codec.resolveDecoder(_, definitions)).toArray
 
     override def apply(value: AvroValue): Either[AvroException, A] =
       value match {
-        case AvroValue.Union(index, typeValue) if index >= 0 && index < types.length =>
-          decoderOf(index)(typeValue)
+        case AvroValue.Union(index, typeValue) if index >= 0 && index < decoders.length =>
+          decoders(index)(typeValue)
 
         case AvroValue.Union(index, _) =>
-          Left(new InvalidUnionValue(index, types.length))
+          Left(new InvalidUnionValue(index, decoders.length))
 
         case _ =>
           Left(invalidValue(value, union))
       }
-
-    private def decoderOf(index: Int): AvroValue => Either[AvroException, A] = {
-      val existing = decoders.get(index)
-      if (existing != null) existing
-      else {
-        val decoder = codec.resolveDecoder(types(index), definitions)
-        decoders.set(index, decoder)
-        decoder
-      }
-    }
   }
 
   /** Builds vectors of the given number of items without copying them, unlike `VectorBuilder`. */
@@ -1830,13 +1928,17 @@ object Codec {
   private final val MicrosPerDay: Long = 86400000000L
 
   /** The schema of the field, including the default encoded as JSON. */
-  private def fieldSchema[A, B](field: Field[A, B]): Either[AvroException, Schema.Field] =
+  private def fieldSchema[A, B](
+    field: Field[A, B],
+    context: SchemaContext
+  ): Either[AvroException, Schema.Field] =
     for {
-      schema <- field.codec.schema
+      schema <- field.codec.schemaIn(context)
       default <- field.default match {
         case Some(default) =>
           field.codec
-            .encodeForSchema(default)
+            .encode(default)
+            .flatMap(defaultJson(field.codec, _))
             .map(Some(_))
             .left
             .map(new ErrorEncodingType(s"default for field ${field.name}", _))
@@ -1851,6 +1953,66 @@ object Codec {
       .withOrder(field.order)
       .withAliases(field.aliases.toVector)
       .withProps(field.props)
+
+  /** The value encoded by the codec as a default value in schemas, without building the codec schema. */
+  private def defaultJson(codec: Codec[_], value: AvroValue): Either[AvroException, Json] =
+    (codec, value) match {
+      case (codec: WithTypeName[_], _) => defaultJson(codec.codec, value)
+      case (codec: Exmap[_, _], _) => defaultJson(codec.codec, value)
+      case (codec: LogicalTypeCodec[_], _) => defaultJson(codec.codec, value)
+      case (codec: Deferred[_], _) => defaultJson(codec.codec, value)
+      case (codec: CustomCodec[_], _) =>
+        codec.schema.flatMap(JsonEncoder.withoutUnionTypes).flatMap(_.encode(value))
+
+      case (codec: RecordCodec[_], AvroValue.Record(values)) if values.size == codec.fieldVector.size =>
+        val fields = codec.fieldVector.iterator.zip(values.iterator)
+        build(fields, vectorBuilder[(String, Json)](values.size)) { case (field, fieldValue) =>
+          defaultJson(field.codec, fieldValue).map((field.name, _))
+        }.map(Json.fromFields)
+
+      case (codec: UnionCodec[_], AvroValue.Union(index, typeValue)) if codec.alts.indices.contains(index) =>
+        defaultJson(codec.alts(index).codec, typeValue)
+
+      case (_: OptionCodec[_], AvroValue.Union(0, _)) =>
+        Right(Json.Null)
+
+      case (codec: OptionCodec[_], AvroValue.Union(index, typeValue)) =>
+        if (codec.includesUnion) defaultJson(codec.codec, AvroValue.Union(index - 1, typeValue))
+        else defaultJson(codec.codec, typeValue)
+
+      case (codec: ArrayCodec[_, _], AvroValue.Array(items)) =>
+        build(items.iterator, vectorBuilder[Json](items.size))(defaultJson(codec.items, _))
+          .map(Json.fromValues)
+
+      case (codec: MapCodec[_, _], AvroValue.Map(entries)) =>
+        build(entries.iterator, vectorBuilder[(String, Json)](entries.size)) { case (key, entryValue) =>
+          defaultJson(codec.values, entryValue).map((key, _))
+        }.map(Json.fromFields)
+
+      case (_, AvroValue.Null) => Right(Json.Null)
+      case (_, AvroValue.Boolean(boolean)) => Right(Json.fromBoolean(boolean))
+      case (_, AvroValue.Int(int)) => Right(Json.fromInt(int))
+      case (_, AvroValue.Long(long)) => Right(Json.fromLong(long))
+      case (_, AvroValue.Float(float)) => Right(JsonNumbers.float(float))
+      case (_, AvroValue.Double(double)) => Right(JsonNumbers.double(double))
+      case (_, AvroValue.Bytes(bytes)) => Right(JsonEncoder.bytesJson(bytes))
+      case (_, AvroValue.String(string)) => Right(Json.fromString(string))
+      case (_, AvroValue.Enum(symbol)) => Right(Json.fromString(symbol))
+      case (_, AvroValue.Fixed(bytes)) => Right(JsonEncoder.bytesJson(bytes))
+      case (_, _) => Left(new InvalidValue(value, "codec"))
+    }
+
+  /** Returns `true` if the codec is for a union, without building its schema. */
+  @tailrec private def isUnion(codec: Codec[_]): Boolean =
+    codec match {
+      case _: UnionCodec[_] | _: OptionCodec[_] => true
+      case codec: WithTypeName[_] => isUnion(codec.codec)
+      case codec: Exmap[_, _] => isUnion(codec.codec)
+      case codec: LogicalTypeCodec[_] => isUnion(codec.codec)
+      case codec: Deferred[_] => isUnion(codec.codec)
+      case codec: CustomCodec[_] => codec.customSchema.exists(_.isInstanceOf[Schema.Union])
+      case _ => false
+    }
 
   private def fieldEncoder[A, B](field: Field[A, B]): A => Either[AvroException, AvroValue] =
     a =>
@@ -1948,11 +2110,7 @@ object Codec {
 
   /** The codec, or a codec failing with an error if the codec is `null`. */
   private def initialized[A](codec: Codec[A], description: => String): Codec[A] =
-    if (codec ne null) codec
-    else {
-      val error = Left(new UninitializedCodec(description))
-      new CustomCodec[A](error, _ => error, _ => error)
-    }
+    if (codec ne null) codec else fail(new UninitializedCodec(description))
 
   private[vulcan] def invalidValue(value: AvroValue, writerSchema: Schema): AvroException =
     new InvalidValue(value, SchemaNames.describe(writerSchema))

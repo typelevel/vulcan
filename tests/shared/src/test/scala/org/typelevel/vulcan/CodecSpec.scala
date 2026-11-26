@@ -366,6 +366,31 @@ object CodecSpec extends BaseSuite {
       expect.eql(1, calls)
     }
 
+    pureTest("Codec custom decode should call the decoder function once for each named writer schema") {
+      var calls = 0
+      val counting =
+        Codec.custom[Int](
+          Right(Schema.Fixed(Schema.Name("Id"), 1)),
+          int => Right(AvroValue.Fixed(ByteVector(int.toByte))),
+          _ => {
+            calls += 1
+            Right {
+              case AvroValue.Fixed(bytes) => Right(bytes.head.toInt)
+              case value => Left(AvroException(s"Got value $value"))
+            }
+          }
+        )
+
+      implicit val pairCodec: Codec[(Int, Int)] =
+        Codec.record("Pair", "") { field =>
+          (field("first", _._1)(counting), field("second", _._2)(counting)).tupled
+        }
+
+      val value = AvroValue.Record(Vector(AvroValue.Fixed(hex"01"), AvroValue.Fixed(hex"02")))
+      expectDecode(Right(value), (1, 2)) &&
+      expect.eql(1, calls)
+    }
+
     pureTest("Codec custom decode should include the definitions of referenced names in writer schemas") {
       val inner = Schema.Fixed(Schema.Name("Inner"), 1)
 
@@ -874,6 +899,23 @@ object CodecSpec extends BaseSuite {
         FirstInSealedTraitEnum
       )
     }
+  }
+
+  pureTest("Codec fail should fail with the error for the schema, encoding, and decoding") {
+    implicit val codec: Codec[Int] =
+      Codec.fail(AvroException("error"))
+
+    expectSchemaError[Int]("error") &&
+    expectEncodeError(1, "error") &&
+    expectDecodeError[Int](Right(AvroValue.Int(1)), Right(Schema.Int), "error")
+  }
+
+  pureTest("Codec fail should fail codecs using the codec with the error") {
+    implicit val codec: Codec[Int] =
+      Codec.fail(AvroException("error"))
+
+    expectSchemaError[List[Int]]("error") &&
+    expectSchemaError[Option[Int]]("error")
   }
 
   locally {
@@ -2889,13 +2931,7 @@ object CodecSpec extends BaseSuite {
   }
 
   pureTest("Codec show should show the error if schema is unavailable") {
-    val codec =
-      Codec.custom[Int](
-        Left(AvroException("error")),
-        int => Right(AvroValue.Int(int)),
-        _ => Left(AvroException("error"))
-      )
-
+    val codec = Codec.fail[Int](AvroException("error"))
     expect.eql("org.typelevel.vulcan.AvroException: error", codec.show)
   }
 

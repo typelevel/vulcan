@@ -243,8 +243,32 @@ object RegressionSpec extends BaseSuite {
         }
     }
 
+    object UsedCodecs {
+      implicit val outerCodec: Codec[Outer] =
+        Codec.record("Outer", "com.example") { field =>
+          field("inner", _.inner).map(Outer(_))
+        }
+
+      val outerSchema: Either[AvroException, Schema] =
+        outerCodec.schema
+
+      implicit val innerCodec: Codec[Inner] =
+        Codec.record("Inner", "com.example") { field =>
+          field("value", _.value).map(Inner(_))
+        }
+    }
+
+    pureTest("#317: record fields should use codecs defined after the record codec") {
+      implicit val codec: Codec[Outer] =
+        Codecs.outerCodec
+
+      expectSchema[Outer] {
+        """{"type":"record","name":"Outer","namespace":"com.example","fields":[{"name":"inner","type":{"type":"record","name":"Inner","fields":[{"name":"value","type":"int"}]}}]}"""
+      }
+    }
+
     pureTest("#317: codecs used before their initialization should error for the field") {
-      matches(Codecs.outerCodec.schema) { case Left(error: AvroException.UninitializedCodec) =>
+      matches(UsedCodecs.outerSchema) { case Left(error: AvroException.UninitializedCodec) =>
         expect.eql(
           "Got unexpected null codec for field inner; use lazy val or def for codecs used before their definition",
           error.message

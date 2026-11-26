@@ -17,4 +17,6 @@ object GenericDerivationRoundtripSpec extends BaseSuite {
   test("derive CaseClassAvroNullDefault") { forallRoundtrip[CaseClassAvroNullDefault] }
   test("derive CaseClassFieldAvroNullDefault") { forallRoundtrip[CaseClassFieldAvroNullDefault] }
   test("derive CaseClassAndFieldAvroNullDefault") { forallRoundtrip[CaseClassAndFieldAvroNullDefault] }
+  test("derive CaseClassRecursive") { forallRoundtrip[CaseClassRecursive] }
+  test("derive SealedTraitRecursive") { forallRoundtrip[SealedTraitRecursive] }
 }
