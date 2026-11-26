@@ -72,11 +72,7 @@ sealed abstract class Codec[A] {
     */
   final def decoder(writerSchema: Schema): Either[AvroException, Decoder[A]] =
     (schema >> SchemaValidator.validate(writerSchema, validateDefaults = false)).map { _ =>
-      val resolved = resolveDecoder(writerSchema, new Definitions(writerSchema))
-      new Decoder[A] {
-        override def decode(value: AvroValue): Either[AvroException, A] =
-          resolved(value)
-      }
+      resolveDecoder(writerSchema, new Definitions(writerSchema))
     }
 
   /** Returns a `BinaryEncoder` for Avro binary, or an error if the schema is invalid. */
@@ -124,10 +120,13 @@ sealed abstract class Codec[A] {
     */
   final def binaryDecoder(writerSchema: Schema): Either[AvroException, BinaryDecoder[A]] =
     (schema >> BinaryDecoder(writerSchema)).map { compiled =>
-      val resolved = resolveDecoder(writerSchema, new Definitions(writerSchema))
+      val decoder = resolveDecoder(writerSchema, new Definitions(writerSchema))
       new BinaryDecoder[A] {
         override def decode(bytes: ByteVector): Either[AvroException, A] =
-          compiled.decode(bytes).flatMap(resolved)
+          compiled.decode(bytes) match {
+            case Right(value) => decoder.decode(value)
+            case left @ Left(_) => left.rightCast
+          }
       }
     }
 
@@ -149,10 +148,13 @@ sealed abstract class Codec[A] {
     */
   final def jsonDecoder(writerSchema: Schema): Either[AvroException, JsonDecoder[A]] =
     (schema >> JsonDecoder(writerSchema)).map { compiled =>
-      val resolved = resolveDecoder(writerSchema, new Definitions(writerSchema))
+      val decoder = resolveDecoder(writerSchema, new Definitions(writerSchema))
       new JsonDecoder[A] {
         override def decode(json: Json): Either[AvroException, A] =
-          compiled.decode(json).flatMap(resolved)
+          compiled.decode(json) match {
+            case Right(value) => decoder.decode(value)
+            case left @ Left(_) => left.rightCast
+          }
       }
     }
 
@@ -213,17 +215,24 @@ sealed abstract class Codec[A] {
   /** Attempts to encode the specified value. */
   private[vulcan] def encode(a: A): Either[AvroException, AvroValue]
 
-  /** Returns a function decoding values of the writer schema; neither a union nor a reference. */
+  /** Returns a decoder for values of the writer schema; neither a union nor a reference. */
   private[vulcan] def resolve(
     writerSchema: Schema,
     definitions: Definitions
-  ): AvroValue => Either[AvroException, A]
+  ): Decoder[A]
 
-  /** Returns a function decoding values of the writer schema, resolved once for named schemas. */
+  private[vulcan] def resolveWithTypeName(
+    writerSchema: Schema,
+    definitions: Definitions,
+    typeName: String
+  ): Decoder[A] =
+    new Codec.TypeNameDecoder(resolve(writerSchema, definitions), typeName)
+
+  /** Returns a decoder for values of the writer schema, resolved once for named schemas. */
   private[vulcan] final def resolveDecoder(
     writerSchema: Schema,
     definitions: Definitions
-  ): AvroValue => Either[AvroException, A] =
+  ): Decoder[A] =
     writerSchema match {
       case union: Schema.Union =>
         new Codec.UnionDecoder(this, union, definitions)
@@ -941,10 +950,15 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, B] = {
-      val decode = codec.resolve(writerSchema, definitions)
-      decode(_).flatMap(f)
-    }
+    ): Decoder[B] =
+      new ExmapDecoder(codec.resolve(writerSchema, definitions), f, null)
+
+    override def resolveWithTypeName(
+      writerSchema: Schema,
+      definitions: Definitions,
+      typeName: String
+    ): Decoder[B] =
+      new ExmapDecoder(codec.resolve(writerSchema, definitions), f, typeName)
   }
 
   private[vulcan] final class CustomCodec[A](
@@ -961,9 +975,9 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, A] =
+    ): Decoder[A] =
       customDecoder(definitions.expanded(writerSchema)) match {
-        case Right(decoder) => decoder.decode(_)
+        case Right(decoder) => decoder
         case Left(error) => failing(error)
       }
   }
@@ -984,10 +998,8 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, A] = {
-      val decode = codec.resolve(writerSchema, definitions)
-      decode(_).left.map(new ErrorDecodingType(typeName, _))
-    }
+    ): Decoder[A] =
+      codec.resolveWithTypeName(writerSchema, definitions, typeName)
   }
 
   /** Codec for collections encoded as arrays, with a builder for the number of items. */
@@ -1008,28 +1020,20 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, C] =
+    ): Decoder[C] =
+      resolveWithTypeName(writerSchema, definitions, null)
+
+    override def resolveWithTypeName(
+      writerSchema: Schema,
+      definitions: Definitions,
+      typeName: String
+    ): Decoder[C] =
       writerSchema match {
         case array: Schema.Array =>
-          val decode = items.resolveDecoder(array.items, definitions)
-          value =>
-            value match {
-              case AvroValue.Array(values) if hashed && values.size > MaxEqualHashCodes =>
-                build(values.iterator, vectorBuilder[A](values.size))(decode).flatMap { decoded =>
-                  if (hashCollisions(decoded.size)(decoded(_)))
-                    Left(new HashCollisionsExceeded("items", MaxEqualHashCodes))
-                  else Right((newBuilder(decoded.size) ++= decoded).result())
-                }
-
-              case AvroValue.Array(values) =>
-                build(values.iterator, newBuilder(values.size))(decode)
-
-              case _ =>
-                Left(invalidValue(value, writerSchema))
-            }
+          new ArrayDecoder(this, array, items.resolveDecoder(array.items, definitions), typeName)
 
         case _ =>
-          failing(new UnexpectedSchemaType(writerSchema, "array"))
+          failing(includeTypeName(typeName, new UnexpectedSchemaType(writerSchema, "array")))
       }
   }
 
@@ -1055,26 +1059,20 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, M] =
+    ): Decoder[M] =
+      resolveWithTypeName(writerSchema, definitions, null)
+
+    override def resolveWithTypeName(
+      writerSchema: Schema,
+      definitions: Definitions,
+      typeName: String
+    ): Decoder[M] =
       writerSchema match {
         case map: Schema.Map =>
-          val decode = values.resolveDecoder(map.values, definitions)
-          value =>
-            value match {
-              case AvroValue.Map(entries) if hashed && hashCollisions(entries.size)(entries(_)._1) =>
-                Left(new HashCollisionsExceeded("keys", MaxEqualHashCodes))
-
-              case AvroValue.Map(entries) =>
-                build(entries.iterator, newBuilder(entries.size)) { case (key, entryValue) =>
-                  decode(entryValue).map((key, _))
-                }
-
-              case _ =>
-                Left(invalidValue(value, writerSchema))
-            }
+          new MapDecoder(this, map, values.resolveDecoder(map.values, definitions), typeName)
 
         case _ =>
-          failing(new UnexpectedSchemaType(writerSchema, "map"))
+          failing(includeTypeName(typeName, new UnexpectedSchemaType(writerSchema, "map")))
       }
   }
 
@@ -1119,16 +1117,22 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, Option[A]] =
+    ): Decoder[Option[A]] =
+      resolveWithTypeName(writerSchema, definitions, null)
+
+    override def resolveWithTypeName(
+      writerSchema: Schema,
+      definitions: Definitions,
+      typeName: String
+    ): Decoder[Option[A]] =
       writerSchema match {
         case _: Schema.Null => {
           case AvroValue.Null => DecodedNone
-          case value => Left(invalidValue(value, writerSchema))
+          case value => Left(includeTypeName(typeName, invalidValue(value, writerSchema)))
         }
 
         case _ =>
-          val decode = codec.resolve(writerSchema, definitions)
-          decode(_).map(Some(_))
+          new SomeDecoder(codec.resolve(writerSchema, definitions), typeName)
       }
   }
 
@@ -1162,21 +1166,27 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, A] =
+    ): Decoder[A] =
+      resolveWithTypeName(writerSchema, definitions, null)
+
+    override def resolveWithTypeName(
+      writerSchema: Schema,
+      definitions: Definitions,
+      typeName: String
+    ): Decoder[A] =
       types match {
         case Right(types) =>
           unionType(writerSchema, types) match {
             case Some(index) =>
               val alt = alts(index)
-              val decode = alt.codec.resolve(writerSchema, definitions)
-              decode(_).map(alt.prism.reverseGet)
+              new AltDecoder(alt.codec.resolve(writerSchema, definitions), alt.prism, typeName)
 
             case None =>
-              failing(new MissingAlternative(writerSchema))
+              failing(includeTypeName(typeName, new MissingAlternative(writerSchema)))
           }
 
         case Left(error) =>
-          failing(error)
+          failing(includeTypeName(typeName, error))
       }
   }
 
@@ -1247,46 +1257,22 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, A] =
+    ): Decoder[A] =
+      resolveWithTypeName(writerSchema, definitions, null)
+
+    override def resolveWithTypeName(
+      writerSchema: Schema,
+      definitions: Definitions,
+      typeName: String
+    ): Decoder[A] =
       writerSchema match {
         case record: Schema.Record =>
           val decoders = fieldVector.map(fieldDecoder(_, record, definitions)).toArray
-          value =>
-            value match {
-              case AvroValue.Record(values) if values.size == record.fields.size =>
-                decodeFields(values, decoders)
-
-              case AvroValue.Record(values) =>
-                Left(new InvalidRecordValue(values.size, record.fullName, record.fields.size))
-
-              case _ =>
-                Left(invalidValue(value, writerSchema))
-            }
+          new RecordDecoder(record, decoders, construct, typeName)
 
         case _ =>
-          failing(new UnexpectedSchemaType(writerSchema, "record"))
+          failing(includeTypeName(typeName, new UnexpectedSchemaType(writerSchema, "record")))
       }
-
-    private def decodeFields(
-      values: Vector[AvroValue],
-      decoders: Array[Vector[AvroValue] => Either[AvroException, Any]]
-    ): Either[AvroException, A] = {
-      val decoded = new Array[Any](decoders.length)
-
-      @tailrec def loop(index: Int): Either[AvroException, A] =
-        if (index < decoders.length)
-          decoders(index)(values) match {
-            case Right(value) =>
-              decoded(index) = value
-              loop(index + 1)
-
-            case Left(error) =>
-              Left(error)
-          }
-        else Right(construct(decoded))
-
-      loop(0)
-    }
   }
 
   /** Codec for enums, where unknown symbols decode to the default, if there is one. */
@@ -1330,7 +1316,7 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, A] =
+    ): Decoder[A] =
       (schema, writerSchema) match {
         case (Left(error), _) =>
           failing(error)
@@ -1380,7 +1366,7 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, A] =
+    ): Decoder[A] =
       (schema, writerSchema) match {
         case (Left(error), _) =>
           failing(error)
@@ -1433,7 +1419,7 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, BigDecimal] =
+    ): Decoder[BigDecimal] =
       (schema, writerSchema) match {
         case (Left(error), _) =>
           failing(error)
@@ -1469,13 +1455,13 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, A] = {
-      val decode = codec.resolve(writerSchema, definitions)
+    ): Decoder[A] = {
+      val decoder = codec.resolve(writerSchema, definitions)
       writerSchema.logicalType match {
         case Some(writerLogicalType) if writerLogicalType == logicalType =>
-          decode
+          decoder
         case _ =>
-          decode(_) >> Left(new UnexpectedLogicalType(writerSchema))
+          value => decoder.decode(value) >> Left(new UnexpectedLogicalType(writerSchema))
       }
     }
   }
@@ -1494,7 +1480,7 @@ object Codec {
     protected final def invalid(value: AvroValue, writerSchema: Schema): Either[AvroException, A] =
       Left(new ErrorDecodingType(typeName, invalidValue(value, writerSchema)))
 
-    protected final def unexpected(writerSchema: Schema): AvroValue => Either[AvroException, A] =
+    protected final def unexpected(writerSchema: Schema): Decoder[A] =
       failing {
         new ErrorDecodingType(
           typeName,
@@ -1522,7 +1508,7 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, A] =
+    ): Decoder[A] =
       writerSchema match {
         case _: Schema.Null => {
           case AvroValue.Null => decoded
@@ -1541,7 +1527,7 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, Boolean] =
+    ): Decoder[Boolean] =
       writerSchema match {
         case _: Schema.Boolean => {
           case AvroValue.Boolean(boolean) => Right(boolean)
@@ -1560,7 +1546,7 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, Int] =
+    ): Decoder[Int] =
       writerSchema match {
         case _: Schema.Int => {
           case AvroValue.Int(int) => Right(int)
@@ -1579,7 +1565,7 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, Long] =
+    ): Decoder[Long] =
       writerSchema match {
         case _: Schema.Long => {
           case AvroValue.Long(long) => Right(long)
@@ -1603,7 +1589,7 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, Float] =
+    ): Decoder[Float] =
       writerSchema match {
         case _: Schema.Float => {
           case AvroValue.Float(float) => Right(float)
@@ -1632,7 +1618,7 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, Double] =
+    ): Decoder[Double] =
       writerSchema match {
         case _: Schema.Double => {
           case AvroValue.Double(double) => Right(double)
@@ -1666,7 +1652,7 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, ByteVector] =
+    ): Decoder[ByteVector] =
       writerSchema match {
         case _: Schema.Bytes => {
           case AvroValue.Bytes(bytes) => Right(bytes)
@@ -1692,7 +1678,7 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, String] =
+    ): Decoder[String] =
       writerSchema match {
         case _: Schema.String => {
           case AvroValue.String(string) => Right(string)
@@ -1749,8 +1735,15 @@ object Codec {
     override def resolve(
       writerSchema: Schema,
       definitions: Definitions
-    ): AvroValue => Either[AvroException, A] =
+    ): Decoder[A] =
       codec.resolve(writerSchema, definitions)
+
+    override def resolveWithTypeName(
+      writerSchema: Schema,
+      definitions: Definitions,
+      typeName: String
+    ): Decoder[A] =
+      codec.resolveWithTypeName(writerSchema, definitions, typeName)
   }
 
   private[vulcan] final class SchemaContext {
@@ -1764,19 +1757,19 @@ object Codec {
       Set.empty
   }
 
-  /** Decodes values of a writer union using the written type, resolving types when first used. */
+  /** Decodes values of a writer union using the decoder for the written type. */
   private final class UnionDecoder[A](
     codec: Codec[A],
     union: Schema.Union,
     definitions: Definitions
-  ) extends (AvroValue => Either[AvroException, A]) {
-    private val decoders: Array[AvroValue => Either[AvroException, A]] =
+  ) extends Decoder[A] {
+    private val decoders: Array[Decoder[A]] =
       union.types.map(codec.resolveDecoder(_, definitions)).toArray
 
-    override def apply(value: AvroValue): Either[AvroException, A] =
+    override def decode(value: AvroValue): Either[AvroException, A] =
       value match {
         case AvroValue.Union(index, typeValue) if index >= 0 && index < decoders.length =>
-          decoders(index)(typeValue)
+          decoders(index).decode(typeValue)
 
         case AvroValue.Union(index, _) =>
           Left(new InvalidUnionValue(index, decoders.length))
@@ -1785,6 +1778,178 @@ object Codec {
           Left(invalidValue(value, union))
       }
   }
+
+  private final class RecordDecoder[A](
+    writerSchema: Schema.Record,
+    fields: Array[FieldDecoder],
+    construct: Array[Any] => A,
+    typeName: String
+  ) extends Decoder[A] {
+    override def decode(value: AvroValue): Either[AvroException, A] =
+      value match {
+        case AvroValue.Record(values) if values.size == writerSchema.fields.size =>
+          val decoded = new Array[Any](fields.length)
+          var error: AvroException = null
+          var index = 0
+          while ((error eq null) && index < fields.length) {
+            val field = fields(index)
+            val result: Either[AvroException, Any] =
+              if (field.writerIndex >= 0) field.decoder.decode(values(field.writerIndex))
+              else field.default
+
+            result match {
+              case Right(fieldValue) =>
+                decoded(index) = fieldValue
+                index += 1
+
+              case Left(fieldError) =>
+                error =
+                  if (field.writerIndex >= 0) new ErrorDecodingType(s"field ${field.name}", fieldError)
+                  else fieldError
+            }
+          }
+
+          if (error eq null) Right(construct(decoded))
+          else Left(includeTypeName(typeName, error))
+
+        case AvroValue.Record(values) =>
+          val error = new InvalidRecordValue(values.size, writerSchema.fullName, writerSchema.fields.size)
+          Left(includeTypeName(typeName, error))
+
+        case _ =>
+          Left(includeTypeName(typeName, invalidValue(value, writerSchema)))
+      }
+  }
+
+  /**
+    * Decodes a field from the writer field at the index, or uses the default
+    * if the index is negative, since the writer schema is without the field.
+    */
+  private final class FieldDecoder(
+    val name: String,
+    val writerIndex: Int,
+    val decoder: Decoder[_],
+    val default: Either[AvroException, Any]
+  )
+
+  private final class ArrayDecoder[A, C](
+    codec: ArrayCodec[A, C],
+    writerSchema: Schema.Array,
+    items: Decoder[A],
+    typeName: String
+  ) extends Decoder[C] {
+    override def decode(value: AvroValue): Either[AvroException, C] =
+      value match {
+        case AvroValue.Array(values) =>
+          val hashed = codec.hashed && values.size > MaxEqualHashCodes
+          val builder: mutable.Builder[A, Any] =
+            if (hashed) vectorBuilder[A](values.size) else codec.newBuilder(values.size)
+
+          val iterator = values.iterator
+          var error: AvroException = null
+          while ((error eq null) && iterator.hasNext)
+            items.decode(iterator.next()) match {
+              case Right(item) => builder += item
+              case Left(itemError) => error = itemError
+            }
+
+          if (error ne null) Left(includeTypeName(typeName, error))
+          else if (!hashed) Right(builder.result().asInstanceOf[C])
+          else {
+            val decoded = builder.result().asInstanceOf[Vector[A]]
+            if (hashCollisions(decoded.size)(decoded(_)))
+              Left(includeTypeName(typeName, new HashCollisionsExceeded("items", MaxEqualHashCodes)))
+            else Right((codec.newBuilder(decoded.size) ++= decoded).result())
+          }
+
+        case _ =>
+          Left(includeTypeName(typeName, invalidValue(value, writerSchema)))
+      }
+  }
+
+  private final class MapDecoder[A, M](
+    codec: MapCodec[A, M],
+    writerSchema: Schema.Map,
+    values: Decoder[A],
+    typeName: String
+  ) extends Decoder[M] {
+    override def decode(value: AvroValue): Either[AvroException, M] =
+      value match {
+        case AvroValue.Map(entries) if codec.hashed && hashCollisions(entries.size)(entries(_)._1) =>
+          Left(includeTypeName(typeName, new HashCollisionsExceeded("keys", MaxEqualHashCodes)))
+
+        case AvroValue.Map(entries) =>
+          val builder = codec.newBuilder(entries.size)
+          val iterator = entries.iterator
+          var error: AvroException = null
+          while ((error eq null) && iterator.hasNext) {
+            val entry = iterator.next()
+            values.decode(entry._2) match {
+              case Right(entryValue) => builder += ((entry._1, entryValue))
+              case Left(valueError) => error = valueError
+            }
+          }
+
+          if (error eq null) Right(builder.result())
+          else Left(includeTypeName(typeName, error))
+
+        case _ =>
+          Left(includeTypeName(typeName, invalidValue(value, writerSchema)))
+      }
+  }
+
+  /** Decodes values of options which are not `null`. */
+  private final class SomeDecoder[A](decoder: Decoder[A], typeName: String) extends Decoder[Option[A]] {
+    override def decode(value: AvroValue): Either[AvroException, Option[A]] =
+      decoder.decode(value) match {
+        case Right(a) => Right(Some(a))
+        case Left(error) => Left(includeTypeName(typeName, error))
+      }
+  }
+
+  /** Decodes values of the written type using the alternative of a union. */
+  private final class AltDecoder[A, B](
+    decoder: Decoder[B],
+    prism: Prism[A, B],
+    typeName: String
+  ) extends Decoder[A] {
+    override def decode(value: AvroValue): Either[AvroException, A] =
+      decoder.decode(value) match {
+        case Right(b) => Right(prism.reverseGet(b))
+        case Left(error) => Left(includeTypeName(typeName, error))
+      }
+  }
+
+  private final class ExmapDecoder[A, B](
+    decoder: Decoder[A],
+    f: A => Either[AvroException, B],
+    typeName: String
+  ) extends Decoder[B] {
+    override def decode(value: AvroValue): Either[AvroException, B] =
+      decoder.decode(value) match {
+        case Right(a) =>
+          f(a) match {
+            case Left(error) if typeName ne null => Left(new ErrorDecodingType(typeName, error))
+            case result => result
+          }
+
+        case Left(error) =>
+          Left(includeTypeName(typeName, error))
+      }
+  }
+
+  /** Decodes values using the decoder, including the type name in errors. */
+  private final class TypeNameDecoder[A](decoder: Decoder[A], typeName: String) extends Decoder[A] {
+    override def decode(value: AvroValue): Either[AvroException, A] =
+      decoder.decode(value) match {
+        case Left(error) => Left(new ErrorDecodingType(typeName, error))
+        case result => result
+      }
+  }
+
+  /** The error, including the type name unless it is `null`. */
+  private def includeTypeName(typeName: String, error: AvroException): AvroException =
+    if (typeName eq null) error else new ErrorDecodingType(typeName, error)
 
   /** Builds vectors of the given number of items without copying them, unlike `VectorBuilder`. */
   private final class ExactVectorBuilder[A](size: Int) extends mutable.Builder[A, Vector[A]] {
@@ -2029,7 +2194,7 @@ object Codec {
     field: Field[A, B],
     record: Schema.Record,
     definitions: Definitions
-  ): Vector[AvroValue] => Either[AvroException, Any] = {
+  ): FieldDecoder = {
     val writerIndex =
       (field.name +: field.aliases).iterator
         .map(name => record.fields.indexWhere(_.name == name))
@@ -2037,12 +2202,11 @@ object Codec {
 
     writerIndex match {
       case Some(index) =>
-        val decode = field.codec.resolveDecoder(record.fields(index).schema, definitions)
-        values => decode(values(index)).left.map(new ErrorDecodingType(s"field ${field.name}", _))
+        val decoder = field.codec.resolveDecoder(record.fields(index).schema, definitions)
+        new FieldDecoder(field.name, index, decoder, null)
 
       case None =>
-        val result = field.default.toRight(new MissingField(field.name))
-        _ => result
+        new FieldDecoder(field.name, -1, null, field.default.toRight(new MissingField(field.name)))
     }
   }
 
@@ -2102,8 +2266,8 @@ object Codec {
   private def validated(schema: Schema): Either[AvroException, Schema] =
     SchemaValidator.validate(schema, validateDefaults = true).map(_ => schema)
 
-  /** A function decoding any value to the error. */
-  private[vulcan] def failing[A](error: AvroException): AvroValue => Either[AvroException, A] = {
+  /** A decoder decoding any value to the error. */
+  private[vulcan] def failing[A](error: AvroException): Decoder[A] = {
     val result = Left(error)
     _ => result
   }

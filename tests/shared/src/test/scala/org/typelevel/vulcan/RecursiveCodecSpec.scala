@@ -248,24 +248,23 @@ object RecursiveCodecSpec extends BaseSuite {
 
   pureTest("Recursive codecs should encode values nested deeper than binary decoders allow") {
     val limit = BinaryDecoder.MaxDepth
-    val codec = Tree.codec[Int]
+    val codec = CaseClassRecursive.codec
 
-    // Each tree is a record and an array, so the depth of trees is twice their number
-    def nested(trees: Int): Tree[Int] =
-      (1 until trees).foldLeft(Tree(0, List.empty[Tree[Int]]))((child, _) => Tree(0, List(child)))
+    def nested(depth: Int): CaseClassRecursive =
+      (1 until depth).foldLeft(CaseClassRecursive(0, None))((next, _) => CaseClassRecursive(0, Some(next)))
 
     val decoded =
       for {
         schema <- codec.schema
         encoder <- codec.binaryEncoder
         decoder <- codec.binaryDecoder(schema)
-        atLimit <- encoder.encode(nested(limit / 2))
-        beyondLimit <- encoder.encode(nested(limit / 2 + 1))
+        atLimit <- encoder.encode(nested(limit))
+        beyondLimit <- encoder.encode(nested(limit + 1))
       } yield (decoder.decode(atLimit), decoder.decode(beyondLimit).left.map(_.message))
 
     val error =
-      s"Invalid depth ${limit + 1} at position $limit, exceeding the limit of $limit nested records, arrays and maps"
+      s"Invalid depth ${limit + 1} at position ${2 * limit}, exceeding the limit of $limit nested records, arrays and maps"
 
-    expect.same(Right((Right(nested(limit / 2)), Left(error))), decoded)
+    expect.same(Right((Right(nested(limit)), Left(error))), decoded)
   }
 }

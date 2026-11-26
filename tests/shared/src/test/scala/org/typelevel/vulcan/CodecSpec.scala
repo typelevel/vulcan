@@ -366,6 +366,27 @@ object CodecSpec extends BaseSuite {
       expect.eql(1, calls)
     }
 
+    pureTest("Codec custom decode should call the decoder function once for each binary and JSON decoder") {
+      var calls = 0
+      val counting =
+        Codec.custom[Int](
+          Right(Schema.Int),
+          int => Right(AvroValue.Int(int)),
+          _ => {
+            calls += 1
+            Right(_ => Right(1))
+          }
+        )
+
+      val binaryDecoder = counting.binaryDecoder(Schema.Int)
+      val jsonDecoder = counting.jsonDecoder(Schema.Int)
+      expect.same(Right(1), binaryDecoder.flatMap(_.decode(hex"02"))) &&
+      expect.same(Right(1), binaryDecoder.flatMap(_.decode(hex"04"))) &&
+      expect.same(Right(1), jsonDecoder.flatMap(_.decode(Json.fromInt(1)))) &&
+      expect.same(Right(1), jsonDecoder.flatMap(_.decode(Json.fromInt(2)))) &&
+      expect.eql(2, calls)
+    }
+
     pureTest("Codec custom decode should call the decoder function once for each named writer schema") {
       var calls = 0
       val counting =

@@ -9,6 +9,7 @@ package org.typelevel.vulcan.internal
 import org.typelevel.vulcan.AvroException
 import org.typelevel.vulcan.AvroValue
 import org.typelevel.vulcan.Codec
+import org.typelevel.vulcan.Decoder
 import org.typelevel.vulcan.Schema
 import scala.collection.mutable
 
@@ -31,9 +32,7 @@ private[vulcan] final class Definitions(writerSchema: Schema) {
     * the first time, where recursive references to the decoder being resolved
     * forward to it once resolved.
     */
-  def decoder[A](codec: Codec[A], named: Schema.Named)(
-    resolve: => AvroValue => Either[AvroException, A]
-  ): AvroValue => Either[AvroException, A] =
+  def decoder[A](codec: Codec[A], named: Schema.Named)(resolve: => Decoder[A]): Decoder[A] =
     decoders.get((codec, named.fullName)) match {
       case Some(reference) =>
         reference.asInstanceOf[Definitions.Reference[A]].resolved
@@ -87,14 +86,14 @@ private[vulcan] final class Definitions(writerSchema: Schema) {
 private object Definitions {
 
   /** A decoder, which is being resolved if references are recursive. */
-  private final class Reference[A] extends (AvroValue => Either[AvroException, A]) {
-    var decoder: AvroValue => Either[AvroException, A] =
+  private final class Reference[A] extends Decoder[A] {
+    var decoder: Decoder[A] =
       null
 
-    def resolved: AvroValue => Either[AvroException, A] =
+    def resolved: Decoder[A] =
       if (decoder != null) decoder else this
 
-    override def apply(value: AvroValue): Either[AvroException, A] =
-      decoder(value)
+    override def decode(value: AvroValue): Either[AvroException, A] =
+      decoder.decode(value)
   }
 }
