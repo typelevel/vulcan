@@ -9,6 +9,7 @@ package org.typelevel.vulcan
 import cats.Eq
 import cats.kernel.laws.discipline.HashTests
 import cats.laws.discipline.ContravariantTests
+import cats.laws.discipline.DeferTests
 import cats.laws.discipline.InvariantTests
 import cats.laws.discipline.MonadErrorTests
 import io.circe.Json
@@ -116,6 +117,8 @@ object LawsSpec extends FunSuite with Discipline {
     )
 
   checkAll("Codec", InvariantTests[Codec].invariant[Int, Int, String])
+
+  checkAll("Codec", DeferTests[Codec].defer[Int])
 
   implicit def decoderArbitrary[A: Arbitrary]: Arbitrary[Decoder[A]] =
     arbitraryFunction[Decoder[A], AvroValue, Either[AvroException, A]](f => value => f(value))

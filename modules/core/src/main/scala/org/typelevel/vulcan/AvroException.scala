@@ -333,6 +333,24 @@ object AvroException {
     extends AvroException(s"Unions cannot directly contain other unions: $union")
 
   /**
+    * Exception raised when a record codec contains a different codec
+    * for the same record, for example when a codec for a recursive
+    * type is a `def` creating a new codec for nested records.
+    */
+  final class RecursiveCodecMismatch private[vulcan] (fullName: String)
+    extends AvroException(
+      s"Record codec for $fullName contains a different codec for record $fullName; " +
+        "recursive codecs must refer to themselves, for example using Codec.recursive"
+    )
+
+  /**
+    * Exception raised when a recursive codec refers to itself other
+    * than within a record, which Avro schemas cannot express.
+    */
+  final class RecursiveCodecWithoutRecord private[vulcan] ()
+    extends AvroException("Recursive codecs can only refer to themselves within records")
+
+  /**
     * Exception raised when a named schema without a
     * namespace has the name of a primitive type.
     */

@@ -66,7 +66,7 @@ object JsonEncoder {
     }
 
   /** Bytes as a string with one character per byte, same as the Java Avro library. */
-  private def bytesJson(bytes: ByteVector): Json =
+  private[vulcan] def bytesJson(bytes: ByteVector): Json =
     Json.fromString(ByteVectors.decodeString(bytes, StandardCharsets.ISO_8859_1))
 
   private sealed abstract class Node {

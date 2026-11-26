@@ -21,9 +21,12 @@ import org.apache.avro.Conversions
 import org.apache.avro.data.TimeConversions
 import org.apache.avro.generic.GenericFixed
 import org.apache.avro.generic.GenericRecord
+import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.typelevel.vulcan.Codec.InstantMicros
+import org.typelevel.vulcan.examples.CaseClassRecursive
+import org.typelevel.vulcan.examples.SealedTraitRecursive
 import scala.jdk.CollectionConverters.*
 import scala.util.Try
 import scodec.bits.ByteVector
@@ -240,6 +243,13 @@ object CodecJavaSpec extends BaseSuite {
       .map(_.combineAll)
   }
 
+  test("recursive codecs should encode and decode the same as the Java Avro library") {
+    for {
+      records <- expectBinarySameAsJava[CaseClassRecursive]
+      unions <- expectBinarySameAsJava[SealedTraitRecursive]
+    } yield records && unions
+  }
+
   test("logical types should encode and decode decimal the same as the Java Avro library") {
     val codec = Codec.decimal(precision = 10, scale = 5)
     val conversion = new Conversions.DecimalConversion
@@ -438,6 +448,25 @@ object CodecJavaSpec extends BaseSuite {
           failure(s"Decoded $value as $decoded, Java Avro decoded $javaDecoded")
       }
     }
+
+  /** Checks that the Java Avro library writes the same bytes as the codec. */
+  private def expectBinarySameAsJava[A: Codec: Arbitrary](implicit loc: SourceLocation): IO[Expectations] = {
+    val codec = Codec[A]
+    implicit val show: Show[A] = Show.fromToString
+
+    IO.fromEither(codec.schema).flatMap { schema =>
+      val javaSchema = JavaAvro.schema(schema)
+      val compiled = (codec.binaryEncoder, codec.binaryDecoder(schema)).tupled
+
+      forall { (a: A) =>
+        whenSuccess((compiled, codec.encode(a)).tupled) { case ((encoder, decoder), value) =>
+          val javaBytes = JavaAvro.writeBinary(javaSchema, JavaAvro.toJava(value, schema, javaSchema))
+          expect.same(Right(javaBytes), encoder.encode(a)) &&
+          expect.same(Right(a), decoder.decode(javaBytes))
+        }
+      }
+    }
+  }
 
   /** Checks that decoding succeeds and fails the same way as for the Java Avro library. */
   private def expectSameAsJava[A](

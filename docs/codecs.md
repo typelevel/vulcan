@@ -154,6 +154,52 @@ Codec.record[Person](
 
 For generic derivation support, refer to the [generic module](derivation.md#records).
 
+## Recursive Types
+
+Avro records can contain themselves, for example in an optional field or in an array. Record @:api(org.typelevel.vulcan.Codec)s build their fields on first use, so the @:api(org.typelevel.vulcan.Codec) of a recursive type can refer to itself, and the schema refers to the enclosing record by name.
+
+```scala mdoc
+final case class Category(name: String, subcategories: List[Category])
+
+object Category {
+  given Codec[Category] =
+    Codec.record[Category](
+      name = "Category",
+      namespace = "com.example"
+    ) { field =>
+      (
+        field("name", _.name),
+        field("subcategories", _.subcategories, default = Some(Nil))
+      ).mapN(Category(_, _))
+    }
+}
+
+Codec[Category]
+```
+
+Recursive @:api(org.typelevel.vulcan.Codec)s must refer to themselves, rather than to a new @:api(org.typelevel.vulcan.Codec) for the same record, otherwise an error is raised. When the @:api(org.typelevel.vulcan.Codec) is a `def`, for example for a generic type, `Codec.recursive` can be used to pass the @:api(org.typelevel.vulcan.Codec) to itself, like in the following example.
+
+```scala mdoc
+final case class Node[A](value: A, next: Option[Node[A]])
+
+object Node {
+   given [A: Codec]: Codec[Node[A]] =
+    Codec.recursive { implicit codec =>
+      Codec.record[Node[A]](
+        name = "Node",
+        namespace = "com.example"
+      ) { field =>
+        (
+          field("value", _.value),
+          field("next", _.next)
+        ).mapN(Node(_, _))
+      }
+    }
+}
+
+Codec[Node[Int]]
+```
+
 ## Unions
 
 Avro unions closely correspond to `sealed trait`s.

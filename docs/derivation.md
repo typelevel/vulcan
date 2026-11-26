@@ -80,6 +80,22 @@ final case class Person(firstName: String, lastName: String, age: Option[Int])
 Codec.derive[Person]
 ```
 
+## Recursive Types
+
+Derived @:api(org.typelevel.vulcan.Codec)s support [recursive types](codecs.md#recursive-types), as long as they refer to themselves. Define them using `given` (or `implicit lazy val`) in the companion object, so derivation reuses the @:api(org.typelevel.vulcan.Codec) for the recursive reference.
+
+```scala mdoc
+@AvroNamespace("com.example")
+final case class Comment(text: String, replies: List[Comment])
+
+object Comment {
+  given Codec[Comment] =
+    Codec.derive
+}
+
+Codec[Comment]
+```
+
 ## Unions
 
 While `case class`es correspond to Avro records, `sealed trait`s correspond to unions.
